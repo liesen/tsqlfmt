@@ -1,4 +1,4 @@
-WITH ActiveAccounts AS (
+;WITH ActiveAccounts AS (
     SELECT a.account_id,
         a.account_name,
         a.region_id

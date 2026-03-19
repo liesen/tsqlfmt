@@ -164,6 +164,7 @@ This keeps project-specific additions explicit and avoids ambiguity with SQL Pro
 
 Current extensions:
 
+* `formatterExtensions.cte.omitLeadingSemicolon` -- emits `WITH` instead of `;WITH` when set to `true` (default `false`).
 * `formatterExtensions.setOperations.blankLinesAroundOperators` -- inserts a blank line before and after `UNION`, `EXCEPT`, and `INTERSECT`.
 
 == Pretty-Printer Algebra

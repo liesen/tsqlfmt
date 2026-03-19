@@ -1144,6 +1144,19 @@
             "type": "object",
             "description": "Custom options used by tsqlfmt (not part of SQL Prompt schema)",
             "properties": {
+                "cte": {
+                    "$id": "#root/formatterExtensions/cte",
+                    "type": "object",
+                    "description": "Custom CTE formatting options",
+                    "properties": {
+                        "omitLeadingSemicolon": {
+                            "$id": "#root/formatterExtensions/cte/omitLeadingSemicolon",
+                            "description": "Omit the leading semicolon before CTEs (emit WITH instead of ;WITH)",
+                            "type": "boolean",
+                            "default": false
+                        }
+                    }
+                },
                 "setOperations": {
                     "$id": "#root/formatterExtensions/setOperations",
                     "type": "object",

@@ -87,6 +87,9 @@
     }
   },
   "formatterExtensions": {
+    "cte": {
+      "omitLeadingSemicolon": false
+    },
     "setOperations": {
       "blankLinesAroundOperators": true
     }

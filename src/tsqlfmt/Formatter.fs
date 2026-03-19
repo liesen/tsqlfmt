@@ -807,7 +807,12 @@ and private selectStatementDoc (cfg: FormattingStyle) (ss: SelectStatement) : Do
                 ss.WithCtesAndXmlNamespaces.CommonTableExpressions
                 |> Seq.map (fun cte -> cteExprDoc cfg cte)
                 |> Seq.toList
-            Some (kw cfg "WITH" <++> join (text "," <+> line) cteParts)
+            let withKw =
+                if cfg.formatterExtensions.cte.omitLeadingSemicolon then
+                    kw cfg "WITH"
+                else
+                    text ";" <+> kw cfg "WITH"
+            Some (withKw <++> join (text "," <+> line) cteParts)
         else None
 
     let parts =

@@ -441,8 +441,15 @@ type SetOperationsExtensionsConfig = {
     blankLinesAroundOperators: bool
 }
 
+type CteExtensionsConfig = {
+    [<JsonPropertyName("omitLeadingSemicolon")>]
+    omitLeadingSemicolon: bool
+}
+
 /// Namespace for custom formatter-specific options.
 type FormatterExtensionsConfig = {
+    [<JsonPropertyName("cte")>]
+    cte: CteExtensionsConfig
     [<JsonPropertyName("setOperations")>]
     setOperations: SetOperationsExtensionsConfig
 }
@@ -690,7 +697,12 @@ let defaultSetOperationsExtensions = {
     blankLinesAroundOperators = true
 }
 
+let defaultCteExtensions = {
+    omitLeadingSemicolon = false
+}
+
 let defaultFormatterExtensions = {
+    cte = defaultCteExtensions
     setOperations = defaultSetOperationsExtensions
 }
 
@@ -990,12 +1002,18 @@ let loadConfig (path: string) : FormattingStyle =
     let formatterExtensions =
         match getOpt root "formatterExtensions" with
         | Some ext ->
+            let cte =
+                match getOpt ext "cte" with
+                | Some c ->
+                    { omitLeadingSemicolon = getBool c "omitLeadingSemicolon" defaultCteExtensions.omitLeadingSemicolon }
+                | None -> defaultCteExtensions
             let setOps =
                 match getOpt ext "setOperations" with
                 | Some so ->
                     { blankLinesAroundOperators = getBool so "blankLinesAroundOperators" defaultSetOperationsExtensions.blankLinesAroundOperators }
                 | None -> defaultSetOperationsExtensions
-            { setOperations = setOps }
+            { cte = cte
+              setOperations = setOps }
         | None -> defaultFormatterExtensions
 
     { whitespace = whitespace
