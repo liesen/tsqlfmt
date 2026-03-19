@@ -1,0 +1,1 @@
+DECLARE @x INT = 1, @y INT = 2, @z VARCHAR(1)= 'z'

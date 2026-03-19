@@ -13,7 +13,29 @@ open TSqlFormatter.Keywords
 let private kw (cfg: FormattingStyle) (s: string) = text (caseKeyword cfg.casing s)
 let private fn (cfg: FormattingStyle) (s: string) = text (caseFunction cfg.casing s)
 let private dt (cfg: FormattingStyle) (s: string) = text (caseDataType cfg.casing s)
-let private indent = 4
+let private indentWidth (cfg: FormattingStyle) = cfg.whitespace.numberOfSpacesInTabs
+
+/// Format a clause-level comma list: first item on the same line as the keyword,
+/// continuation items indented one level on new lines.
+/// E.g. "SELECT col1,\n    col2,\n    col3"
+let private clauseCommaList (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
+    match items with
+    | [] -> keyword
+    | [single] -> keyword <++> single
+    | first :: rest ->
+        let restDoc = join (text "," <+> line) rest
+        keyword <++> first <+> text "," <+> nest (indentWidth cfg) (line <+> restDoc)
+
+/// Like clauseCommaList, but collapses onto one line when it fits.
+/// Used for ORDER BY, GROUP BY where short lists should stay inline.
+let private clauseCommaGroup (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
+    match items with
+    | [] -> keyword
+    | [single] -> keyword <++> single
+    | _ ->
+        let flatDoc = keyword <++> join (text ", ") items |> flatten
+        let expandedDoc = clauseCommaList cfg keyword items
+        TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
 
 /// Get the raw SQL text of a fragment from its token stream.
 let private fragmentText (frag: TSqlFragment) : string =
@@ -243,10 +265,10 @@ and private expandedCaseDoc (cfg: FormattingStyle) (c: SearchedCaseExpression) :
     let whenDocs =
         [ for wc in c.WhenClauses do
             yield kw cfg "WHEN" <++> boolExprDoc cfg wc.WhenExpression <++> kw cfg "THEN" <++> exprDoc cfg wc.ThenExpression ]
-    let body = nest indent (join line whenDocs)
+    let body = nest (indentWidth cfg) (join line whenDocs)
     let elseDoc =
         if c.ElseExpression <> null then
-            line <+> nest indent (kw cfg "ELSE" <++> exprDoc cfg c.ElseExpression)
+            line <+> nest (indentWidth cfg) (kw cfg "ELSE" <++> exprDoc cfg c.ElseExpression)
         else empty
     kw cfg "CASE" <+> line <+> body <+> elseDoc <+> line <+> kw cfg "END"
 
@@ -269,20 +291,20 @@ and private simpleCaseDoc (cfg: FormattingStyle) (c: SimpleCaseExpression) : Doc
             let whenDocs =
                 [ for wc in c.WhenClauses do
                     yield kw cfg "WHEN" <++> exprDoc cfg wc.WhenExpression <++> kw cfg "THEN" <++> exprDoc cfg wc.ThenExpression ]
-            let body = nest indent (join line whenDocs)
+            let body = nest (indentWidth cfg) (join line whenDocs)
             let elseDoc =
                 if c.ElseExpression <> null then
-                    line <+> nest indent (kw cfg "ELSE" <++> exprDoc cfg c.ElseExpression)
+                    line <+> nest (indentWidth cfg) (kw cfg "ELSE" <++> exprDoc cfg c.ElseExpression)
                 else empty
             kw cfg "CASE" <++> inputExpr <+> line <+> body <+> elseDoc <+> line <+> kw cfg "END"
     else
         let whenDocs =
             [ for wc in c.WhenClauses do
                 yield kw cfg "WHEN" <++> exprDoc cfg wc.WhenExpression <++> kw cfg "THEN" <++> exprDoc cfg wc.ThenExpression ]
-        let body = nest indent (join line whenDocs)
+        let body = nest (indentWidth cfg) (join line whenDocs)
         let elseDoc =
             if c.ElseExpression <> null then
-                line <+> nest indent (kw cfg "ELSE" <++> exprDoc cfg c.ElseExpression)
+                line <+> nest (indentWidth cfg) (kw cfg "ELSE" <++> exprDoc cfg c.ElseExpression)
             else empty
         kw cfg "CASE" <++> inputExpr <+> line <+> body <+> elseDoc <+> line <+> kw cfg "END"
 
@@ -402,7 +424,7 @@ and private boolBinaryDoc (cfg: FormattingStyle) (bb: BooleanBinaryExpression) :
         | _ -> "AND"
     let lhs = exprDoc cfg bb.FirstExpression
     let rhs = exprDoc cfg bb.SecondExpression
-    lhs <+> line <+> nest indent (kw cfg opText <++> rhs)
+    lhs <+> line <+> nest (indentWidth cfg) (kw cfg opText <++> rhs)
 
 and private inPredicateDoc (cfg: FormattingStyle) (inp: InPredicate) : Doc =
     let lhs = exprDoc cfg inp.Expression
@@ -416,8 +438,8 @@ and private inPredicateDoc (cfg: FormattingStyle) (inp: InPredicate) : Doc =
             lhs <++> notPart <+> inKw <++> text "(" <+> subDoc <+> text ")"
         else
             // expandedSplit: content at nest+indent, closing paren at nest level
-            // (whereConditionDoc wraps the first expression in nest indent, providing the outer indent)
-            lhs <++> notPart <+> inKw <++> text "(" <+> nest indent (line <+> subDoc) <+> line <+> text ")"
+            // (whereConditionDoc wraps the first expression in nest (indentWidth cfg), providing the outer indent)
+            lhs <++> notPart <+> inKw <++> text "(" <+> nest (indentWidth cfg) (line <+> subDoc) <+> line <+> text ")"
     else
         let valDocs = inp.Values |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
         // Use Union to allow the renderer to collapse onto one line when it fits.
@@ -427,7 +449,7 @@ and private inPredicateDoc (cfg: FormattingStyle) (inp: InPredicate) : Doc =
         let expandedContent =
             let valSep = text "," <+> line
             let valsDoc = join valSep valDocs
-            lhs <++> notPart <+> inKw <++> text "(" <+> nest indent (line <+> valsDoc) <+> line <+> text ")"
+            lhs <++> notPart <+> inKw <++> text "(" <+> nest (indentWidth cfg) (line <+> valsDoc) <+> line <+> text ")"
         TSqlFormatter.Doc.Doc.Union(flatContent, expandedContent)
 
 and private likePredicateDoc (cfg: FormattingStyle) (lk: LikePredicate) : Doc =
@@ -477,7 +499,7 @@ and private scalarSubqueryDoc (cfg: FormattingStyle) (sq: ScalarSubquery) : Doc 
     if cfg.dml.collapseShortSubqueries && flatStr.Length < cfg.dml.collapseSubqueriesShorterThan && not (flatStr.Contains('\n')) then
         text "(" <+> inner <+> text ")"
     else
-        text "(" <+> nest indent (line <+> inner) <+> line <+> text ")"
+        text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
 
 // ─── Query expressions ───
 
@@ -486,7 +508,7 @@ and private queryExprDoc (cfg: FormattingStyle) (qe: QueryExpression) : Doc =
     | :? QuerySpecification as qs -> querySpecDoc cfg qs
     | :? BinaryQueryExpression as bqe -> binaryQueryDoc cfg bqe
     | :? QueryParenthesisExpression as qpe ->
-        text "(" <+> nest indent (line <+> queryExprDoc cfg qpe.QueryExpression) <+> line <+> text ")"
+        text "(" <+> nest (indentWidth cfg) (line <+> queryExprDoc cfg qpe.QueryExpression) <+> line <+> text ")"
     | _ -> tokenStreamDoc cfg qe
 
 and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) : Doc =
@@ -504,13 +526,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) : Doc =
         else selectKw
 
     let selectItems = qs.SelectElements |> Seq.map (fun e -> exprDoc cfg e) |> Seq.toList
-    let selectClause =
-        match selectItems with
-        | [] -> selectKwWithTop
-        | [single] -> selectKwWithTop <++> single
-        | first :: rest ->
-            let restDoc = join (text "," <+> line) rest
-            selectKwWithTop <++> first <+> text "," <+> nest indent (line <+> restDoc)
+    let selectClause = clauseCommaList cfg selectKwWithTop selectItems
 
     let parts =
         [ yield selectClause
@@ -534,7 +550,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) : Doc =
                       | :? ExpressionGroupingSpecification as egs -> exprDoc cfg egs.Expression
                       | _ -> tokenStreamDoc cfg g)
                   |> Seq.toList
-              yield kw cfg "GROUP" <++> kw cfg "BY" <++> commaSep grpItems
+              yield clauseCommaGroup cfg (kw cfg "GROUP" <++> kw cfg "BY") grpItems
 
           // HAVING clause
           if qs.HavingClause <> null && qs.HavingClause.SearchCondition <> null then
@@ -543,7 +559,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) : Doc =
           // ORDER BY clause
           if qs.OrderByClause <> null && qs.OrderByClause.OrderByElements <> null && qs.OrderByClause.OrderByElements.Count > 0 then
               let orderItems = qs.OrderByClause.OrderByElements |> Seq.map (fun o -> orderByElemDoc cfg o) |> Seq.toList
-              yield kw cfg "ORDER" <++> kw cfg "BY" <++> group (commaSep orderItems) ]
+              yield clauseCommaGroup cfg (kw cfg "ORDER" <++> kw cfg "BY") orderItems ]
 
     join line parts
 
@@ -556,13 +572,13 @@ and private whereConditionDoc (cfg: FormattingStyle) (expr: BooleanExpression) :
         | [] -> empty
         | [single] -> single
         | first :: rest ->
-            // Wrap first in nest indent so that any line breaks inside it
+            // Wrap first in nest (indentWidth cfg) so that any line breaks inside it
             // (e.g. IN subquery content) get an extra indent level.
             // This makes expandedSplit IN subqueries indent correctly at both
             // top-level WHERE and nested ON/AND contexts.
             let restDoc = rest |> List.map id |> join line
-            nest indent first <+> nest indent (line <+> restDoc)
-    | _ -> nest indent (exprDoc cfg expr)
+            nest (indentWidth cfg) first <+> nest (indentWidth cfg) (line <+> restDoc)
+    | _ -> nest (indentWidth cfg) (exprDoc cfg expr)
 
 and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc list =
     let opText =
@@ -653,7 +669,7 @@ and private qualifiedJoinDoc (cfg: FormattingStyle) (qj: QualifiedJoin) : Doc =
         | _ -> kw cfg "JOIN"
     let secondTable = tableRefDoc cfg qj.SecondTableReference
     let onCondition = whereConditionDoc cfg qj.SearchCondition
-    firstTable <+> line <+> joinType <++> secondTable <+> nest indent (line <+> kw cfg "ON" <++> onCondition)
+    firstTable <+> line <+> joinType <++> secondTable <+> nest (indentWidth cfg) (line <+> kw cfg "ON" <++> onCondition)
 
 and private unqualifiedJoinDoc (cfg: FormattingStyle) (uj: UnqualifiedJoin) : Doc =
     let firstTable = tableRefDoc cfg uj.FirstTableReference
@@ -668,7 +684,7 @@ and private unqualifiedJoinDoc (cfg: FormattingStyle) (uj: UnqualifiedJoin) : Do
 
 and private queryDerivedTableDoc (cfg: FormattingStyle) (qdt: QueryDerivedTable) : Doc =
     let inner = queryExprDoc cfg qdt.QueryExpression
-    let parenDoc = text "(" <+> nest indent (line <+> inner) <+> line <+> text ")"
+    let parenDoc = text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
     let aliasDoc =
         if qdt.Alias <> null then text " " <+> identDoc qdt.Alias
         else empty
@@ -687,7 +703,7 @@ and private schemaObjectFuncTableDoc (cfg: FormattingStyle) (softr: SchemaObject
                 text "(" <+> flatArgs <+> text ")"
             else
                 let argBody = commaSep argDocs
-                text "(" <+> nest (2 * indent) argBody <+> nest indent (line <+> text ")")
+                text "(" <+> nest (2 * indentWidth cfg) argBody <+> nest (indentWidth cfg) (line <+> text ")")
         else text "()"
     let aliasDoc =
         if softr.Alias <> null then text " " <+> identDoc softr.Alias
@@ -712,7 +728,7 @@ and private binaryQueryDoc (cfg: FormattingStyle) (bqe: BinaryQueryExpression) :
     // ORDER BY on BinaryQueryExpression
     if bqe.OrderByClause <> null && bqe.OrderByClause.OrderByElements <> null && bqe.OrderByClause.OrderByElements.Count > 0 then
         let orderItems = bqe.OrderByClause.OrderByElements |> Seq.map (fun o -> orderByElemDoc cfg o) |> Seq.toList
-        result <+> line <+> kw cfg "ORDER" <++> kw cfg "BY" <++> group (commaSep orderItems)
+        result <+> line <+> clauseCommaGroup cfg (kw cfg "ORDER" <++> kw cfg "BY") orderItems
     else result
 
 // ─── SELECT statement (top-level, with ORDER BY, FOR, etc.) ───
@@ -746,9 +762,9 @@ and private cteExprDoc (cfg: FormattingStyle) (cte: CommonTableExpression) : Doc
     let asDoc = kw cfg "AS"
     let body = queryExprDoc cfg cte.QueryExpression
     if cfg.cte.placeAsOnNewLine then
-        nameDoc <+> colsDoc <+> line <+> asDoc <++> text "(" <+> nest indent (line <+> body) <+> line <+> text ")"
+        nameDoc <+> colsDoc <+> line <+> asDoc <++> text "(" <+> nest (indentWidth cfg) (line <+> body) <+> line <+> text ")"
     else
-        nameDoc <+> colsDoc <++> asDoc <++> text "(" <+> nest indent (line <+> body) <+> line <+> text ")"
+        nameDoc <+> colsDoc <++> asDoc <++> text "(" <+> nest (indentWidth cfg) (line <+> body) <+> line <+> text ")"
 
 // ─── DDL: ALTER/CREATE FUNCTION/PROCEDURE ───
 
@@ -780,7 +796,7 @@ and private ddlParamListDoc (cfg: FormattingStyle) (parameters: System.Collectio
                 nameDoc <++> typeDoc <+> defaultDoc <+> outputDoc <+> commaDoc <+> commentDoc)
             |> Seq.toList
         let paramsBody = join line paramDocs
-        text " (" <+> nest indent (line <+> paramsBody) <+> line <+> text ")"
+        text " (" <+> nest (indentWidth cfg) (line <+> paramsBody) <+> line <+> text ")"
 
 and private getParamTrailingComments (parameters: System.Collections.Generic.IList<ProcedureParameter>) : Map<int, string> =
     if parameters = null || parameters.Count = 0 then Map.empty
@@ -906,7 +922,7 @@ and private beginEndDoc (cfg: FormattingStyle) (be: BeginEndBlockStatement) : Do
         if be.StatementList <> null then
             be.StatementList.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
         else []
-    kw cfg "BEGIN" <+> line <+> nest indent (join line stmts) <+> line <+> kw cfg "END"
+    kw cfg "BEGIN" <+> line <+> nest (indentWidth cfg) (join line stmts) <+> line <+> kw cfg "END"
 
 and private ifDoc (cfg: FormattingStyle) (ifs: IfStatement) : Doc =
     let cond = exprDoc cfg ifs.Predicate
@@ -932,10 +948,10 @@ and private tryCatchDoc (cfg: FormattingStyle) (tc: TryCatchStatement) : Doc =
             tc.CatchStatements.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
         else []
     kw cfg "BEGIN" <++> kw cfg "TRY" <+> line <+>
-    nest indent (join line tryStmts) <+> line <+>
+    nest (indentWidth cfg) (join line tryStmts) <+> line <+>
     kw cfg "END" <++> kw cfg "TRY" <+> line <+>
     kw cfg "BEGIN" <++> kw cfg "CATCH" <+> line <+>
-    nest indent (join line catchStmts) <+> line <+>
+    nest (indentWidth cfg) (join line catchStmts) <+> line <+>
     kw cfg "END" <++> kw cfg "CATCH"
 
 // ─── Other DML ───
@@ -999,7 +1015,7 @@ and private updateDoc (cfg: FormattingStyle) (upd: UpdateStatement) : Doc =
 
     let parts =
         [ yield kw cfg "UPDATE" <++> target
-          yield kw cfg "SET" <++> commaSep setClauses
+          yield clauseCommaList cfg (kw cfg "SET") setClauses
 
           if spec.FromClause <> null && spec.FromClause.TableReferences <> null && spec.FromClause.TableReferences.Count > 0 then
               yield kw cfg "FROM" <++> tableRefDoc cfg spec.FromClause.TableReferences.[0]
@@ -1043,7 +1059,7 @@ and private declareDoc (cfg: FormattingStyle) (decl: DeclareVariableStatement) :
                 else empty
             nameDoc <++> typeDoc <+> valueDoc
         ) |> Seq.toList
-    kw cfg "DECLARE" <++> commaSep varDocs
+    clauseCommaList cfg (kw cfg "DECLARE") varDocs
 
 and private setVarDoc (cfg: FormattingStyle) (sv: SetVariableStatement) : Doc =
     let varDoc = text sv.Variable.Name
