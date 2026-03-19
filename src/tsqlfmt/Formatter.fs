@@ -648,7 +648,18 @@ and private qualifiedJoinDoc (cfg: FormattingStyle) (qj: QualifiedJoin) : Doc =
     let firstTable = tableRefDoc cfg qj.FirstTableReference
     let joinType =
         match qj.QualifiedJoinType with
-        | QualifiedJoinType.Inner -> kw cfg "INNER" <++> kw cfg "JOIN"
+        | QualifiedJoinType.Inner ->
+            // The AST does not distinguish bare JOIN from INNER JOIN —
+            // both parse as QualifiedJoinType.Inner. We must inspect
+            // the token stream to detect whether INNER was explicit.
+            let hasExplicitInner =
+                match qj.ScriptTokenStream with
+                | null -> true
+                | stream ->
+                    seq { qj.FirstTableReference.LastTokenIndex + 1 .. qj.SecondTableReference.FirstTokenIndex - 1 }
+                    |> Seq.exists (fun i -> stream.[i].TokenType = TSqlTokenType.Inner)
+            if hasExplicitInner then kw cfg "INNER" <++> kw cfg "JOIN"
+            else kw cfg "JOIN"
         | QualifiedJoinType.LeftOuter -> kw cfg "LEFT" <++> kw cfg "JOIN"
         | QualifiedJoinType.RightOuter -> kw cfg "RIGHT" <++> kw cfg "JOIN"
         | QualifiedJoinType.FullOuter -> kw cfg "FULL" <++> kw cfg "JOIN"
@@ -1152,6 +1163,28 @@ and private handleInlineTvf (cfg: FormattingStyle) (af: AlterFunctionStatement) 
 
 // ─── Top-level format function ───
 
+/// Collect leading comments from the token stream before the first statement.
+let private leadingCommentsDoc (script: TSqlScript) : Doc =
+    if script.Batches.Count = 0 then empty
+    else
+        let firstBatch = script.Batches.[0]
+        if firstBatch.Statements.Count = 0 then empty
+        else
+            let firstStmt = firstBatch.Statements.[0]
+            let stream = firstStmt.ScriptTokenStream
+            if stream = null then empty
+            else
+                let comments = ResizeArray<string>()
+                for i = 0 to firstStmt.FirstTokenIndex - 1 do
+                    let tok = stream.[i]
+                    if tok.TokenType = TSqlTokenType.SingleLineComment ||
+                       tok.TokenType = TSqlTokenType.MultilineComment then
+                        comments.Add(tok.Text.TrimEnd())
+                if comments.Count = 0 then empty
+                else
+                    let commentDocs = comments |> Seq.map text |> Seq.toList
+                    join line commentDocs <+> line
+
 /// Format a T-SQL string using the given configuration.
 let format (config: FormattingStyle) (sql: string) : Result<string, string list> =
     let parser = TSql160Parser(initialQuotedIdentifiers = true)
@@ -1163,6 +1196,7 @@ let format (config: FormattingStyle) (sql: string) : Result<string, string list>
     else
         match fragment with
         | :? TSqlScript as script ->
+            let leadingComments = leadingCommentsDoc script
             let batchDocs =
                 script.Batches
                 |> Seq.map (fun batch ->
@@ -1173,7 +1207,7 @@ let format (config: FormattingStyle) (sql: string) : Result<string, string list>
                     join line stmtDocs
                 )
                 |> Seq.toList
-            let result = join (line <+> kw config "GO" <+> line) batchDocs
+            let result = leadingComments <+> join (line <+> kw config "GO" <+> line) batchDocs
             Ok (render config.whitespace.wrapLinesLongerThan result)
         | _ ->
             Ok (render config.whitespace.wrapLinesLongerThan (tokenStreamDoc config fragment))
