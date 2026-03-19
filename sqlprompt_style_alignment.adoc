@@ -1,0 +1,60 @@
+= SQL Prompt style alignment
+
+This note summarizes where `tsqlfmt` matches SQL Prompt and where it differs.
+
+== Behavior map
+
+|===
+| Behavior | SQL Prompt | tsqlfmt | Status
+
+| CTE leading semicolon
+| Explicitly handles `;WITH`; appears to preserve an existing semicolon instead of inserting one globally
+| Controlled by `formatterExtensions.cte.omitLeadingSemicolon`
+| Default output is `;WITH`
+
+| Procedure parameter parentheses
+| Explicitly preserves whether parentheses were present in source
+| Preserves source parentheses for procedures; functions remain parenthesized
+| Aligned
+
+| Set operator spacing
+| Explicit line-break handling for `UNION`/`EXCEPT`/`INTERSECT`; no clear dedicated blank-line option found
+| Controlled by `formatterExtensions.setOperations.blankLinesAroundOperators`
+| Formatter-specific extension
+
+| Semicolon policy
+| Explicit spacing rules around existing semicolons; no clear global insert/remove policy found
+| Mixed behavior: token-stream fallback preserves some semicolons, while reconstructed statements often omit them
+| No formatter-wide policy
+
+| Procedure header layout
+| Depends partly on whether parameters are parenthesized; otherwise formats plain parameter lists cleanly
+| Broadly similar, but not identical in all layouts
+| Partial alignment
+
+| VALUES layout
+| Tends to expand more aggressively; often places `VALUES` on its own line and uses one row per line
+| Uses collapse/expand heuristics and `), (` row separator preference
+| Style difference
+
+| Function casing
+| Under the current profile, still emits mixed or lowercase casing for some built-ins in practice
+| Applies configured casing more uniformly and uppercases built-ins
+| Style difference
+
+| EXISTS / subquery wrapping
+| Often more aggressively multiline
+| More threshold-driven and more compact in some cases
+| Style difference
+
+| Window function `OVER (...)` formatting
+| Explicit formatting rules; often clause-broken across multiple lines
+| Differs in layout choices
+| Style difference
+|===
+
+== Notes
+
+Formatter-specific differences are namespaced under `formatterExtensions`.
+
+Blank lines around set operators are controlled by `formatterExtensions.setOperations.blankLinesAroundOperators`.
