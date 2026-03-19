@@ -1138,6 +1138,26 @@
                 }
 
             }
+        },
+        "formatterExtensions": {
+            "$id": "#root/formatterExtensions",
+            "type": "object",
+            "description": "Custom options used by tsqlfmt (not part of SQL Prompt schema)",
+            "properties": {
+                "setOperations": {
+                    "$id": "#root/formatterExtensions/setOperations",
+                    "type": "object",
+                    "description": "Custom set-operator formatting options",
+                    "properties": {
+                        "blankLinesAroundOperators": {
+                            "$id": "#root/formatterExtensions/setOperations/blankLinesAroundOperators",
+                            "description": "Insert a blank line before and after UNION/EXCEPT/INTERSECT operators",
+                            "type": "boolean",
+                            "default": true
+                        }
+                    }
+                }
+            }
         }
 
     }

@@ -435,6 +435,18 @@ type OperatorsConfig = {
     ``in``: InConfig
 }
 
+/// Custom formatter-specific options that are not part of SQL Prompt schema.
+type SetOperationsExtensionsConfig = {
+    [<JsonPropertyName("blankLinesAroundOperators")>]
+    blankLinesAroundOperators: bool
+}
+
+/// Namespace for custom formatter-specific options.
+type FormatterExtensionsConfig = {
+    [<JsonPropertyName("setOperations")>]
+    setOperations: SetOperationsExtensionsConfig
+}
+
 type FormattingStyle = {
     [<JsonPropertyName("whitespace")>]
     whitespace: WhitespaceConfig
@@ -464,6 +476,8 @@ type FormattingStyle = {
     caseExpressions: CaseExpressionsConfig
     [<JsonPropertyName("operators")>]
     operators: OperatorsConfig
+    [<JsonPropertyName("formatterExtensions")>]
+    formatterExtensions: FormatterExtensionsConfig
 }
 
 // ─── Defaults ───
@@ -672,6 +686,14 @@ let defaultOperators = {
     ``in`` = defaultIn
 }
 
+let defaultSetOperationsExtensions = {
+    blankLinesAroundOperators = true
+}
+
+let defaultFormatterExtensions = {
+    setOperations = defaultSetOperationsExtensions
+}
+
 let defaultStyle : FormattingStyle = {
     whitespace = defaultWhitespace
     lists = defaultLists
@@ -687,6 +709,7 @@ let defaultStyle : FormattingStyle = {
     functionCalls = defaultFunctionCalls
     caseExpressions = defaultCaseExpressions
     operators = defaultOperators
+    formatterExtensions = defaultFormatterExtensions
 }
 
 // ─── JSON Loading ───
@@ -964,6 +987,17 @@ let loadConfig (path: string) : FormattingStyle =
             { comparison = comparison; arithmetic = arithmetic; andOr = andOr; between = between; ``in`` = inOp }
         | None -> defaultOperators
 
+    let formatterExtensions =
+        match getOpt root "formatterExtensions" with
+        | Some ext ->
+            let setOps =
+                match getOpt ext "setOperations" with
+                | Some so ->
+                    { blankLinesAroundOperators = getBool so "blankLinesAroundOperators" defaultSetOperationsExtensions.blankLinesAroundOperators }
+                | None -> defaultSetOperationsExtensions
+            { setOperations = setOps }
+        | None -> defaultFormatterExtensions
+
     { whitespace = whitespace
       lists = lists
       parentheses = parentheses
@@ -977,4 +1011,5 @@ let loadConfig (path: string) : FormattingStyle =
       insertStatements = insertStatements
       functionCalls = functionCalls
       caseExpressions = caseExpressions
-      operators = operators }
+      operators = operators
+      formatterExtensions = formatterExtensions }

@@ -151,7 +151,20 @@ Its key settings:
 | `joinStatements.on.keywordAlignment`
 | `indented`
 | ON indented one level from JOIN
+
+| `formatterExtensions.setOperations.blankLinesAroundOperators`
+| `true`
+| Custom formatter extension: blank line before and after UNION/EXCEPT/INTERSECT
 |===
+
+=== Formatter Extensions (Non-SQL Prompt)
+
+The formatter supports a namespaced custom section, `formatterExtensions`, for behavior not present in SQL Prompt's schema.
+This keeps project-specific additions explicit and avoids ambiguity with SQL Prompt-native options.
+
+Current extensions:
+
+* `formatterExtensions.setOperations.blankLinesAroundOperators` -- inserts a blank line before and after `UNION`, `EXCEPT`, and `INTERSECT`.
 
 == Pretty-Printer Algebra
 
@@ -304,7 +317,7 @@ Value stays on same line (per `variables.placeAssignedValueOnNewLineIfLongerThan
 
 `BinaryQueryExpression` (UNION, UNION ALL, EXCEPT, INTERSECT)::
 Set operator on its own line with a blank line before and after.
-NOTE: This is a hardcoded formatter convention, not controlled by any config setting.
+Controlled by `formatterExtensions.setOperations.blankLinesAroundOperators` (default `true`).
 
 == Keyword Casing
 

@@ -85,5 +85,10 @@
       "alignment": "indented",
       "placeSubsequentValuesOnNewLines": "always"
     }
+  },
+  "formatterExtensions": {
+    "setOperations": {
+      "blankLinesAroundOperators": true
+    }
   }
 }

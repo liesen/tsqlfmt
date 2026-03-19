@@ -779,8 +779,13 @@ and private binaryQueryDoc (cfg: FormattingStyle) (bqe: BinaryQueryExpression) :
         | BinaryQueryExpressionType.Except -> kw cfg "EXCEPT"
         | BinaryQueryExpressionType.Intersect -> kw cfg "INTERSECT"
         | _ -> kw cfg "UNION"
-    // Blank line before and after the set operator (hardcoded convention, not in config schema)
-    let result = lhs <+> line <+> line <+> op <+> line <+> line <+> rhs
+    // Blank lines around set operators are a formatter extension, not part of SQL Prompt schema.
+    let separator =
+        if cfg.formatterExtensions.setOperations.blankLinesAroundOperators then
+            line <+> line
+        else
+            line
+    let result = lhs <+> separator <+> op <+> separator <+> rhs
     // ORDER BY on BinaryQueryExpression
     if bqe.OrderByClause <> null && bqe.OrderByClause.OrderByElements <> null && bqe.OrderByClause.OrderByElements.Count > 0 then
         let orderItems = bqe.OrderByClause.OrderByElements |> Seq.map (fun o -> orderByElemDoc cfg o) |> Seq.toList
