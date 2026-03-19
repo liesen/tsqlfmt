@@ -729,7 +729,7 @@ and private binaryQueryDoc (cfg: FormattingStyle) (bqe: BinaryQueryExpression) :
         | BinaryQueryExpressionType.Except -> kw cfg "EXCEPT"
         | BinaryQueryExpressionType.Intersect -> kw cfg "INTERSECT"
         | _ -> kw cfg "UNION"
-    // Blank line before and after the set operator
+    // Blank line before and after the set operator (hardcoded convention, not in config schema)
     let result = lhs <+> line <+> line <+> op <+> line <+> line <+> rhs
     // ORDER BY on BinaryQueryExpression
     if bqe.OrderByClause <> null && bqe.OrderByClause.OrderByElements <> null && bqe.OrderByClause.OrderByElements.Count > 0 then
