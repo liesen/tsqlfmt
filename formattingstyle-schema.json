@@ -1,0 +1,1144 @@
+{
+    "definitions": {},
+    "$schema": "http://json-schema.org/draft-07/schema#", 
+    "$id": "https://example.com/object1588080036.json", 
+    "title": "Root", 
+    "type": "object",
+    "properties": {
+        "whitespace": {
+            "$id": "#root/whitespace", 
+            "type": "object",
+            "description": "Formatting options for whitespace",
+            "properties": {
+                "spacesOrTabs": {
+                    "$id": "#root/whitespace/spacesOrTabs",
+                    "description": "Whether spaces or tabs are used while formatting",
+                    "type": "string",
+                    "enum": [
+                        "spaces",
+                        "tabs",
+                        "tabsIfPossible"
+                    ],
+                    "default": "spaces"
+                },
+                "numberOfSpacesInTabs": {
+                    "$id": "#root/whitespace/numberOfSpacesInTabs",
+                    "description": "How many spaces are inserted when tab is pressed",
+                    "type": "integer",
+                    "examples": [
+                        2, 3, 4, 6, 8
+                    ],
+                    "default": 4
+                },
+                "wrapLongLines": {
+                    "$id": "#root/whitespace/wrapLongLines",
+                    "description": "Whether long lines will be wrapped onto a new line",
+                    "type": "boolean",
+                    "default": true
+                },
+                "wrapLinesLongerThan": {
+                    "$id": "#root/whitespace/wrapLinesLongerThan",
+                    "description": "Lines with more than this number of characters will be wrapped",
+                    "type": "integer",
+                    "examples": [
+                        80, 120, 160
+                    ],
+                    "default": 120
+                },
+                "whiteSpaceBeforeSemiColon": {
+                    "$id": "#root/whitespace/whiteSpaceBeforeSemiColon",
+                    "description": "Whether spaces will be inserted before semicolons",
+                    "type": "string",
+                    "enum": [
+                        "none",
+                        "spaceBefore",
+                        "newLineBefore"
+                    ],
+                    "default": "none"
+                },
+                "newLines": {
+                    "$id": "#root/whitespace/newLines",
+                    "type": "object",
+                    "description": "Formatting options for new lines",
+                    "properties": {
+                        "preserveExistingEmptyLinesBetweenStatements": {
+                            "$id": "#root/whitespace/newLines/preserveExistingEmptyLinesBetweenStatements",
+                            "description": "Preserve existing empty lines between statements",
+                            "type": "boolean",
+                            "default": true
+                        },
+                        "preserveExistingEmptyLinesAfterBatchSeparator": {
+                            "$id": "#root/whitespace/newLines/preserveExistingEmptyLinesAfterBatchSeparator", 
+                            "description": "Preserve existing empty lines after batch separator", 
+                            "type": "boolean",
+                            "default": true
+                        },
+                        "emptyLinesBetweenStatements": {
+                            "$id": "#root/whitespace/newLines/emptyLinesBetweenStatements", 
+                            "description": "How many empty lines to insert between separate statements",
+                            "type": "integer",
+                            "examples": [
+                                0, 1, 2, 3
+                            ],
+                            "default": 1
+                        },
+                        "emptyLinesAfterBatchSeparator": {
+                            "$id": "#root/whitespace/newLines/emptyLinesAfterBatchSeparator", 
+                            "description": "How many empty lines to insert after a batch separator",
+                            "type": "integer",
+                            "examples": [
+                                0, 1, 2, 3
+                            ],
+                            "default": 1
+                        }
+                    }
+                }
+
+            }
+        },
+        "lists": {
+            "$id": "#root/lists", 
+            "type": "object",
+            "description": "Formatting options for lists",
+            "properties": {
+                "placeFirstItemOnNewLine": {
+                    "$id": "#root/lists/placeFirstItemOnNewLine", 
+                    "desciption": "Place first item in list on new line", 
+                    "type": "string",
+                    "enum": [
+                        "always",
+                        "never",
+                        "ifSubsequentItems"
+                    ],
+                    "default": "never"
+                },
+                "placeSubsequentItemsOnNewLines": {
+                    "$id": "#root/lists/placeSubsequentItemsOnNewLines", 
+                    "description": "Place subsequent list items on new lines", 
+                    "type": "string",
+                    "enum": [
+                        "always", 
+                        "never", 
+                        "ifLongerThanMaxLineLength"
+                    ],
+                    "default": "always"
+                },
+                "alignSubsequentItemsWithFirstItem": {
+                    "$id": "#root/lists/alignSubsequentItemsWithFirstItem", 
+                    "description": "Align subsequent list items with first item", 
+                    "type": "boolean",
+                    "default": true
+                },
+                "alignItemsAcrossClauses": {
+                    "$id": "#root/lists/alignItemsAcrossClauses", 
+                    "description": "Align list items across clauses", 
+                    "type": "boolean",
+                    "default": true
+                },
+                "indentListItems": {
+                    "$id": "#root/lists/indentListItems", 
+                    "description": "Indent list items", 
+                    "type": "boolean",
+                    "default": true
+                },
+                "alignItemsToTabStops": {
+                    "$id": "#root/lists/alignItemsToTabStops", 
+                    "description": "Align list items to tab stops", 
+                    "type": "boolean",
+                    "default": false
+                },
+                "alignAliases": {
+                    "$id": "#root/lists/alignAliases", 
+                    "description": "Align aliases to each other", 
+                    "type": "boolean",
+                    "default": false
+                },
+                "alignComments": {
+                    "$id": "#root/lists/alignComments", 
+                    "description": "Align comments to each other", 
+                    "type": "boolean",
+                    "default": false
+                },
+                "placeCommasBeforeItems": {
+                    "$id": "#root/lists/placeCommasBeforeItems", 
+                    "description": "Place commas before list items", 
+                    "type": "boolean",
+                    "default": false
+                },
+                "addSpaceBeforeComma": {
+                    "$id": "#root/lists/addSpaceBeforeComma", 
+                    "description": "Add space before commas", 
+                    "type": "boolean",
+                    "default": false
+                },
+                "addSpaceAfterComma": {
+                    "$id": "#root/lists/addSpaceAfterComma", 
+                    "description": "Add space after commas", 
+                    "type": "boolean",
+                    "default": true
+                },
+                "commaAlignment": {
+                    "$id": "#root/lists/commaAlignment", 
+                    "description": "How commas separating list items are aligned", 
+                    "type": "string",
+                    "enum": [
+                        "beforeItem",
+                        "toList",
+                        "toStatement"
+                    ],
+                    "default": "toList"
+                }
+            }
+        },
+        "parentheses": {
+            "$id": "#root/parentheses", 
+            "type": "object",
+            "description": "Formatting options for parentheses",
+            "properties": {
+                "parenthesisStyle": {
+                    "$id": "#root/parentheses/parenthesisStyle", 
+                    "description": "The format to use for parenthesized code", 
+                    "type": "string",
+                    "enum": [
+                        "compactSimple",
+                        "compactToStatement",
+                        "compactIndented",
+                        "compactRightAligned",
+                        "expandedSimple",
+                        "expandedSplit",
+                        "expandedToStatement",
+                        "expandedIndented",
+                        "expandedRightAligned"
+                    ],
+                    "default": "compactSimple"
+                },
+                "indentParenthesesContents": {
+                    "$id": "#root/parentheses/indentParenthesesContents", 
+                    "desciption": "Whether the contents of parentheses are indented", 
+                    "type": "boolean",
+                    "default": false
+                },
+                "collapseShortParenthesisContents": {
+                    "$id": "#root/parentheses/collapseShortParenthesisContents", 
+                    "description": "Collapse short contents of parentheses onto a single line", 
+                    "type": "boolean",
+                    "default": false
+                },
+                "collapseParenthesesShorterThan": {
+                    "$id": "#root/parentheses/collapseParenthesesShorterThan", 
+                    "description": "Contents with fewer than this number of characters will be collapsed onto a single line if enabled",
+                    "type": "integer",
+                    "examples": [
+                        80, 120, 160
+                    ],
+                    "default": 80
+                },
+                "addSpacesAroundParentheses": {
+                    "$id": "#root/parentheses/addSpacesAroundParentheses", 
+                    "description": "Whether spaces will be added around parentheses", 
+                    "type": "boolean",
+                    "default": true
+                },
+                "addSpacesInsideParentheses": {
+                    "$id": "#root/parentheses/addSpacesInsideParentheses", 
+                    "description": "Whether spaces are added around parentheses' contents", 
+                    "type": "boolean",
+                    "default": false
+                }
+            }
+        },
+        "casing": {
+            "$id": "#root/casing", 
+            "type": "object",
+            "description": "Formatting options for casing",
+            "properties": {
+                "reservedKeywords": {
+                    "$id": "#root/casing/reservedKeywords",
+                    "description": "How reserved keywords are cased",
+                    "type": "string",
+                    "enum": [
+                        "leaveAsIs",
+                        "lowercase",
+                        "uppercase",
+                        "lowerCamelCase",
+                        "upperCamelCase"
+                    ],
+                    "default": "leaveAsIs"
+                },
+                "builtInFunctions": {
+                    "$id": "#root/casing/builtInFunctions", 
+                    "description": "How built-in functions are cased",
+                    "type": "string",
+                    "enum": [
+                        "leaveAsIs",
+                        "lowercase",
+                        "uppercase",
+                        "lowerCamelCase",
+                        "upperCamelCase"
+                    ],
+                    "default": "leaveAsIs"
+                },
+                "builtInDataTypes": {
+                    "$id": "#root/casing/builtInDataTypes",
+                    "description": "How built-in data types are cased",
+                    "type": "string",
+                    "enum": [
+                        "leaveAsIs",
+                        "lowercase",
+                        "uppercase",
+                        "lowerCamelCase",
+                        "upperCamelCase"
+                    ],
+                    "default": "leaveAsIs"
+                },
+                "globalVariables": {
+                    "$id": "#root/casing/globalVariables",
+                    "description": "How global variables are cased",
+                    "type": "string",
+                    "enum": [
+                        "leaveAsIs",
+                        "lowercase",
+                        "uppercase",
+                        "lowerCamelCase",
+                        "upperCamelCase"
+                    ],
+                    "default": "leaveAsIs"
+                },
+                "useObjectDefinitionCase": {
+                    "$id": "#root/casing/useObjectDefinitionCase",
+                    "description": "Use the case from the definition when casing objects",
+                    "type": "boolean",
+                    "default": false
+                }
+            }
+        },
+        "dml": {
+            "$id": "#root/dml",
+            "type": "object",
+            "description": "Formatting options for data (DML)",
+            "properties": {
+                "placeInsertTableOnNewLine": {
+                    "$id": "#root/dml/placeInsertTableOnNewLine", 
+                    "description": "In INSERT table statements, place table name on a new line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "placeDistinctAndTopClausesOnNewLine": {
+                    "$id": "#root/dml/placeDistinctAndTopClausesOnNewLine",
+                    "description": "Whether to place DISTINCT and TOP clauses on a new line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "addNewLineAfterDistinctAndTopClauses": {
+                    "$id": "#root/dml/addNewLineAfterDistinctAndTopClauses",
+                    "description": "Whether to add a new line after DISTINCT and TOP clauses",
+                    "type": "boolean",
+                    "default": false
+                },
+                "collapseShortStatements": {
+                    "$id": "#root/dml/collapseShortStatements",
+                    "description": "Collapse short statements onto a single line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "collapseStatementsShorterThan": {
+                    "$id": "#root/dml/collapseStatementsShorterThan",
+                    "description": "Statements that are shorter than this will be collapsed onto a single line if enabled",
+                    "type": "integer",
+                    "examples": [
+                        80, 120, 160
+                    ],
+                    "default": 80
+                },
+                "collapseShortSubqueries": {
+                    "$id": "#root/dml/collapseShortSubqueries",
+                    "description": "Collapse short subqueries onto a single line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "collapseSubqueriesShorterThan": {
+                    "$id": "#root/dml/collapseSubqueriesShorterThan",
+                    "description": "Subqueries that are shorter than this will be collapsed onto a single line if enabled",
+                    "type": "integer",
+                    "examples": [
+                        80, 120, 160
+                    ],
+                    "default": 80
+                },
+                "clauses": {
+                    "$id": "#root/dml/clauses", 
+                    "type": "object",
+                    "description": "Formatting options for DML clauses",
+                    "properties": {
+                        "clauseAlignment": {
+                            "$id": "#root/dml/clauses/clauseAlignment",
+                            "description": "How clauses withing DML statements are aligned",
+                            "type": "string",
+                            "enum": [
+                                "leftAligned",
+                                "rightAligned",
+                                "toFirstListItem"
+                            ],
+                            "default": "leftAligned"
+                        },
+                        "clauseIndentation": {
+                            "$id": "#root/dml/clauses/clauseIndentation",
+                            "description": "The number of spaces to indent clauses within DML statements",
+                            "type": "integer",
+                            "examples": [
+                                0, 1, 2, 3, 4, 6, 8
+                            ],
+                            "default": 0
+                        }
+                    }
+                },
+                "listItems": {
+                    "$id": "#root/dml/listItems",
+                    "type": "object",
+                    "description": "Formatting options for DML list items",
+                    "properties": {
+                        "placeFromTableOnNewLine": {
+                            "$id": "#root/dml/listItems/placeFromTableOnNewLine",
+                            "description": "When to place the table in a DML statement on a new line",
+                            "type": "string",
+                            "enum": [
+                                "always",
+                                "never",
+                                "ifMultiple"
+                            ],
+                            "default": "never"
+                        },
+                        "placeWhereConditionOnNewLine": {
+                            "$id": "#root/dml/listItems/placeWhereConditionOnNewLine",
+                            "description": "When to place a WHERE condition in a DML statement on a new line",
+                            "type": "string",
+                            "enum": [
+                                "always",
+                                "never",
+                                "ifMultiple"
+                            ],
+                            "default": "never"
+                        },
+                        "placeGroupByAndOrderByOnNewLine": {
+                            "$id": "#root/dml/listItems/placeGroupByAndOrderByOnNewLine", 
+                            "description": "When to place GROUP BY and ORDER BY clauses in a DML statement on a new line",
+                            "type": "string",
+                            "enum": [
+                                "always",
+                                "never",
+                                "ifMultiple"
+                            ],
+                            "default": "never"
+                        }
+                    }
+                }
+            }
+        },
+        "ddl": {
+            "$id": "#root/ddl",
+            "type": "object",
+            "description": "Formatting options for schema (DDL)",
+            "properties": {
+                "parenthesisStyle": {
+                    "$id": "#root/ddl/parenthesisStyle",
+                    "description": "The format to use for parenthesized DDL code", 
+                    "type": "string",
+                    "enum": [
+                        "compactSimple",
+                        "compactToStatement",
+                        "compactIndented",
+                        "compactRightAligned",
+                        "expandedSimple",
+                        "expandedSplit",
+                        "expandedToStatement",
+                        "expandedIndented",
+                        "expandedRightAligned"
+                    ],
+                    "default": "compactSimple"
+                },
+                "indentParenthesesContents": {
+                    "$id": "#root/ddl/indentParenthesesContents",
+                    "description": "Whether the contents of parentheses in DDL statements are indented",
+                    "type": "boolean",
+                    "default": false
+                },
+                "alignDataTypesAndConstraints": {
+                    "$id": "#root/ddl/alignDataTypesAndConstraints",
+                    "description": "Whether to align data types and constraints",
+                    "type": "boolean",
+                    "default": true
+                },
+                "placeConstraintsOnNewLines": {
+                    "$id": "#root/ddl/placeConstraintsOnNewLines",
+                    "description": "Whether to place constraints on a new line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "placeConstraintColumnsOnNewLines": {
+                    "$id": "#root/ddl/placeConstraintColumnsOnNewLines",
+                    "description": "When to place constraint columns on a new line",
+                    "type": "string",
+                    "enum": [
+                        "always",
+                        "ifLongerThanMaxLineLength",
+                        "ifLongerOrMultipleColumns"
+                    ],
+                    "default": "ifLongerThanMaxLineLength"
+                },
+                "indentClauses": {
+                    "$id": "#root/ddl/indentClauses",
+                    "description": "Whether to indent clauses in DDL statements",
+                    "type": "boolean",
+                    "default": false
+                },
+                "placeFirstProcedureParameterOnNewLine": {
+                    "$id": "#root/ddl/placeFirstProcedureParameterOnNewLine",
+                    "description": "Whether to place the first parameter of a stored procedure on a new line",
+                    "type": "string",
+                    "enum": [
+                        "always",
+                        "never",
+                        "ifMultipleItems"
+                    ],
+                    "default": "ifMultipleItems"
+                },
+                "collapseShortStatements": {
+                    "$id": "#root/ddl/collapseShortStatements",
+                    "description": "Collapse short DDL statements onto a single line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "collapseStatementsShorterThan": {
+                    "$id": "#root/ddl/collapseStatementsShorterThan",
+                    "description": "DDL statements that are shorter than this will be collapsed onto a single line if enabled",
+                    "type": "integer",
+                    "examples": [
+                        80, 120, 160
+                    ],
+                    "default": 80
+                }
+            }
+        },
+        "controlFlow": {
+            "$id": "#root/controlFlow",
+            "type": "object",
+            "description": "Formatting options for control flow",
+            "properties": {
+                "placeBeginAndEndOnNewLine": {
+                    "$id": "#root/controlFlow/placeBeginAndEndOnNewLine",
+                    "description": "Whether BEGIN and END keywords are placed on new lines",
+                    "type": "boolean",
+                    "default": true
+                },
+                "indentBeginAndEndKeywords": {
+                    "$id": "#root/controlFlow/indentBeginAndEndKeywords",
+                    "description": "Whether to indent BEGIN and END keywords",
+                    "type": "boolean",
+                    "default": false
+                },
+                "indentContentsOfStatements": {
+                    "$id": "#root/controlFlow/indentContentsOfStatements",
+                    "description": "Whether the contents of control flow statements are indented",
+                    "type": "boolean",
+                    "default": true
+                },
+                "collapseShortStatements": {
+                    "$id": "#root/controlFlow/collapseShortStatements",
+                    "description": "Collapse short control flow statements onto a single line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "collapseStatementsShorterThan": {
+                    "$id": "#root/controlFlow/collapseStatementsShorterThan", 
+                    "description": "Control flow statements that are shorter than this will be collapsed onto a single line if enabled",
+                    "type": "integer",
+                    "examples": [
+                        80, 120, 160
+                    ],
+                    "default": 80
+                }
+            }
+        },
+        "cte": {
+            "$id": "#root/cte", 
+            "type": "object",
+            "description": "Formatting options for CTEs",
+            "properties": {
+                "parenthesisStyle": {
+                    "$id": "#root/cte/parenthesisStyle", 
+                    "description": "The format to use for parenthesized CTE code", 
+                    "type": "string",
+                    "enum": [
+                        "compactSimple",
+                        "compactToStatement",
+                        "compactIndented",
+                        "compactRightAligned",
+                        "expandedSimple",
+                        "expandedSplit",
+                        "expandedToStatement",
+                        "expandedIndented",
+                        "expandedRightAligned"
+                    ],
+                    "default": "compactSimple"
+                },
+                "indentContents": {
+                    "$id": "#root/cte/indentContents",
+                    "description": "Whether to indent clauses in CTE statements",
+                    "type": "boolean",
+                    "default": false
+                },
+                "placeNameOnNewLine": {
+                    "$id": "#root/cte/placeNameOnNewLine",
+                    "description": "Whether the CTE name is placed on a new line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "indentName": {
+                    "$id": "#root/cte/indentName", 
+                    "description": "Whether the CTE name is indented",
+                    "type": "boolean",
+                    "default": false
+                },
+                "placeColumnsOnNewLine": {
+                    "$id": "#root/cte/placeColumnsOnNewLine", 
+                    "description": "Whether the CTE columns are placed on a new line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "columnAlignment": {
+                    "$id": "#root/cte/columnAlignment", 
+                    "description": "How the columns in a CTE are aligned",
+                    "type": "string",
+                    "enum": [
+                        "indented",
+                        "leftAligned",
+                        "rightAligned"
+                    ],
+                    "default": "leftAligned"
+                },
+                "placeAsOnNewLine": {
+                    "$id": "#root/cte/placeAsOnNewLine", 
+                    "description": "Whether the AS keyword is placed on a new line",
+                    "type": "boolean",
+                    "default": true
+                },
+                "asAlignment": {
+                    "$id": "#root/cte/asAlignment", 
+                    "description": "How the AS keyword is aligned",
+                    "type": "string",
+                    "enum": [
+                        "indented",
+                        "leftAligned",
+                        "rightAligned"
+                    ],
+                    "default": "leftAligned"
+                }
+            }
+        },
+        "variables": {
+            "$id": "#root/variables", 
+            "type": "object",
+            "description": "Formatting options for variables",
+            "properties": {
+                "alignDataTypesAndValues": {
+                    "$id": "#root/variables/alignDataTypesAndValues", 
+                    "description": "Whether to align the data types and values in DECLARE statements",
+                    "type": "boolean",
+                    "default": true
+                },
+                "addSpaceBetweenDataTypeAndPrecision": {
+                    "$id": "#root/variables/addSpaceBetweenDataTypeAndPrecision",
+                    "description": "Whether a space is added between a data type and its precision", 
+                    "type": "boolean",
+                    "default": false
+                },
+                "placeAssignedValueOnNewLineIfLongerThanMaxLineLength": {
+                    "$id": "#root/variables/placeAssignedValueOnNewLineIfLongerThanMaxLineLength",
+                    "description": "Whether the assigned value is placed on a new line in long SET statements", 
+                    "type": "boolean",
+                    "default": true
+                },
+                "placeEqualsSignOnNewLine": {
+                    "$id": "#root/variables/placeEqualsSignOnNewLine", 
+                    "description": "Whether the = sign is placed on a new line",
+                    "type": "boolean",
+                    "default": false
+                }
+            }
+        },
+        "joinStatements": {
+            "$id": "#root/joinStatements", 
+            "type": "object",
+            "description": "Formatting options for join statements",
+            "properties": {
+                "join": {
+                    "$id": "#root/joinStatements/join", 
+                    "type": "object",
+                    "description": "Formatting options for JOIN",
+                    "properties": {
+                        "placeOnNewLine": {
+                            "$id": "#root/joinStatements/join/placeOnNewLine",
+                            "description": "Whether the JOIN keyword is placed on a new line", 
+                            "type": "boolean",
+                            "default": true
+                        },
+                        "keywordAlignment": {
+                            "$id": "#root/joinStatements/join/keywordAlignment", 
+                            "description": "How the JOIN keyword is aligned",
+                            "type": "string",
+                            "enum": [
+                                "toFrom",
+                                "rightAlignedToFrom",
+                                "toTable",
+                                "indented"
+                            ],
+                            "default": "toFrom"
+                        },
+                        "insertEmptyLineBetweenJoinClauses": {
+                            "$id": "#root/joinStatements/join/insertEmptyLineBetweenJoinClauses", 
+                            "description": "Whether empty lines are inserted between JOIN clauses",
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "placeJoinTableOnNewLine": {
+                            "$id": "#root/joinStatements/join/placeJoinTableOnNewLine", 
+                            "description": "Whether the join table is placed on a new line",
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "indentJoinTable": {
+                            "$id": "#root/joinStatements/join/indentJoinTable", 
+                            "description": "Whether the join table is indented",
+                            "type": "boolean",
+                            "default": true
+                        }
+                    }
+                },
+                "on": {
+                    "$id": "#root/joinStatements/on", 
+                    "type": "object",
+                    "description": "Formatting options for ON",
+                    "properties": {
+                        "placeOnNewLine": {
+                            "$id": "#root/joinStatements/on/placeOnNewLine",
+                            "description": "Whether the ON keyword is placed on a new line",
+                            "type": "boolean",
+                            "default": true
+                        },
+                        "keywordAlignment": {
+                            "$id": "#root/joinStatements/on/keywordAlignment", 
+                            "description": "How the ON keyword is aligned",
+                            "type": "string",
+                            "enum": [
+                                "toJoin",
+                                "rightAlignedToJoin",
+                                "rightAlignedToInner",
+                                "toTable",
+                                "indented"
+                            ],
+                            "default": "toJoin"
+                        },
+                        "placeConditionOnNewLine": {
+                            "$id": "#root/joinStatements/on/placeConditionOnNewLine",
+                            "description": "Whether a join condition is placed on a new line", 
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "conditionAlignment": {
+                            "$id": "#root/joinStatements/on/conditionAlignment", 
+                            "description": "How join conditions are aligned",
+                            "type": "string",
+                            "enum": [
+                                "toOnKeyword",
+                                "toInner",
+                                "toTable",
+                                "indented"
+                            ],
+                            "default": "toOnKeyword"
+                        }
+                    }
+                }
+            }
+        },
+        "insertStatements": {
+            "$id": "#root/insertStatements", 
+            "type": "object",
+            "description": "Formatting options for inserts",
+            "properties": {
+                "columns": {
+                    "$id": "#root/insertStatements/columns", 
+                    "type": "object",
+                    "description": "Formatting options for columns",
+                    "properties": {
+                        "parenthesisStyle": {
+                            "$id": "#root/insertStatements/columns/parenthesisStyle", 
+                            "description": "The format to use for parenthesized insert statements",
+                            "type": "string",
+                            "enum": [
+                                "compactSimple",
+                                "compactToStatement",
+                                "compactIndented",
+                                "compactRightAligned",
+                                "expandedSimple",
+                                "expandedSplit",
+                                "expandedToStatement",
+                                "expandedIndented",
+                                "expandedRightAligned"
+                            ],
+                            "default": "expandedToStatement"
+                        },
+                        "indentContents": {
+                            "$id": "#root/insertStatements/columns/indentContents", 
+                            "description": "Whether to indent content",
+                            "type": "boolean",
+                            "default": true
+                        },
+                        "placeSubsequentColumnsOnNewLines": {
+                            "$id": "#root/insertStatements/columns/placeSubsequentColumnsOnNewLines", 
+                            "description": "When to place subsequent columns on new lines",
+                            "type": "string",
+                            "enum": [
+                                "always",
+                                "never",
+                                "ifLongerThanMaxLineLength"
+                            ],
+                            "default": "always"
+                        }
+                    }
+                },
+                "values": {
+                    "$id": "#root/insertStatements/values", 
+                    "type": "object",
+                    "description": "Formatting options for values",
+                    "properties": {
+                        "parenthesisStyle": {
+                            "$id": "#root/insertStatements/values/parenthesisStyle", 
+                            "description": "The format to use for values in INSERT statements",
+                            "type": "string",
+                            "enum": [
+                                "compactSimple",
+                                "compactToStatement",
+                                "compactIndented",
+                                "compactRightAligned",
+                                "expandedSimple",
+                                "expandedSplit",
+                                "expandedToStatement",
+                                "expandedIndented",
+                                "expandedRightAligned"
+                            ],
+                            "default": "compactToStatement"
+                        },
+                        "indentContents": {
+                            "$id": "#root/insertStatements/values/indentContents", 
+                            "description": "Whether to indent content",
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "placeSubsequentValuesOnNewLines": {
+                            "$id": "#root/insertStatements/values/placeSubsequentValuesOnNewLines", 
+                            "description": "When to place subsequent values on new lines",
+                            "type": "string",
+                            "enum": [
+                                "always",
+                                "never",
+                                "ifLongerThanMaxLineLength"
+                            ],
+                            "default": "never"
+                        }
+                    }
+                }
+            }
+        },
+        "functionCalls": {
+            "$id": "#root/functionCalls", 
+            "type": "object",
+            "description": "Formatting options for function calls",
+            "properties": {
+                "placeArgumentsOnNewLines": {
+                    "$id": "#root/functionCalls/placeArgumentsOnNewLines", 
+                    "description": "When to place arguments on new lines",
+                    "type": "string",
+                    "enum": [
+                        "always",
+                        "never",
+                        "ifLongerThanMaxLineLength"
+                    ],
+                    "default": "ifLongerThanMaxLineLength"
+                },
+                "addSpacesAroundParentheses": {
+                    "$id": "#root/functionCalls/addSpacesAroundParentheses", 
+                    "description": "Whether to add spaces around parentheses",
+                    "type": "boolean",
+                    "default": false
+                },
+                "addSpacesAroundArgumentList": {
+                    "$id": "#root/functionCalls/addSpacesAroundArgumentList", 
+                    "description": "Whether to add spaces around argument list",
+                    "type": "boolean",
+                    "default": false
+                },
+                "addSpaceBetweenEmptyParentheses": {
+                    "$id": "#root/functionCalls/addSpaceBetweenEmptyParentheses", 
+                    "description": "Whether to add space between empty parentheses",
+                    "type": "boolean",
+                    "default": false
+                }
+            }
+        },
+        "caseExpressions": {
+            "$id": "#root/caseExpressions", 
+            "type": "object",
+            "description": "Formatting options for CASE",
+            "properties": {
+                "placeExpressionOnNewLine": {
+                    "$id": "#root/caseExpressions/placeExpressionOnNewLine", 
+                    "description": "Whether to place expression on new line",
+                    "type": "boolean",
+                    "default": true
+                },
+                "placeFirstWhenOnNewLine": {
+                    "$id": "#root/caseExpressions/placeFirstWhenOnNewLine", 
+                    "description": "When to place the first WHEN keyword on a new line",
+                    "type": "string",
+                    "enum": [
+                        "always",
+                        "never",
+                        "ifInputExpression"
+                    ],
+                    "default": "always"
+                },
+                "whenAlignment": {
+                    "$id": "#root/caseExpressions/whenAlignment", 
+                    "description": "How the WHEN keywords are aligned",
+                    "type": "string",
+                    "enum": [
+                        "indentedFromCase",
+                        "toCase",
+                        "toFirstItem"
+                    ],
+                    "default": "indentedFromCase"
+                },
+                "placeThenOnNewLine": {
+                    "$id": "#root/caseExpressions/placeThenOnNewLine", 
+                    "description": "Whether the THEN keyword is placed on a new line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "thenAlignment": {
+                    "$id": "#root/caseExpressions/thenAlignment", 
+                    "description": "How the THEN keywords are aligned",
+                    "type": "string",
+                    "enum": [
+                        "indentedFromWhen",
+                        "toWhen",
+                        "toWhenExpression"
+                    ],
+                    "default": "indentedFromWhen"
+                },
+                "placeElseOnNewLine": {
+                    "$id": "#root/caseExpressions/placeElseOnNewLine", 
+                    "description": "Whether the ELSE keyword is placed on new line",
+                    "type": "boolean",
+                    "default": true
+                },
+                "alignElseToWhen": {
+                    "$id": "#root/caseExpressions/alignElseToWhen", 
+                    "description": "Whether to align the ELSE keyword to the WHEN keyword",
+                    "type": "boolean",
+                    "default": true
+                },
+                "placeEndOnNewLine": {
+                    "$id": "#root/caseExpressions/placeEndOnNewLine", 
+                    "description": "Whether to place the END keyword on new line",
+                    "type": "boolean",
+                    "default": true
+                },
+                "endAlignment": {
+                    "$id": "#root/caseExpressions/endAlignment", 
+                    "description": "How the END keyword is aligned",
+                    "type": "string",
+                    "enum": [
+                        "toCase",
+                        "toWhen",
+                        "rightAlignedToWhen"
+                    ],
+                    "default": "toCase"
+                },
+                "collapseShortCaseExpressions": {
+                    "$id": "#root/caseExpressions/collapseShortCaseExpressions", 
+                    "description": "Collapse short CASE expressions onto a single line",
+                    "type": "boolean",
+                    "default": false
+                },
+                "collapseCaseExpressionsShorterThan": {
+                    "$id": "#root/caseExpressions/collapseCaseExpressionsShorterThan", 
+                    "description": "CASE expressions shorter than this will be collapsed onto a single line if enabled",
+                    "type": "integer",
+                    "examples": [80, 120, 180],
+                    "default": 80
+                }
+            }
+        },
+        "operators": {
+            "$id": "#root/operators", 
+            "type": "object",
+            "description": "Formatting options for operators",
+            "properties": {
+                "comparison": {
+                    "$id": "#root/operators/comparison", 
+                    "type": "object",
+                    "description": "Formatting options for comparisons",
+                    "properties": {
+                        "align": {
+                            "$id": "#root/operators/comparison/align", 
+                            "description": "Whether to align comparison operators",
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "addSpacesAround": {
+                            "$id": "#root/operators/comparison/addSpacesAround", 
+                            "description": "Whether to add spaces around comparison operators",
+                            "type": "boolean",
+                            "default": true
+                        }
+                    }
+                },
+                "arithmetic": {
+                    "$id": "#root/operators/arithmetic", 
+                    "type": "object",
+                    "description": "Formatting options for arithmetic",
+                    "properties": {
+                        "addSpacesAround": {
+                            "$id": "#root/operators/arithmetic/addSpacesAround", 
+                            "description": "Whether to add spaces around arithmetic operators",
+                            "type": "boolean",
+                            "default": true
+                        }
+                    }
+                },
+                "andOr": {
+                    "$id": "#root/operators/andOr", 
+                    "type": "object",
+                    "description": "Formatting options for AND / OR",
+                    "properties": {
+                        "placeOnNewLine": {
+                            "$id": "#root/operators/andOr/placeOnNewLine",                         
+                            "description": "When to place AND / OR operators on a new line",
+                            "type": "string",
+                            "enum": [
+                                "always",
+                                "never",
+                                "ifLongerThanMaxLineLength"
+                            ],
+                            "default": "always"
+                        },
+                        "alignment": {
+                            "$id": "#root/operators/andOr/alignment", 
+                            "description": "How to align AND / OR operators",
+                            "type": "string",
+                            "enum": [
+                                "leftAligned",
+                                "rightAligned",
+                                "beforeFirstListItem",
+                                "toFirstListItem",
+                                "indented"
+                            ],
+                            "default": "leftAligned"
+                        },
+                        "placeKeywordBeforeCondition": {
+                            "$id": "#root/operators/andOr/placeKeywordBeforeCondition", 
+                            "description": "Whether to place AND / OR keyword before condition",
+                            "type": "boolean",
+                            "default": true
+                        }
+                    }
+                },
+                "between": {
+                    "$id": "#root/operators/between", 
+                    "type": "object",
+                    "description": "Formatting options for BETWEEN",
+                    "properties": {
+                        "placeOnNewLine": {
+                            "$id": "#root/operators/between/placeOnNewLine", 
+                            "description": "Whether to place BETWEEN operator on a new line",
+                            "type": "boolean",
+                            "default": true
+                        },
+                        "placeAndKeywordOnNewLine": {
+                            "$id": "#root/operators/between/placeAndKeywordOnNewLine", 
+                            "description": "Whether to place AND keyword on a new line",
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "andAlignment": {
+                            "$id": "#root/operators/between/andAlignment", 
+                            "description": "How to align the AND keyword if placing AND keyword on a new line is enabled",
+                            "type": "string",
+                            "enum": [
+                                "toBetween",
+                                "rightAlignedToBetween",
+                                "toBeginningOfExpression"
+                            ],
+                            "default": "toBetween"
+                        }
+                    }
+                },
+                "in": {
+                    "$id": "#root/operators/in", 
+                    "type": "object",
+                    "description": "Formatting options for IN",
+                    "properties": {
+                        "placeOpeningParenthesisOnNewLine": {
+                            "$id": "#root/operators/in/placeOpeningParenthesisOnNewLine", 
+                            "description": "Whether to place opening parenthesis on new line",
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "alignment": {
+                            "$id": "#root/operators/in/alignment", 
+                            "description": "How to align the IN keyword",
+                            "type": "string",
+                            "enum": [
+                                "leftAligned",
+                                "rightAligned",
+                                "indented"
+                            ],
+                            "default": "leftAligned"
+                        },
+                        "placeFirstValueOnNewLine": {
+                            "$id": "#root/operators/in/placeFirstValueOnNewLine", 
+                            "description": "When to place the first value on a new line",
+                            "type": "string",
+                            "enum": [
+                                "always",
+                                "never",
+                                "ifLongerThanMaxLineLength",
+                                "ifSubsequentValues"
+                            ],
+                            "default": "ifLongerThanMaxLineLength"
+                        },
+                        "placeSubsequentValuesOnNewLines": {
+                            "$id": "#root/operators/in/placeSubsequentValuesOnNewLines", 
+                            "description": "When to place subsequent values on new lines",
+                            "type": "string",
+                            "enum": [
+                                "always",
+                                "never",
+                                "ifLongerThanMaxLineLength"
+                            ],
+                            "default": "ifLongerThanMaxLineLength"
+                        },
+                        "addSpaceAroundInContents": {
+                            "$id": "#root/operators/in/addSpaceAroundInContents", 
+                            "description": "Whether to add a space around IN contents",
+                            "type": "boolean",
+                            "default": false
+                        }
+                    }
+                }
+
+            }
+        }
+
+    }
+}

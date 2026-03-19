@@ -1,0 +1,670 @@
+= T-SQL Formatter Specification
+// Metadata:
+:description: Specification for a T-SQL formatter in F# using SqlScriptDOM and Wadler's pretty-printing algebra.
+// Settings:
+:idprefix:
+:idseparator: -
+:sectnums:
+:toc:
+:toc-placement!:
+// Refs:
+:url-fspretty: https://github.com/mjsottile/FsPretty
+:url-ionide-lsp: https://github.com/ionide/LanguageServerProtocol
+:url-scriptdom: https://learn.microsoft.com/en-us/dotnet/api/microsoft.sqlserver.transactsql.scriptdom
+:url-sqlprompt-formatter: https://documentation.red-gate.com/sp/sql-prompt-formatting
+:url-wadler-prettier: https://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf
+
+toc::[]
+
+== Overview
+
+This document specifies a T-SQL code formatter implemented in F#.
+The formatter parses T-SQL using Microsoft's {url-scriptdom}[SqlScriptDOM] library, transforms the AST into a pretty-printer document using Wadler's algebra (via {url-fspretty}[FsPretty]), and renders the result to a string.
+
+The formatter reads configuration from a JSON file whose schema matches {url-sqlprompt-formatter}[SQL Prompt]'s formatting style.
+Existing SQL Prompt configuration files load directly.
+
+=== Goals
+
+* Produce output identical to SQL Prompt for the supported configuration subset.
+* Use Wadler's {url-wadler-prettier}[_A Prettier Printer_] algebra for principled line-breaking decisions.
+* Expose a CLI tool that reads SQL from stdin or a file and writes formatted SQL to stdout.
+* Preserve comments in their relative positions.
+
+=== Non-goals
+
+* Linting, code analysis, or refactoring.
+* LSP integration (deferred to future work).
+* `useObjectDefinitionCase` (requires database metadata lookup).
+
+== Architecture
+
+=== Pipeline
+
+The formatter is a three-stage pipeline:
+
+. *Parse* -- `TSqlParser.Parse()` produces a `TSqlFragment` AST. +
+Parse errors are reported and the input is returned unchanged.
+. *Transform* -- A recursive function walks the AST and produces an FsPretty `Doc` value. +
+The configuration record is threaded through this phase.
+. *Render* -- `Doc.render(maxWidth)` flattens the `Doc` into a string respecting the configured line width.
+
+[source,fsharp]
+----
+let format (config: FormattingStyle) (sql: string) : Result<string, string list> =
+    let parser = TSql160Parser(initialQuotedIdentifiers = true)
+    let fragment, errors = parser.Parse(new StringReader(sql))
+    if errors.Count > 0 then
+        Error [ for e in errors -> e.Message ]
+    else
+        let doc = toDoc config fragment
+        Ok (render config.whitespace.wrapLinesLongerThan doc)
+----
+
+=== Dependencies
+
+|===
+| Library | Purpose
+
+| `Microsoft.SqlServer.TransactSql.ScriptDom`
+| T-SQL parser, AST types, token stream
+
+| FsPretty (vendored or NuGet)
+| Wadler's pretty-printing algebra (`Doc` type, `render`)
+|===
+
+== Configuration Model
+
+The configuration is a strongly-typed F# record hierarchy that mirrors the JSON schema in `formattingstyle-schema.json`.
+The top-level record:
+
+[source,fsharp]
+----
+type FormattingStyle =
+    { whitespace: WhitespaceConfig
+      lists: ListsConfig
+      parentheses: ParenthesesConfig
+      casing: CasingConfig
+      dml: DmlConfig
+      ddl: DdlConfig
+      controlFlow: ControlFlowConfig
+      cte: CteConfig
+      variables: VariablesConfig
+      joinStatements: JoinStatementsConfig
+      insertStatements: InsertStatementsConfig
+      functionCalls: FunctionCallsConfig
+      caseExpressions: CaseExpressionsConfig
+      operators: OperatorsConfig }
+----
+
+Each nested record mirrors its JSON schema counterpart.
+The `metadata` section in the JSON file is ignored during deserialization.
+
+Enum-like fields (e.g., `parenthesisStyle`, `alignment`, `reservedKeywords`) are represented as discriminated unions or string enums with JSON converters.
+
+The concrete profile used is `default-style.json`.
+Its key settings:
+
+|===
+| Path | Value | Effect
+
+| `whitespace.wrapLinesLongerThan`
+| 180
+| Maximum line width before wrapping
+
+| `casing.reservedKeywords`
+| `uppercase`
+| All keywords uppercased
+
+| `casing.builtInFunctions`
+| `uppercase`
+| `CAST`, `ISNULL`, `COALESCE` etc. uppercased
+
+| `casing.builtInDataTypes`
+| `uppercase`
+| `VARCHAR`, `INT`, `DATE` etc. uppercased
+
+| `parentheses.parenthesisStyle`
+| `expandedSplit`
+| Opening paren on preceding line, closing on own line
+
+| `parentheses.collapseParenthesesShorterThan`
+| 40
+| Short parenthesized content stays on one line
+
+| `dml.collapseStatementsShorterThan`
+| 78
+| Short DML statements stay on one line
+
+| `dml.collapseSubqueriesShorterThan`
+| 40
+| Short subqueries stay on one line
+
+| `operators.andOr.alignment`
+| `indented`
+| AND/OR indented one level from clause keyword
+
+| `joinStatements.join.indentJoinTable`
+| `false`
+| Join table on same line as JOIN keyword
+
+| `joinStatements.on.keywordAlignment`
+| `indented`
+| ON indented one level from JOIN
+|===
+
+== Pretty-Printer Algebra
+
+The formatter uses Wadler's algebra as implemented by FsPretty.
+The core `Doc` type provides these combinators:
+
+`text s`:: A literal string. No line breaks.
+`line`:: A line break that becomes a single space when flattened by `group`.
+`hardline`:: A mandatory line break. Never flattened.
+`nest i doc`:: Increases indentation by `i` for `doc`.
+`group doc`:: Try to flatten `doc` onto one line. If it fits within the page width, flatten it; otherwise keep line breaks.
+`doc1 <> doc2`:: Concatenation.
+`empty`:: The empty document.
+
+=== Mapping SQL Concepts to Combinators
+
+Short-statement collapsing::
+Wrap an entire statement's `Doc` in `group`.
+If the rendered width is under `collapseStatementsShorterThan`, it collapses onto one line.
+
+Clause boundaries (SELECT, FROM, WHERE, ...)::
+Use `hardline` between clause keyword and preceding content.
+Clauses always start on a new line.
+
+List items (columns, values, conditions)::
+Use `line` (softline) between items.
+Inside a `group`, fits on one line; outside, each item gets its own line.
+Indent list items with `nest 4`.
+
+Parenthesized content (expandedSplit)::
+Opening paren as `text "("`, then `nest 4 (hardline <> contents)`, then `hardline <> text ")"`.
+Wrap in `group` with a collapse threshold check for short content.
+
+AND/OR operators::
+`hardline` before each AND/OR.
+Indented one level with `nest 4`.
+
+== AST Visitor
+
+The core of the formatter is a recursive function `toDoc` that pattern-matches on `TSqlFragment` subtypes and produces `Doc` values.
+
+=== Dispatch Strategy
+
+ScriptDOM's AST is a class hierarchy rooted at `TSqlFragment`.
+F# handles this via type-test patterns:
+
+[source,fsharp]
+----
+let rec toDoc (cfg: FormattingStyle) (node: TSqlFragment) : Doc =
+    match node with
+    | :? SelectStatement as s -> selectStatementDoc cfg s
+    | :? QuerySpecification as q -> querySpecDoc cfg q
+    | :? QualifiedJoin as j -> joinDoc cfg j
+    | :? BooleanBinaryExpression as b -> booleanBinaryDoc cfg b
+    // ... remaining node types
+    | _ -> tokenStreamDoc cfg node
+----
+
+The fallback `tokenStreamDoc` renders any unhandled node by emitting its tokens directly from the token stream, preserving the original text.
+This ensures the formatter is safe on unsupported syntax: it degrades to identity rather than crashing.
+
+=== Node Types
+
+The following ScriptDOM node types require dedicated formatting functions:
+
+==== DML Statements
+
+`SelectStatement`, `QuerySpecification`::
+Formats SELECT, FROM, WHERE, GROUP BY, HAVING, ORDER BY clauses.
+Each clause starts on a new line at the current indentation level.
+List items (columns, GROUP BY expressions, ORDER BY expressions) are indented one level.
+
+`InsertStatement`::
+Column list and VALUES list formatted per `insertStatements` config.
+
+`UpdateStatement`, `DeleteStatement`::
+Follow DML clause layout rules.
+
+`MergeStatement`::
+MERGE, USING, ON, WHEN MATCHED/NOT MATCHED as clauses.
+
+==== Joins
+
+`QualifiedJoin` (INNER JOIN, LEFT JOIN, etc.)::
+JOIN keyword left-aligned with FROM.
+Table reference on same line as JOIN (per `indentJoinTable: false`).
+ON keyword on the next line, indented one level.
+Additional join conditions (AND/OR) indented from ON.
+
+`UnqualifiedJoin` (CROSS JOIN, comma join)::
+Formatted inline or on new line depending on context.
+
+==== DDL Statements
+
+`CreateProcedureStatement`, `AlterProcedureStatement`::
+Parameter list uses `expandedSplit` parenthesis style with indented contents.
+
+`CreateFunctionStatement`, `AlterFunctionStatement`::
+Same parenthesis handling as procedures.
+RETURNS clause on its own line.
+
+`CreateTableStatement`::
+Column definitions use DDL parenthesis style.
+
+==== Control Flow
+
+`BeginEndBlockStatement`::
+BEGIN and END on their own lines.
+Contents indented one level.
+
+`IfStatement`, `WhileStatement`::
+Condition on same line as keyword.
+Body indented.
+
+`TryCatchStatement`::
+TRY/CATCH/END TRY/END CATCH each on their own line.
+
+==== Expressions
+
+`CaseExpression` (searched CASE), `SimpleCaseExpression`::
+Collapse if total width under `collapseCaseExpressionsShorterThan` (25 chars).
+Otherwise: WHEN indented from CASE, THEN on same line as WHEN condition, ELSE aligned to WHEN, END aligned to CASE.
+
+`FunctionCall`::
+Arguments broken across lines if longer than max line length.
+No spaces inside parentheses.
+
+`CastCall`::
+`CAST(expr AS type)` -- keyword uppercased per `builtInFunctions` config.
+
+`InPredicate`::
+Values each on their own line (per `operators.in.placeSubsequentValuesOnNewLines: always`), indented.
+
+`BetweenPredicate`::
+AND stays on same line as BETWEEN (per `operators.between.placeOnNewLine: false`).
+
+`ParenthesisExpression`, `ScalarSubquery`::
+Follow `parentheses` config.
+Subqueries collapse if under `collapseSubqueriesShorterThan`.
+
+==== Variables
+
+`DeclareVariableStatement`::
+Data types and values not aligned (per `variables.alignDataTypesAndValues: false`).
+
+`SetVariableStatement`::
+Value stays on same line (per `variables.placeAssignedValueOnNewLineIfLongerThanMaxLineLength: false`).
+
+==== Set Operations
+
+`BinaryQueryExpression` (UNION, UNION ALL, EXCEPT, INTERSECT)::
+Set operator on its own line with a blank line before and after.
+
+== Keyword Casing
+
+During token emission, keywords are re-cased according to `config.casing`:
+
+|===
+| Category | Config field | Classification
+
+| Reserved keywords
+| `reservedKeywords`
+| SELECT, FROM, WHERE, JOIN, ON, AND, OR, IS, NULL, NOT, IN, BETWEEN, AS, UNION, ALL, ORDER, BY, GROUP, HAVING, INSERT, INTO, VALUES, UPDATE, SET, DELETE, MERGE, WHEN, MATCHED, THEN, CASE, WHEN, ELSE, END, BEGIN, IF, WHILE, TRY, CATCH, DECLARE, RETURN, EXISTS, LIKE, TOP, DISTINCT, etc.
+
+| Built-in functions
+| `builtInFunctions`
+| CAST, CONVERT, ISNULL, COALESCE, NULLIF, IIF, CHOOSE, LEN, LEFT, RIGHT, SUBSTRING, REPLACE, UPPER, LOWER, LTRIM, RTRIM, TRIM, CHARINDEX, PATINDEX, DATEADD, DATEDIFF, DATEPART, GETDATE, GETUTCDATE, SYSDATETIME, FORMAT, ROUND, ABS, CEILING, FLOOR, POWER, SIGN, SQRT, ROW_NUMBER, RANK, DENSE_RANK, NTILE, LAG, LEAD, FIRST_VALUE, LAST_VALUE, SUM, COUNT, AVG, MIN, MAX, STRING_AGG, etc.
+
+| Built-in data types
+| `builtInDataTypes`
+| INT, BIGINT, SMALLINT, TINYINT, BIT, DECIMAL, NUMERIC, FLOAT, REAL, MONEY, SMALLMONEY, DATE, DATETIME, DATETIME2, DATETIMEOFFSET, SMALLDATETIME, TIME, CHAR, VARCHAR, NCHAR, NVARCHAR, TEXT, NTEXT, BINARY, VARBINARY, IMAGE, UNIQUEIDENTIFIER, XML, TABLE, etc.
+
+| Global variables
+| `globalVariables`
+| @@ROWCOUNT, @@ERROR, @@IDENTITY, @@TRANCOUNT, @@FETCH_STATUS, @@VERSION, @@SERVERNAME, @@SPID, etc.
+|===
+
+User-defined identifiers (table names, column names, variable names, aliases) are never re-cased.
+
+== Comment Preservation
+
+[NOTE]
+====
+Comment handling requires investigation of ScriptDOM's token stream API.
+This section describes the intended approach; implementation may need adjustment.
+====
+
+ScriptDOM's `TSqlFragment` nodes expose `ScriptTokenStream`, `FirstTokenIndex`, and `LastTokenIndex` properties.
+Comments appear as tokens of type `TSqlTokenType.SingleLineComment` and `TSqlTokenType.MultilineComment` in the token stream but are not represented as AST nodes.
+
+=== Strategy
+
+The formatter associates comments with AST nodes by scanning token gaps:
+
+. For each AST node, examine the tokens between the previous node's `LastTokenIndex` and the current node's `FirstTokenIndex`.
+. Any comment tokens in that gap are attached to the current node as _leading comments_.
+. Trailing comments (on the same line after a node's last token, before a newline) are attached to the preceding node.
+. When emitting a node's `Doc`, prepend its leading comments and append its trailing comments.
+
+Single-line comments (`-- ...`) emit as `text "-- ..."` followed by `hardline`.
+Multi-line comments (`/* ... */`) emit as `text "/* ... */"`.
+
+Inline comments (e.g., `-- Number of times per year` after a parameter) stay on the same line as the preceding token.
+
+== Table Hints
+
+Table hints such as `(NOLOCK)` are `TableHint` nodes in ScriptDOM.
+They appear on the same line as the table reference, separated by a single space:
+
+[source,sql]
+----
+FROM [ARMS].[dbo].[arms_run] (NOLOCK) b
+----
+
+== Batch Separators
+
+ScriptDOM parses each batch separately.
+The formatter emits `GO` between batches.
+Blank lines before and after `GO` are controlled by `whitespace.newLines.emptyLinesAfterBatchSeparator`.
+
+== Parenthesis Styles
+
+The `parenthesisStyle` option appears in several config sections (parentheses, ddl, cte, insertStatements).
+Nine styles are defined:
+
+=== Compact Styles
+
+All compact styles keep the opening parenthesis on the same line as the preceding token.
+
+`compactSimple`::
+Opening and closing parentheses on the same line as content.
++
+[source,sql]
+----
+WHERE id IN (1, 2, 3)
+----
+
+`compactToStatement`::
+Closing parenthesis aligned to the statement keyword.
++
+[source,sql]
+----
+WHERE id IN (1,
+             2,
+             3)
+----
+
+`compactIndented`::
+Content indented one level.
+Closing parenthesis on its own line, indented.
++
+[source,sql]
+----
+WHERE id IN (
+    1,
+    2,
+    3
+    )
+----
+
+`compactRightAligned`::
+Closing parenthesis right-aligned to the opening parenthesis.
+
+=== Expanded Styles
+
+All expanded styles place the opening and closing parentheses on their own lines.
+
+`expandedSimple`::
+Opening and closing parentheses on their own lines, left-aligned to the preceding keyword.
++
+[source,sql]
+----
+WHERE id IN
+(1, 2, 3)
+----
+
+`expandedSplit`::
+Opening parenthesis at end of preceding line.
+Closing parenthesis on its own line.
+This is the primary style used in the `default-style` profile.
++
+[source,sql]
+----
+WHERE id IN (
+    1,
+    2,
+    3
+)
+----
+
+`expandedToStatement`::
+Closing parenthesis aligned to the statement keyword.
+
+`expandedIndented`::
+Both parentheses indented one level from the statement keyword.
+
+`expandedRightAligned`::
+Content right-aligned to the opening parenthesis.
+
+=== Collapsing
+
+When `collapseShortParenthesisContents` is true and the content is shorter than `collapseParenthesesShorterThan`, the content collapses onto a single line regardless of the parenthesis style:
+
+[source,sql]
+----
+WHERE id IN (1, 2, 3)
+----
+
+This maps directly to wrapping the parenthesized `Doc` in `group` and measuring its flat width.
+
+== Layout Rules
+
+=== DML Clause Layout
+
+Each DML clause begins a new line at the current indentation level.
+List items are indented one level (4 spaces) from the clause keyword.
+
+[source,sql]
+----
+SELECT col1,       -- clause at column 0
+    col2,          -- list item indented 4
+    col3
+FROM table1        -- clause at column 0
+WHERE x = 1        -- clause at column 0
+    AND y = 2      -- AND/OR indented 4
+ORDER BY col1      -- clause at column 0
+----
+
+Short statements collapse onto one line when their total width is under `collapseStatementsShorterThan` (78):
+
+[source,sql]
+----
+SELECT 1 FROM tbl WHERE x = 1
+----
+
+=== JOIN Layout
+
+JOIN keywords are left-aligned with FROM.
+The table reference appears on the same line as the JOIN keyword.
+ON is indented one level from JOIN.
+
+[source,sql]
+----
+FROM table1 t1
+INNER JOIN table2 t2
+    ON t1.id = t2.id
+LEFT JOIN table3 t3
+    ON t1.id = t3.id
+        AND t1.type = t3.type
+----
+
+=== AND/OR Layout
+
+AND/OR operators start a new line, indented one level from the clause keyword (WHERE, ON, etc.).
+The keyword appears before the condition.
+
+[source,sql]
+----
+WHERE x = 1
+    AND y = 2
+    OR z = 3
+----
+
+=== IN Operator
+
+Values are each placed on a new line (per `operators.in.placeSubsequentValuesOnNewLines: always`), indented from the IN keyword.
+
+[source,sql]
+----
+WHERE job_name IN ('value1')
+    AND upload_date = '20260101'
+----
+
+When the IN contains a subquery, the subquery follows the parenthesis style and may collapse if short.
+
+=== CASE Expressions
+
+Short CASE expressions (under `collapseCaseExpressionsShorterThan`, 25 chars) collapse:
+
+[source,sql]
+----
+CASE WHEN x = 1 THEN 'a' ELSE 'b' END
+----
+
+Longer expressions expand:
+
+[source,sql]
+----
+CASE
+    WHEN x = 1 THEN 'a'
+    WHEN x = 2 THEN 'b'
+    ELSE 'c'
+END
+----
+
+=== UNION / Set Operations
+
+A blank line precedes and follows the set operator:
+
+[source,sql]
+----
+SELECT col1
+FROM table1
+
+UNION ALL
+
+SELECT col1
+FROM table2
+----
+
+=== DDL Parameter Lists
+
+Function and procedure parameters use `expandedSplit` parentheses with indented contents:
+
+[source,sql]
+----
+ALTER FUNCTION [schema].[name] (
+    @param1 VARCHAR(3),
+    @param2 INT
+)
+----
+
+== CLI Interface
+
+The formatter is a command-line tool.
+
+=== Usage
+
+[source,shell]
+----
+tsqlfmt [OPTIONS] [FILE]
+----
+
+When `FILE` is omitted or `-`, reads from stdin.
+Formatted SQL is written to stdout.
+
+=== Options
+
+`--config PATH`::
+Path to a JSON configuration file.
+Defaults to `formattingstyle.json` in the current directory.
+
+`--check`::
+Check mode.
+Prints a diff to stderr and exits with code 1 if the input would change.
+Useful in CI pipelines.
+
+`--in-place`::
+Overwrite the input file with formatted output.
+Requires a file path argument.
+
+`--help`::
+Print usage information.
+
+=== Exit Codes
+
+|===
+| Code | Meaning
+
+| 0
+| Success (or no changes in `--check` mode)
+
+| 1
+| Input would change (`--check` mode), or formatting error
+
+| 2
+| Invalid arguments or missing configuration file
+|===
+
+== Testing Strategy
+
+=== Integration Tests
+
+The primary correctness criterion: for each test case, formatting the `.actual.sql` file with the `default-style.json` config must produce output identical to the `.expected.sql` file.
+
+Test cases:
+
+|===
+| Test | Description
+
+| test1
+| Complex UNION ALL query with JOINs, subqueries, NOLOCK hints
+
+| test2
+| ALTER FUNCTION with long parameter list and long SELECT list
+
+| test3
+| Simple INNER JOIN with SELECT *
+
+| test4
+| Simple SELECT with WHERE clause and AND
+|===
+
+=== Unit Tests
+
+Each `toDoc` function is tested in isolation against small SQL fragments.
+Assert the rendered output matches the expected string.
+
+=== Property Tests
+
+Parse a formatted result and verify it produces an equivalent AST (same structure, same token values modulo whitespace and casing).
+This ensures the formatter never changes the semantics of the SQL.
+
+=== Regression Tests
+
+New test cases are added as bugs are found.
+Each test case is a triple: input SQL, configuration, expected output.
+
+== Open Questions
+
+. *Comment association*: Does `TSqlFragment.ScriptTokenStream` reliably expose all comment tokens?
+Can `FirstTokenIndex` / `LastTokenIndex` gaps be used to associate comments with AST nodes, or is a separate pass needed?
+. *Whitespace in string literals*: The formatter must never modify whitespace inside string literals (`'...'`).
+ScriptDOM's AST distinguishes literals, so this should be safe, but needs verification.
+. *NOLOCK and other table hints*: Verify that ScriptDOM parses `(NOLOCK)` as a `TableHint` node attached to the table reference, not as a standalone parenthesized expression.
+. *Multiple statements in one batch*: How should blank lines between statements within a single batch be handled when `preserveExistingEmptyLinesBetweenStatements` is false?
