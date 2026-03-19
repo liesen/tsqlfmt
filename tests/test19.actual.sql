@@ -1,0 +1,1 @@
+select a.id, b.value, c.name, d.result from dbo.base_data a cross join dbo.reference_values b inner join dbo.categories c on c.id = a.category_id cross apply (select top 1 x.result from dbo.calculations x where x.input_id = a.id order by x.created_date desc) d outer apply (select count(*) as child_count from dbo.child_records cr where cr.parent_id = a.id) e where a.is_active = 1

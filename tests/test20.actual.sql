@@ -1,0 +1,1 @@
+insert into dbo.archive_records (record_id, record_type, record_date, source_system) select t.id, t.type_code, t.created_date, 'MainSystem' from dbo.active_records t inner join dbo.record_types rt on rt.type_id = t.type_id where t.created_date < dateadd(year, -2, getutcdate()) and rt.is_archivable = 1 order by t.created_date

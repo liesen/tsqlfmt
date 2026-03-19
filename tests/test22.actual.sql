@@ -1,0 +1,3 @@
+create procedure dbo.usp_ProcessRecords @batchSize int = 100, @dryRun bit = 0 as begin set nocount on; declare @processed int = 0; select top (@batchSize) r.id, r.status into #temp from dbo.pending_records r where r.status = 'New' order by r.priority desc; if @dryRun = 0 begin update t set t.status = 'Processing', t.started_date = getutcdate() from dbo.pending_records t inner join #temp tmp on tmp.id = t.id; set @processed = @@rowcount; end select @processed as records_processed; drop table #temp; end
+GO
+create procedure dbo.usp_CleanupRecords @cutoffDays int = 30 as begin delete from dbo.archive_records where created_date < dateadd(day, -@cutoffDays, getutcdate()); end

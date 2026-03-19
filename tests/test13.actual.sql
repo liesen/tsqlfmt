@@ -1,0 +1,1 @@
+update t set t.status = 'Active', t.modified_date = getutcdate(), t.modified_by = @userId from dbo.accounts t inner join dbo.account_types at on at.type_id = t.type_id left join dbo.regions r on r.region_id = t.region_id where t.is_deleted = 0 and at.category = 'Premium' and r.country_code = 'SE'

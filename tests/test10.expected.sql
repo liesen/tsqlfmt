@@ -24,8 +24,7 @@ VALUES (
     200,
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     'sess_abc123def456ghi789'
-),
-(
+), (
     NEWID(),
     GETUTCDATE(),
     'DataExport',

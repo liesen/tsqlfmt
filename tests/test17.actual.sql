@@ -1,0 +1,1 @@
+select t.id, t.name from dbo.items t where exists (select 1 from dbo.orders o where o.item_id = t.id and o.status = 'Shipped') and t.name like '%widget%' and t.name not like 'TEST%' and t.price between 10.00 and 99.99 and t.category_id not in (select c.id from dbo.categories c where c.is_discontinued = 1) and t.id not between 1000 and 2000
