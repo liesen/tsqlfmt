@@ -15,7 +15,8 @@ Formatted SQL is written to stdout.
 
 Options:
   --config PATH   Path to a JSON configuration file.
-                  Defaults to 'formattingstyle.json' in the current directory.
+                  If omitted, loads 'formattingstyle.json' from the current directory when present;
+                  otherwise uses built-in defaults.
   --check         Check mode. Exits with code 1 if the input would change.
   --in-place      Overwrite the input file with formatted output.
   --help          Print usage information.
@@ -23,7 +24,7 @@ Options:
 Exit Codes:
   0  Success (or no changes in --check mode)
   1  Input would change (--check mode), or formatting error
-  2  Invalid arguments or missing configuration file
+  2  Invalid arguments, file not found, or config load error
 """
 
 type CliArgs = {
@@ -53,7 +54,9 @@ let private parseArgs (argv: string[]) : Result<CliArgs, string> =
             | arg when arg.StartsWith("-") && arg <> "-" ->
                 Error (sprintf "Unknown option: %s" arg)
             | file ->
-                loop (i + 1) { args with inputFile = Some file }
+                match args.inputFile with
+                | None -> loop (i + 1) { args with inputFile = Some file }
+                | Some _ -> Error "Only one input file may be specified"
     loop 0 {
         configPath = None
         checkMode = false
