@@ -18,8 +18,8 @@ toc::[]
 
 == Overview
 
-This document specifies a T-SQL code formatter implemented in F#.
-The formatter parses T-SQL using Microsoft's {url-scriptdom}[SqlScriptDOM] library, transforms the AST into a pretty-printer document using Wadler's algebra (via {url-fspretty}[FsPretty]), and renders the result to a string.
+This document specifies an F# formatter for T-SQL.
+The formatter parses T-SQL with Microsoft's {url-scriptdom}[SqlScriptDOM], transforms the AST into a pretty-printer document with Wadler's algebra (via {url-fspretty}[FsPretty]), and renders the result as text.
 
 The formatter reads configuration from a JSON file whose schema matches {url-sqlprompt-formatter}[SQL Prompt]'s formatting style.
 Existing SQL Prompt configuration files load directly.
@@ -44,7 +44,7 @@ Existing SQL Prompt configuration files load directly.
 The formatter is a three-stage pipeline:
 
 . *Parse* -- `TSqlParser.Parse()` produces a `TSqlFragment` AST. +
-Parse errors are reported and the input is returned unchanged.
+If parsing fails, the formatter reports the errors and returns the input unchanged.
 . *Transform* -- A recursive function walks the AST and produces an FsPretty `Doc` value. +
 The configuration record is threaded through this phase.
 . *Render* -- `Doc.render(maxWidth)` flattens the `Doc` into a string respecting the configured line width.
@@ -102,8 +102,8 @@ The `metadata` section in the JSON file is ignored during deserialization.
 
 Enum-like fields (e.g., `parenthesisStyle`, `alignment`, `reservedKeywords`) are represented as discriminated unions or string enums with JSON converters.
 
-The concrete profile used is `default-style.json`.
-Its key settings:
+The main profile in this repository is `default-style.json`.
+Its key settings are:
 
 |===
 | Path | Value | Effect
@@ -225,7 +225,7 @@ let rec toDoc (cfg: FormattingStyle) (node: TSqlFragment) : Doc =
 ----
 
 The fallback `tokenStreamDoc` renders any unhandled node by emitting its tokens directly from the token stream, preserving the original text.
-This ensures the formatter is safe on unsupported syntax: it degrades to identity rather than crashing.
+This keeps the formatter safe on unsupported syntax: it falls back to the original text instead of crashing.
 
 === Node Types
 
@@ -355,7 +355,7 @@ This section describes the intended approach; implementation may need adjustment
 ====
 
 ScriptDOM's `TSqlFragment` nodes expose `ScriptTokenStream`, `FirstTokenIndex`, and `LastTokenIndex` properties.
-Comments appear as tokens of type `TSqlTokenType.SingleLineComment` and `TSqlTokenType.MultilineComment` in the token stream but are not represented as AST nodes.
+Comments appear in the token stream as `TSqlTokenType.SingleLineComment` and `TSqlTokenType.MultilineComment` tokens, but not as AST nodes.
 
 === Strategy
 
@@ -607,11 +607,11 @@ Formatted SQL is written to stdout.
 
 `--config PATH`::
 Path to a JSON configuration file.
-Defaults to `formattingstyle.json` in the current directory.
+If omitted, the formatter loads `formattingstyle.json` from the current directory when that file exists; otherwise it uses built-in defaults.
 
 `--check`::
 Check mode.
-Prints a diff to stderr and exits with code 1 if the input would change.
+Exits with code 1 if the input would change.
 Useful in CI pipelines.
 
 `--in-place`::
@@ -633,14 +633,14 @@ Print usage information.
 | Input would change (`--check` mode), or formatting error
 
 | 2
-| Invalid arguments or missing configuration file
+| Invalid arguments, file not found, or config load error
 |===
 
 == Testing Strategy
 
 === Integration Tests
 
-The primary correctness criterion: for each test case, formatting the `.actual.sql` file with the `default-style.json` config must produce output identical to the `.expected.sql` file.
+The primary correctness criterion is simple: for each test case, formatting the `.actual.sql` file with `default-style.json` must produce output identical to the `.expected.sql` file.
 
 Test cases:
 
