@@ -1,0 +1,6 @@
+bin/
+obj/
+*.debug.sql
+*.sqlfluff.sql
+.sqlfluff
+test_sqlfluff.py

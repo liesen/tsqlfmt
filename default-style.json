@@ -1,0 +1,89 @@
+{
+  "metadata": {
+    "id": "adce301a-08c3-4410-b393-c03edc69fdd7",
+    "name": "default-style"
+  },
+  "whitespace": {
+    "wrapLinesLongerThan": 180,
+    "newLines": {
+      "preserveExistingEmptyLinesBetweenStatements": false,
+      "preserveExistingEmptyLinesAfterBatchSeparator": false
+    }
+  },
+  "lists": {
+    "alignSubsequentItemsWithFirstItem": false,
+    "alignItemsAcrossClauses": false
+  },
+  "parentheses": {
+    "parenthesisStyle": "expandedSplit",
+    "indentParenthesesContents": true,
+    "collapseShortParenthesisContents": true,
+    "collapseParenthesesShorterThan": 40
+  },
+  "casing": {
+    "reservedKeywords": "uppercase",
+    "builtInFunctions": "uppercase",
+    "builtInDataTypes": "uppercase",
+    "globalVariables": "uppercase",
+    "useObjectDefinitionCase": true
+  },
+  "dml": {
+    "collapseStatementsShorterThan": 78,
+    "collapseShortSubqueries": true,
+    "collapseSubqueriesShorterThan": 40
+  },
+  "ddl": {
+    "parenthesisStyle": "expandedSplit",
+    "indentParenthesesContents": true,
+    "collapseShortStatements": true,
+    "collapseStatementsShorterThan": 78
+  },
+  "controlFlow": {
+    "collapseStatementsShorterThan": 78
+  },
+  "cte": {
+    "parenthesisStyle": "expandedSplit",
+    "indentContents": true,
+    "placeAsOnNewLine": false
+  },
+  "variables": {
+    "alignDataTypesAndValues": false,
+    "placeAssignedValueOnNewLineIfLongerThanMaxLineLength": false
+  },
+  "joinStatements": {
+    "join": {
+      "indentJoinTable": false
+    },
+    "on": {
+      "keywordAlignment": "indented"
+    }
+  },
+  "insertStatements": {
+    "columns": {
+      "parenthesisStyle": "expandedSplit",
+      "placeSubsequentColumnsOnNewLines": "ifLongerThanMaxLineLength"
+    },
+    "values": {
+      "parenthesisStyle": "compactIndented",
+      "indentContents": true,
+      "placeSubsequentValuesOnNewLines": "ifLongerThanMaxLineLength"
+    }
+  },
+  "caseExpressions": {
+    "placeExpressionOnNewLine": false,
+    "collapseShortCaseExpressions": true,
+    "collapseCaseExpressionsShorterThan": 25
+  },
+  "operators": {
+    "andOr": {
+      "alignment": "indented"
+    },
+    "between": {
+      "placeOnNewLine": false
+    },
+    "in": {
+      "alignment": "indented",
+      "placeSubsequentValuesOnNewLines": "always"
+    }
+  }
+}
