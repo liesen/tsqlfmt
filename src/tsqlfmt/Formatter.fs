@@ -972,18 +972,28 @@ and private insertDoc (cfg: FormattingStyle) (ins: InsertStatement) : Doc =
     let colsDoc =
         if spec.Columns <> null && spec.Columns.Count > 0 then
             let cols = spec.Columns |> Seq.map (fun c -> columnRefDoc cfg c) |> Seq.toList
-            text " (" <+> commaSep cols <+> text ")"
+            // expandedSplit: ( at end of line, content indented, ) on own line
+            let flatDoc = text " (" <+> join (text ", ") cols <+> text ")"
+            let expandedDoc =
+                text " (" <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) cols) <+> line <+> text ")"
+            TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
         else empty
 
     let sourceDoc =
         match spec.InsertSource with
         | :? ValuesInsertSource as vis ->
-            let rows =
-                vis.RowValues |> Seq.map (fun rv ->
-                    let vals = rv.ColumnValues |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
-                    text "(" <+> commaSep vals <+> text ")"
-                ) |> Seq.toList
-            kw cfg "VALUES" <++> commaSep rows
+            let rowDoc (rv: RowValue) =
+                let vals = rv.ColumnValues |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
+                // Each row: collapse if short, expand (compactIndented) if long
+                let flatRow = text "(" <+> join (text ", ") vals <+> text ")"
+                let expandedRow =
+                    text "(" <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) vals) <+> line <+> text ")"
+                TSqlFormatter.Doc.Doc.Union(flatRow, expandedRow)
+            let rows = vis.RowValues |> Seq.map rowDoc |> Seq.toList
+            // Multiple rows: comma-separated with line breaks between
+            let flatRows = kw cfg "VALUES" <++> join (text ", ") rows |> flatten
+            let expandedRows = kw cfg "VALUES" <++> join (text "," <+> line) rows
+            TSqlFormatter.Doc.Doc.Union(flatRows, expandedRows)
         | :? SelectInsertSource as sis ->
             queryExprDoc cfg sis.Select
         | _ -> tokenStreamDoc cfg spec.InsertSource
@@ -1049,8 +1059,86 @@ and private deleteDoc (cfg: FormattingStyle) (del: DeleteStatement) : Doc =
     join line parts
 
 and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
-    // Fallback to token stream for complex MERGE statements
-    tokenStreamDoc cfg merge
+    let spec = merge.MergeSpecification
+    let target =
+        if spec.Target <> null then tableRefDoc cfg spec.Target
+        else empty
+    let targetAlias =
+        if spec.TableAlias <> null then
+            text " " <+> kw cfg "AS" <++> identDoc spec.TableAlias
+        else empty
+    let source = tableRefDoc cfg spec.TableReference
+    let onCondition = whereConditionDoc cfg spec.SearchCondition
+
+    let mergeHeader =
+        kw cfg "MERGE" <++> kw cfg "INTO" <++> target <+> targetAlias <+> line <+>
+        kw cfg "USING" <++> source <+> line <+>
+        nest (indentWidth cfg) (kw cfg "ON" <++> onCondition)
+
+    let setClauseDoc (sc: SetClause) =
+        match sc with
+        | :? AssignmentSetClause as asc ->
+            let col = columnRefDoc cfg asc.Column
+            let value = exprDoc cfg asc.NewValue
+            let op =
+                match asc.AssignmentKind with
+                | AssignmentKind.Equals -> "="
+                | AssignmentKind.AddEquals -> "+="
+                | AssignmentKind.SubtractEquals -> "-="
+                | AssignmentKind.MultiplyEquals -> "*="
+                | AssignmentKind.DivideEquals -> "/="
+                | _ -> "="
+            col <++> text op <++> value
+        | _ -> tokenStreamDoc cfg sc
+
+    let actionClauseDoc (ac: MergeActionClause) =
+        let conditionKw =
+            match ac.Condition with
+            | MergeCondition.Matched -> kw cfg "WHEN" <++> kw cfg "MATCHED"
+            | MergeCondition.NotMatched | MergeCondition.NotMatchedByTarget ->
+                kw cfg "WHEN" <++> kw cfg "NOT" <++> kw cfg "MATCHED" <++> kw cfg "BY" <++> kw cfg "TARGET"
+            | MergeCondition.NotMatchedBySource ->
+                kw cfg "WHEN" <++> kw cfg "NOT" <++> kw cfg "MATCHED" <++> kw cfg "BY" <++> kw cfg "SOURCE"
+            | _ -> kw cfg "WHEN" <++> kw cfg "MATCHED"
+        let searchDoc =
+            if ac.SearchCondition <> null then
+                text " " <+> kw cfg "AND" <++> exprDoc cfg ac.SearchCondition
+            else empty
+        let actionDoc =
+            match ac.Action with
+            | :? UpdateMergeAction as u ->
+                let setClauses = u.SetClauses |> Seq.map setClauseDoc |> Seq.toList
+                kw cfg "THEN" <+>
+                nest (indentWidth cfg) (line <+> clauseCommaList cfg (kw cfg "UPDATE" <++> kw cfg "SET") setClauses)
+            | :? InsertMergeAction as ins ->
+                let cols =
+                    if ins.Columns <> null && ins.Columns.Count > 0 then
+                        let colDocs = ins.Columns |> Seq.map (fun c -> columnRefDoc cfg c) |> Seq.toList
+                        let flatCols = text " (" <+> join (text ", ") colDocs <+> text ")"
+                        let expandedCols =
+                            text " (" <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) colDocs) <+> line <+> text ")"
+                        TSqlFormatter.Doc.Doc.Union(flatCols, expandedCols)
+                    else empty
+                let vals =
+                    let vis = ins.Source
+                    let rowDoc (rv: RowValue) =
+                        let valDocs = rv.ColumnValues |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
+                        let flatRow = text "(" <+> join (text ", ") valDocs <+> text ")"
+                        let expandedRow =
+                            text "(" <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) valDocs) <+> line <+> text ")"
+                        TSqlFormatter.Doc.Doc.Union(flatRow, expandedRow)
+                    let rows = vis.RowValues |> Seq.map rowDoc |> Seq.toList
+                    kw cfg "VALUES" <++> join (text "," <+> line) rows
+                kw cfg "THEN" <+>
+                nest (indentWidth cfg) (line <+> kw cfg "INSERT" <+> cols <+> line <+> vals)
+            | :? DeleteMergeAction ->
+                kw cfg "THEN" <+>
+                nest (indentWidth cfg) (line <+> kw cfg "DELETE")
+            | _ -> tokenStreamDoc cfg ac.Action
+        conditionKw <+> searchDoc <+> text " " <+> actionDoc
+    
+    let clauseDocs = spec.ActionClauses |> Seq.map actionClauseDoc |> Seq.toList
+    join line (mergeHeader :: clauseDocs)
 
 // ─── Variables ───
 
@@ -1207,7 +1295,7 @@ let format (config: FormattingStyle) (sql: string) : Result<string, string list>
                         batch.Statements
                         |> Seq.map (fun stmt -> statementDoc config stmt)
                         |> Seq.toList
-                    join line stmtDocs
+                    join (line <+> line) stmtDocs
                 )
                 |> Seq.toList
             let result = leadingComments <+> join (line <+> kw config "GO" <+> line) batchDocs

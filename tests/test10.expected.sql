@@ -1,0 +1,39 @@
+INSERT INTO dbo.audit_log (event_id, event_timestamp, event_type, source_system, user_principal_name, ip_address, request_uri, response_status_code, correlation_id, session_id)
+VALUES (
+    NEWID(),
+    GETUTCDATE(),
+    'UserAuthentication',
+    'IdentityProvider',
+    'administrator@organization.example.com',
+    '192.168.100.250',
+    '/api/v2/authentication/token',
+    200,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    'sess_abc123def456ghi789'
+)
+
+INSERT INTO dbo.audit_log (event_id, event_timestamp, event_type, source_system, user_principal_name, ip_address, request_uri, response_status_code, correlation_id, session_id)
+VALUES (
+    NEWID(),
+    GETUTCDATE(),
+    'UserAuthentication',
+    'IdentityProvider',
+    'administrator@organization.example.com',
+    '192.168.100.250',
+    '/api/v2/authentication/token',
+    200,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    'sess_abc123def456ghi789'
+),
+(
+    NEWID(),
+    GETUTCDATE(),
+    'DataExport',
+    'ReportingEngine',
+    'analyst@organization.example.com',
+    '10.0.50.100',
+    '/api/v2/reports/export/csv',
+    202,
+    'f9e8d7c6-b5a4-3210-fedc-ba9876543210',
+    'sess_xyz789uvw456rst123'
+)
