@@ -28,9 +28,21 @@ let private configPath =
 
 let private config = loadConfig configPath
 
-let private runTest (testName: string) =
+let testCases () : seq<obj[]> =
+    Directory.GetFiles(testDataDir, "*.actual.sql")
+    |> Array.map (fun path ->
+        let name = Path.GetFileName(path).Replace(".actual.sql", "")
+        [| name :> obj |])
+    |> Array.sortBy (fun arr -> arr.[0] :?> string)
+    |> Seq.ofArray
+
+[<Theory>]
+[<MemberData(nameof testCases)>]
+let ``format test`` (testName: string) =
     let actualPath = Path.Combine(testDataDir, testName + ".actual.sql")
     let expectedPath = Path.Combine(testDataDir, testName + ".expected.sql")
+    Assert.True(File.Exists(actualPath), sprintf "Input file not found: %s" actualPath)
+    Assert.True(File.Exists(expectedPath), sprintf "Expected file not found: %s" expectedPath)
     let inputSql = File.ReadAllText(actualPath)
     let expectedSql = File.ReadAllText(expectedPath).ReplaceLineEndings("\n").TrimEnd()
     match format config inputSql with
@@ -60,18 +72,3 @@ let private runTest (testName: string) =
                     sprintf "\nFirst difference at line %d:\nExpected: [%s]\nActual:   [%s]" (diffLine + 1) eLine fLine
                 else ""
             Assert.Fail(sprintf "Output does not match expected for %s. Debug output written to %s.%s" testName debugPath diffInfo)
-
-[<Fact>]
-let ``test1 - complex UNION ALL with JOINs`` () = runTest "test1"
-
-[<Fact>]
-let ``test2 - ALTER FUNCTION inline TVF`` () = runTest "test2"
-
-[<Fact>]
-let ``test3 - simple INNER JOIN`` () = runTest "test3"
-
-[<Fact>]
-let ``test4 - simple SELECT with WHERE`` () = runTest "test4"
-
-[<Fact>]
-let ``test5 - SELECT with JOIN, CASE, and OR in parens`` () = runTest "test5"
