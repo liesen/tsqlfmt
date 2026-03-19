@@ -149,7 +149,7 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
     | :? IIfCall as iif -> iifCallDoc cfg iif
     | :? NullIfExpression as n -> nullIfDoc cfg n
     | :? BooleanParenthesisExpression as bp ->
-        text "(" <+> boolExprDoc cfg bp.Expression <+> text ")"
+        boolParenDoc cfg bp
     | :? BooleanComparisonExpression as bc -> boolCompDoc cfg bc
     | :? BooleanBinaryExpression as bb -> boolBinaryDoc cfg bb
     | :? BooleanNotExpression as bn ->
@@ -425,6 +425,12 @@ and private boolBinaryDoc (cfg: FormattingStyle) (bb: BooleanBinaryExpression) :
     let lhs = exprDoc cfg bb.FirstExpression
     let rhs = exprDoc cfg bb.SecondExpression
     lhs <+> line <+> nest (indentWidth cfg) (kw cfg opText <++> rhs)
+
+and private boolParenDoc (cfg: FormattingStyle) (bp: BooleanParenthesisExpression) : Doc =
+    let inner = boolExprDoc cfg bp.Expression
+    let flatDoc = text "(" <+> flatten inner <+> text ")"
+    let expandedDoc = text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
+    TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
 
 and private inPredicateDoc (cfg: FormattingStyle) (inp: InPredicate) : Doc =
     let lhs = exprDoc cfg inp.Expression
