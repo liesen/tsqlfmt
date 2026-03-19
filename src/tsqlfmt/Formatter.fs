@@ -44,27 +44,27 @@ let private tokenStreamDoc (cfg: FormattingStyle) (frag: TSqlFragment) : Doc =
         let stream = frag.ScriptTokenStream
         if stream = null then text (fragmentText frag)
         else
-            let sb = System.Text.StringBuilder()
-            let mutable prevWasWhitespace = false
-            for i = frag.FirstTokenIndex to frag.LastTokenIndex do
-                let tok = stream.[i]
-                match tok.TokenType with
-                | TSqlTokenType.WhiteSpace ->
-                    if not prevWasWhitespace then
-                        sb.Append(' ') |> ignore
-                    prevWasWhitespace <- true
-                | TSqlTokenType.EndOfFile -> ()
-                | TSqlTokenType.SingleLineComment ->
-                    sb.Append(tok.Text.TrimEnd()) |> ignore
-                    prevWasWhitespace <- false
-                | TSqlTokenType.MultilineComment ->
-                    sb.Append(tok.Text) |> ignore
-                    prevWasWhitespace <- false
-                | _ ->
-                    let t = caseToken cfg.casing tok.Text
-                    sb.Append(t) |> ignore
-                    prevWasWhitespace <- false
-            text (sb.ToString().Trim())
+            let result, _ =
+                seq { frag.FirstTokenIndex .. frag.LastTokenIndex }
+                |> Seq.map (fun i -> stream.[i])
+                |> Seq.fold (fun (sb: System.Text.StringBuilder, prevWs) tok ->
+                    match tok.TokenType with
+                    | TSqlTokenType.WhiteSpace ->
+                        if not prevWs then sb.Append(' ') |> ignore
+                        (sb, true)
+                    | TSqlTokenType.EndOfFile ->
+                        (sb, prevWs)
+                    | TSqlTokenType.SingleLineComment ->
+                        sb.Append(tok.Text.TrimEnd()) |> ignore
+                        (sb, false)
+                    | TSqlTokenType.MultilineComment ->
+                        sb.Append(tok.Text) |> ignore
+                        (sb, false)
+                    | _ ->
+                        sb.Append(caseToken cfg.casing tok.Text) |> ignore
+                        (sb, false)
+                ) (System.Text.StringBuilder(), false)
+            text (result.ToString().Trim())
 
 /// Get comment tokens between the end of prevFrag and start of nextFrag.
 let private interComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : string list =
@@ -82,25 +82,20 @@ let private trailingComment (frag: TSqlFragment) : Doc =
         let stream = frag.ScriptTokenStream
         if stream = null then empty
         else
-            let mutable idx = frag.LastTokenIndex + 1
-            let mutable found = None
-            while idx < stream.Count && found.IsNone do
-                let tok = stream.[idx]
-                match tok.TokenType with
-                | TSqlTokenType.WhiteSpace ->
-                    if tok.Text.Contains('\n') || tok.Text.Contains('\r') then
-                        found <- Some empty
-                    else
-                        idx <- idx + 1
-                | TSqlTokenType.SingleLineComment ->
-                    found <- Some (text " " <+> text (tok.Text.TrimEnd()))
-                | TSqlTokenType.MultilineComment ->
-                    found <- Some (text " " <+> text tok.Text)
-                | _ ->
-                    found <- Some empty
-            match found with
-            | Some d -> d
-            | None -> empty
+            let rec scan idx =
+                if idx >= stream.Count then empty
+                else
+                    let tok = stream.[idx]
+                    match tok.TokenType with
+                    | TSqlTokenType.WhiteSpace ->
+                        if tok.Text.Contains('\n') || tok.Text.Contains('\r') then empty
+                        else scan (idx + 1)
+                    | TSqlTokenType.SingleLineComment ->
+                        text " " <+> text (tok.Text.TrimEnd())
+                    | TSqlTokenType.MultilineComment ->
+                        text " " <+> text tok.Text
+                    | _ -> empty
+            scan (frag.LastTokenIndex + 1)
 
 // ─── Expression formatting ───
 
@@ -204,11 +199,8 @@ and private selectScalarDoc (cfg: FormattingStyle) (sse: SelectScalarExpression)
         let hasAs =
             let stream = sse.ScriptTokenStream
             if stream <> null then
-                let mutable found = false
-                for i = sse.Expression.LastTokenIndex + 1 to alias.FirstTokenIndex - 1 do
-                    if stream.[i].TokenType = TSqlTokenType.As then
-                        found <- true
-                found
+                seq { sse.Expression.LastTokenIndex + 1 .. alias.FirstTokenIndex - 1 }
+                |> Seq.exists (fun i -> stream.[i].TokenType = TSqlTokenType.As)
             else true // default to having AS
         if hasAs then
             e <++> kw cfg "AS" <++> aliasDoc
@@ -359,16 +351,16 @@ and private functionCallDoc (cfg: FormattingStyle) (f: FunctionCall) : Doc =
     callName <+> text "(" <+> args <+> text ")" <+> overDoc
 
 and private overClauseDoc (cfg: FormattingStyle) (oc: OverClause) : Doc =
-    let parts = ResizeArray<Doc>()
-    if oc.Partitions <> null && oc.Partitions.Count > 0 then
-        let partDocs = oc.Partitions |> Seq.map (fun p -> exprDoc cfg p) |> Seq.toList
-        parts.Add(kw cfg "PARTITION" <++> kw cfg "BY" <++> commaSep partDocs)
-    if oc.OrderByClause <> null && oc.OrderByClause.OrderByElements <> null && oc.OrderByClause.OrderByElements.Count > 0 then
-        let orderDocs = oc.OrderByClause.OrderByElements |> Seq.map (fun o -> orderByElemDoc cfg o) |> Seq.toList
-        parts.Add(kw cfg "ORDER" <++> kw cfg "BY" <++> commaSep orderDocs)
-    if oc.WindowFrameClause <> null then
-        parts.Add(tokenStreamDoc cfg oc.WindowFrameClause)
-    kw cfg "OVER" <++> text "(" <+> join (text " ") (parts |> Seq.toList) <+> text ")"
+    let parts =
+        [ if oc.Partitions <> null && oc.Partitions.Count > 0 then
+              let partDocs = oc.Partitions |> Seq.map (fun p -> exprDoc cfg p) |> Seq.toList
+              yield kw cfg "PARTITION" <++> kw cfg "BY" <++> commaSep partDocs
+          if oc.OrderByClause <> null && oc.OrderByClause.OrderByElements <> null && oc.OrderByClause.OrderByElements.Count > 0 then
+              let orderDocs = oc.OrderByClause.OrderByElements |> Seq.map (fun o -> orderByElemDoc cfg o) |> Seq.toList
+              yield kw cfg "ORDER" <++> kw cfg "BY" <++> commaSep orderDocs
+          if oc.WindowFrameClause <> null then
+              yield tokenStreamDoc cfg oc.WindowFrameClause ]
+    kw cfg "OVER" <++> text "(" <+> join (text " ") parts <+> text ")"
 
 and private coalesceDoc (cfg: FormattingStyle) (c: CoalesceExpression) : Doc =
     let argDocs = c.Expressions |> Seq.map (fun e -> exprDoc cfg e) |> Seq.toList
@@ -498,8 +490,6 @@ and private queryExprDoc (cfg: FormattingStyle) (qe: QueryExpression) : Doc =
     | _ -> tokenStreamDoc cfg qe
 
 and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) : Doc =
-    let parts = ResizeArray<Doc>()
-
     // SELECT clause
     let selectKw =
         let s = kw cfg "SELECT"
@@ -514,51 +504,48 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) : Doc =
         else selectKw
 
     let selectItems = qs.SelectElements |> Seq.map (fun e -> exprDoc cfg e) |> Seq.toList
-    match selectItems with
-    | [] -> parts.Add(selectKwWithTop)
-    | [single] -> parts.Add(selectKwWithTop <++> single)
-    | first :: rest ->
-        // First item on same line as SELECT, rest indented by `indent` on new lines
-        let restDoc = join (text "," <+> line) rest
-        parts.Add(selectKwWithTop <++> first <+> text "," <+> nest indent (line <+> restDoc))
+    let selectClause =
+        match selectItems with
+        | [] -> selectKwWithTop
+        | [single] -> selectKwWithTop <++> single
+        | first :: rest ->
+            let restDoc = join (text "," <+> line) rest
+            selectKwWithTop <++> first <+> text "," <+> nest indent (line <+> restDoc)
 
-    // FROM clause
-    if qs.FromClause <> null && qs.FromClause.TableReferences <> null && qs.FromClause.TableReferences.Count > 0 then
-        let tableRef = qs.FromClause.TableReferences.[0]
-        let fromDoc = tableRefDoc cfg tableRef
-        parts.Add(kw cfg "FROM" <++> fromDoc)
-        // Additional table references (comma joins)
-        for i = 1 to qs.FromClause.TableReferences.Count - 1 do
-            let tr = qs.FromClause.TableReferences.[i]
-            parts.Add(text "," <++> tableRefDoc cfg tr)
+    let parts =
+        [ yield selectClause
 
-    // WHERE clause
-    if qs.WhereClause <> null && qs.WhereClause.SearchCondition <> null then
-        let whereDoc = whereConditionDoc cfg qs.WhereClause.SearchCondition
-        parts.Add(kw cfg "WHERE" <++> whereDoc)
+          // FROM clause
+          if qs.FromClause <> null && qs.FromClause.TableReferences <> null && qs.FromClause.TableReferences.Count > 0 then
+              yield kw cfg "FROM" <++> tableRefDoc cfg qs.FromClause.TableReferences.[0]
+              for i = 1 to qs.FromClause.TableReferences.Count - 1 do
+                  yield text "," <++> tableRefDoc cfg qs.FromClause.TableReferences.[i]
 
-    // GROUP BY clause
-    if qs.GroupByClause <> null && qs.GroupByClause.GroupingSpecifications <> null && qs.GroupByClause.GroupingSpecifications.Count > 0 then
-        let grpItems =
-            qs.GroupByClause.GroupingSpecifications
-            |> Seq.map (fun g ->
-                match g with
-                | :? ExpressionGroupingSpecification as egs -> exprDoc cfg egs.Expression
-                | _ -> tokenStreamDoc cfg g)
-            |> Seq.toList
-        parts.Add(kw cfg "GROUP" <++> kw cfg "BY" <++> commaSep grpItems)
+          // WHERE clause
+          if qs.WhereClause <> null && qs.WhereClause.SearchCondition <> null then
+              yield kw cfg "WHERE" <++> whereConditionDoc cfg qs.WhereClause.SearchCondition
 
-    // HAVING clause
-    if qs.HavingClause <> null && qs.HavingClause.SearchCondition <> null then
-        let havDoc = whereConditionDoc cfg qs.HavingClause.SearchCondition
-        parts.Add(kw cfg "HAVING" <++> havDoc)
+          // GROUP BY clause
+          if qs.GroupByClause <> null && qs.GroupByClause.GroupingSpecifications <> null && qs.GroupByClause.GroupingSpecifications.Count > 0 then
+              let grpItems =
+                  qs.GroupByClause.GroupingSpecifications
+                  |> Seq.map (fun g ->
+                      match g with
+                      | :? ExpressionGroupingSpecification as egs -> exprDoc cfg egs.Expression
+                      | _ -> tokenStreamDoc cfg g)
+                  |> Seq.toList
+              yield kw cfg "GROUP" <++> kw cfg "BY" <++> commaSep grpItems
 
-    // ORDER BY clause
-    if qs.OrderByClause <> null && qs.OrderByClause.OrderByElements <> null && qs.OrderByClause.OrderByElements.Count > 0 then
-        let orderItems = qs.OrderByClause.OrderByElements |> Seq.map (fun o -> orderByElemDoc cfg o) |> Seq.toList
-        parts.Add(kw cfg "ORDER" <++> kw cfg "BY" <++> group (commaSep orderItems))
+          // HAVING clause
+          if qs.HavingClause <> null && qs.HavingClause.SearchCondition <> null then
+              yield kw cfg "HAVING" <++> whereConditionDoc cfg qs.HavingClause.SearchCondition
 
-    join line (parts |> Seq.toList)
+          // ORDER BY clause
+          if qs.OrderByClause <> null && qs.OrderByClause.OrderByElements <> null && qs.OrderByClause.OrderByElements.Count > 0 then
+              let orderItems = qs.OrderByClause.OrderByElements |> Seq.map (fun o -> orderByElemDoc cfg o) |> Seq.toList
+              yield kw cfg "ORDER" <++> kw cfg "BY" <++> group (commaSep orderItems) ]
+
+    join line parts
 
 and private whereConditionDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     // Flatten AND/OR chains with proper indentation
@@ -743,13 +730,11 @@ and private selectStatementDoc (cfg: FormattingStyle) (ss: SelectStatement) : Do
             Some (kw cfg "WITH" <++> join (text "," <+> line) cteParts)
         else None
 
-    // ORDER BY is handled by querySpecDoc, not SelectStatement
+    let parts =
+        [ match cteDoc with Some d -> yield d | None -> ()
+          yield qe ]
 
-    let parts = ResizeArray<Doc>()
-    match cteDoc with Some d -> parts.Add(d) | None -> ()
-    parts.Add(qe)
-
-    join line (parts |> Seq.toList)
+    join line parts
 
 and private cteExprDoc (cfg: FormattingStyle) (cte: CommonTableExpression) : Doc =
     let nameDoc = identDoc cte.ExpressionName
@@ -800,31 +785,28 @@ and private ddlParamListDoc (cfg: FormattingStyle) (parameters: System.Collectio
 and private getParamTrailingComments (parameters: System.Collections.Generic.IList<ProcedureParameter>) : Map<int, string> =
     if parameters = null || parameters.Count = 0 then Map.empty
     else
-        let mutable result = Map.empty
-        for i = 0 to parameters.Count - 1 do
-            let p = parameters.[i]
+        let scanForComment (p: ProcedureParameter) =
             let stream = p.ScriptTokenStream
-            if stream <> null then
-                let mutable idx = p.LastTokenIndex + 1
-                let mutable found = false
-                while idx < stream.Count && not found do
-                    let tok = stream.[idx]
-                    match tok.TokenType with
-                    | TSqlTokenType.WhiteSpace ->
-                        if tok.Text.Contains('\n') || tok.Text.Contains('\r') then
-                            found <- true
-                        else idx <- idx + 1
-                    | TSqlTokenType.Comma ->
-                        // Skip comma between parameters to look for trailing comment
-                        idx <- idx + 1
-                    | TSqlTokenType.SingleLineComment ->
-                        result <- result |> Map.add i (tok.Text.TrimEnd())
-                        found <- true
-                    | TSqlTokenType.MultilineComment ->
-                        result <- result |> Map.add i tok.Text
-                        found <- true
-                    | _ -> found <- true
-        result
+            if stream = null then None
+            else
+                let rec scan idx =
+                    if idx >= stream.Count then None
+                    else
+                        let tok = stream.[idx]
+                        match tok.TokenType with
+                        | TSqlTokenType.WhiteSpace ->
+                            if tok.Text.Contains('\n') || tok.Text.Contains('\r') then None
+                            else scan (idx + 1)
+                        | TSqlTokenType.Comma -> scan (idx + 1)
+                        | TSqlTokenType.SingleLineComment -> Some (tok.Text.TrimEnd())
+                        | TSqlTokenType.MultilineComment -> Some tok.Text
+                        | _ -> None
+                scan (p.LastTokenIndex + 1)
+
+        parameters
+        |> Seq.mapi (fun i p -> i, scanForComment p)
+        |> Seq.choose (fun (i, comment) -> comment |> Option.map (fun c -> i, c))
+        |> Map.ofSeq
 
 and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
     let header = kw cfg "ALTER" <++> kw cfg "FUNCTION" <++> schemaObjectNameDoc cfg af.Name
@@ -1015,18 +997,17 @@ and private updateDoc (cfg: FormattingStyle) (upd: UpdateStatement) : Doc =
             | _ -> tokenStreamDoc cfg sc)
         |> Seq.toList
 
-    let parts = ResizeArray<Doc>()
-    parts.Add(kw cfg "UPDATE" <++> target)
-    parts.Add(kw cfg "SET" <++> commaSep setClauses)
+    let parts =
+        [ yield kw cfg "UPDATE" <++> target
+          yield kw cfg "SET" <++> commaSep setClauses
 
-    if spec.FromClause <> null && spec.FromClause.TableReferences <> null && spec.FromClause.TableReferences.Count > 0 then
-        let fromDoc = tableRefDoc cfg spec.FromClause.TableReferences.[0]
-        parts.Add(kw cfg "FROM" <++> fromDoc)
+          if spec.FromClause <> null && spec.FromClause.TableReferences <> null && spec.FromClause.TableReferences.Count > 0 then
+              yield kw cfg "FROM" <++> tableRefDoc cfg spec.FromClause.TableReferences.[0]
 
-    if spec.WhereClause <> null && spec.WhereClause.SearchCondition <> null then
-        parts.Add(kw cfg "WHERE" <++> whereConditionDoc cfg spec.WhereClause.SearchCondition)
+          if spec.WhereClause <> null && spec.WhereClause.SearchCondition <> null then
+              yield kw cfg "WHERE" <++> whereConditionDoc cfg spec.WhereClause.SearchCondition ]
 
-    join line (parts |> Seq.toList)
+    join line parts
 
 and private deleteDoc (cfg: FormattingStyle) (del: DeleteStatement) : Doc =
     let spec = del.DeleteSpecification
@@ -1034,17 +1015,16 @@ and private deleteDoc (cfg: FormattingStyle) (del: DeleteStatement) : Doc =
         if spec.Target <> null then tableRefDoc cfg spec.Target
         else empty
 
-    let parts = ResizeArray<Doc>()
-    parts.Add(kw cfg "DELETE" <++> target)
+    let parts =
+        [ yield kw cfg "DELETE" <++> target
 
-    if spec.FromClause <> null && spec.FromClause.TableReferences <> null && spec.FromClause.TableReferences.Count > 0 then
-        let fromDoc = tableRefDoc cfg spec.FromClause.TableReferences.[0]
-        parts.Add(kw cfg "FROM" <++> fromDoc)
+          if spec.FromClause <> null && spec.FromClause.TableReferences <> null && spec.FromClause.TableReferences.Count > 0 then
+              yield kw cfg "FROM" <++> tableRefDoc cfg spec.FromClause.TableReferences.[0]
 
-    if spec.WhereClause <> null && spec.WhereClause.SearchCondition <> null then
-        parts.Add(kw cfg "WHERE" <++> whereConditionDoc cfg spec.WhereClause.SearchCondition)
+          if spec.WhereClause <> null && spec.WhereClause.SearchCondition <> null then
+              yield kw cfg "WHERE" <++> whereConditionDoc cfg spec.WhereClause.SearchCondition ]
 
-    join line (parts |> Seq.toList)
+    join line parts
 
 and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
     // Fallback to token stream for complex MERGE statements
@@ -1124,27 +1104,27 @@ and private handleInlineTvf (cfg: FormattingStyle) (af: AlterFunctionStatement) 
 
     // For inline TVFs, we need to find the RETURN SELECT in the token stream
     let stream = af.ScriptTokenStream
-    let mutable returnIdx = -1
-    if stream <> null then
-        for i = af.FirstTokenIndex to af.LastTokenIndex do
-            let tok = stream.[i]
-            if tok.TokenType = TSqlTokenType.Return && returnIdx = -1 then
-                returnIdx <- i
+    let returnIdxOpt =
+        if stream <> null then
+            seq { af.FirstTokenIndex .. af.LastTokenIndex }
+            |> Seq.tryFind (fun i -> stream.[i].TokenType = TSqlTokenType.Return)
+        else None
 
-    if returnIdx >= 0 then
-        // Parse just the SELECT part after RETURN
-        // Find the select statement
-        let mutable selectStart = returnIdx + 1
-        while selectStart <= af.LastTokenIndex &&
-              stream.[selectStart].TokenType = TSqlTokenType.WhiteSpace do
-            selectStart <- selectStart + 1
+    match returnIdxOpt with
+    | Some returnIdx ->
+        // Skip whitespace after RETURN to find the SELECT start
+        let selectStart =
+            seq { returnIdx + 1 .. af.LastTokenIndex }
+            |> Seq.skipWhile (fun i -> stream.[i].TokenType = TSqlTokenType.WhiteSpace)
+            |> Seq.tryHead
+            |> Option.defaultValue (returnIdx + 1)
 
         // Build RETURN + SELECT doc from the remaining tokens
-        // We'll re-parse the SELECT portion
-        let selectSb = System.Text.StringBuilder()
-        for i = selectStart to af.LastTokenIndex do
-            selectSb.Append(stream.[i].Text) |> ignore
-        let selectSql = selectSb.ToString().Trim()
+        let selectSql =
+            seq { selectStart .. af.LastTokenIndex }
+            |> Seq.map (fun i -> stream.[i].Text)
+            |> String.concat ""
+            |> fun s -> s.Trim()
 
         let parser = TSql160Parser(true)
         use reader = new StringReader(selectSql)
@@ -1158,7 +1138,7 @@ and private handleInlineTvf (cfg: FormattingStyle) (af: AlterFunctionStatement) 
             else text selectSql
 
         header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc <+> line <+> kw cfg "RETURN" <++> selectDoc
-    else
+    | None ->
         header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc
 
 // ─── Top-level format function ───
@@ -1174,15 +1154,16 @@ let private leadingCommentsDoc (script: TSqlScript) : Doc =
             let stream = firstStmt.ScriptTokenStream
             if stream = null then empty
             else
-                let comments = ResizeArray<string>()
-                for i = 0 to firstStmt.FirstTokenIndex - 1 do
-                    let tok = stream.[i]
-                    if tok.TokenType = TSqlTokenType.SingleLineComment ||
-                       tok.TokenType = TSqlTokenType.MultilineComment then
-                        comments.Add(tok.Text.TrimEnd())
-                if comments.Count = 0 then empty
-                else
-                    let commentDocs = comments |> Seq.map text |> Seq.toList
+                let comments =
+                    [ for i in 0 .. firstStmt.FirstTokenIndex - 1 do
+                        let tok = stream.[i]
+                        if tok.TokenType = TSqlTokenType.SingleLineComment ||
+                           tok.TokenType = TSqlTokenType.MultilineComment then
+                            yield tok.Text.TrimEnd() ]
+                match comments with
+                | [] -> empty
+                | _ ->
+                    let commentDocs = comments |> List.map text
                     join line commentDocs <+> line
 
 /// Format a T-SQL string using the given configuration.

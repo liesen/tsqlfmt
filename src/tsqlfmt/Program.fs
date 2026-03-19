@@ -35,40 +35,32 @@ type CliArgs = {
 }
 
 let private parseArgs (argv: string[]) : Result<CliArgs, string> =
-    let mutable args = {
+    let rec loop i (args: CliArgs) =
+        if i >= argv.Length then Ok args
+        else
+            match argv.[i] with
+            | "--help" | "-h" ->
+                loop (i + 1) { args with showHelp = true }
+            | "--config" ->
+                if i + 1 < argv.Length then
+                    loop (i + 2) { args with configPath = Some argv.[i + 1] }
+                else
+                    Error "--config requires a PATH argument"
+            | "--check" ->
+                loop (i + 1) { args with checkMode = true }
+            | "--in-place" ->
+                loop (i + 1) { args with inPlace = true }
+            | arg when arg.StartsWith("-") && arg <> "-" ->
+                Error (sprintf "Unknown option: %s" arg)
+            | file ->
+                loop (i + 1) { args with inputFile = Some file }
+    loop 0 {
         configPath = None
         checkMode = false
         inPlace = false
         showHelp = false
         inputFile = None
     }
-    let mutable i = 0
-    let mutable error = None
-    while i < argv.Length && error.IsNone do
-        match argv.[i] with
-        | "--help" | "-h" ->
-            args <- { args with showHelp = true }
-            i <- i + 1
-        | "--config" ->
-            if i + 1 < argv.Length then
-                args <- { args with configPath = Some argv.[i + 1] }
-                i <- i + 2
-            else
-                error <- Some "--config requires a PATH argument"
-        | "--check" ->
-            args <- { args with checkMode = true }
-            i <- i + 1
-        | "--in-place" ->
-            args <- { args with inPlace = true }
-            i <- i + 1
-        | arg when arg.StartsWith("-") && arg <> "-" ->
-            error <- Some (sprintf "Unknown option: %s" arg)
-        | file ->
-            args <- { args with inputFile = Some file }
-            i <- i + 1
-    match error with
-    | Some e -> Error e
-    | None -> Ok args
 
 [<EntryPoint>]
 let main argv =
