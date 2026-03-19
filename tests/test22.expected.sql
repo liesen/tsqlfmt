@@ -1,7 +1,6 @@
-CREATE PROCEDURE dbo.usp_ProcessRecords (
+CREATE PROCEDURE dbo.usp_ProcessRecords
     @batchSize INT = 100,
     @dryRun BIT = 0
-)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -32,9 +31,8 @@ BEGIN
     DROP TABLE #temp;
 END
 GO
-CREATE PROCEDURE dbo.usp_CleanupRecords (
+CREATE PROCEDURE dbo.usp_CleanupRecords
     @cutoffDays INT = 30
-)
 AS
 BEGIN
     DELETE dbo.archive_records

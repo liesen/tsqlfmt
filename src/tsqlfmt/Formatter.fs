@@ -837,8 +837,9 @@ and private cteExprDoc (cfg: FormattingStyle) (cte: CommonTableExpression) : Doc
 
 // ─── DDL: ALTER/CREATE FUNCTION/PROCEDURE ───
 
-and private ddlParamListDoc (cfg: FormattingStyle) (parameters: System.Collections.Generic.IList<ProcedureParameter>) (trailingCommentMap: Map<int, string>) : Doc =
-    if parameters = null || parameters.Count = 0 then text "()"
+and private ddlParamListDoc (cfg: FormattingStyle) (parameters: System.Collections.Generic.IList<ProcedureParameter>) (trailingCommentMap: Map<int, string>) (wrapInParens: bool) : Doc =
+    if parameters = null || parameters.Count = 0 then
+        if wrapInParens then text "()" else empty
     else
         let paramCount = parameters.Count
         let paramDocs =
@@ -865,7 +866,28 @@ and private ddlParamListDoc (cfg: FormattingStyle) (parameters: System.Collectio
                 nameDoc <++> typeDoc <+> defaultDoc <+> outputDoc <+> commaDoc <+> commentDoc)
             |> Seq.toList
         let paramsBody = join line paramDocs
-        text " (" <+> nest (indentWidth cfg) (line <+> paramsBody) <+> line <+> text ")"
+        if wrapInParens then
+            text " (" <+> nest (indentWidth cfg) (line <+> paramsBody) <+> line <+> text ")"
+        else
+            nest (indentWidth cfg) (line <+> paramsBody)
+
+and private procedureParamsHaveParens (stmt: TSqlStatement) (parameters: System.Collections.Generic.IList<ProcedureParameter>) : bool =
+    if stmt = null || parameters = null || parameters.Count = 0 then false
+    else
+        let stream = stmt.ScriptTokenStream
+        if stream = null then false
+        else
+            let firstParamIdx = parameters.[0].FirstTokenIndex
+            let rec scanBack idx =
+                if idx < stmt.FirstTokenIndex then false
+                else
+                    match stream.[idx].TokenType with
+                    | TSqlTokenType.WhiteSpace -> scanBack (idx - 1)
+                    | TSqlTokenType.SingleLineComment
+                    | TSqlTokenType.MultilineComment -> scanBack (idx - 1)
+                    | TSqlTokenType.LeftParenthesis -> true
+                    | _ -> false
+            scanBack (firstParamIdx - 1)
 
 and private getParamTrailingComments (parameters: System.Collections.Generic.IList<ProcedureParameter>) : Map<int, string> =
     if parameters = null || parameters.Count = 0 then Map.empty
@@ -896,7 +918,7 @@ and private getParamTrailingComments (parameters: System.Collections.Generic.ILi
 and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
     let header = kw cfg "ALTER" <++> kw cfg "FUNCTION" <++> schemaObjectNameDoc cfg af.Name
     let commentMap = getParamTrailingComments af.Parameters
-    let paramsDoc = ddlParamListDoc cfg af.Parameters commentMap
+    let paramsDoc = ddlParamListDoc cfg af.Parameters commentMap true
     let bodyDoc =
         match af.ReturnType with
         | :? SelectFunctionReturnType as sfrt ->
@@ -941,7 +963,7 @@ and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement)
 and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatement) : Doc =
     let header = kw cfg "CREATE" <++> kw cfg "FUNCTION" <++> schemaObjectNameDoc cfg cf.Name
     let commentMap = getParamTrailingComments cf.Parameters
-    let paramsDoc = ddlParamListDoc cfg cf.Parameters commentMap
+    let paramsDoc = ddlParamListDoc cfg cf.Parameters commentMap true
     let returnsDoc = kw cfg "RETURNS" <++> (
         match cf.ReturnType with
         | :? TableValuedFunctionReturnType -> kw cfg "TABLE"
@@ -961,7 +983,8 @@ and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatemen
 and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatement) : Doc =
     let header = kw cfg "ALTER" <++> kw cfg "PROCEDURE" <++> schemaObjectNameDoc cfg ap.ProcedureReference.Name
     let commentMap = getParamTrailingComments ap.Parameters
-    let paramsDoc = ddlParamListDoc cfg ap.Parameters commentMap
+    let wrapParams = procedureParamsHaveParens (ap :> TSqlStatement) ap.Parameters
+    let paramsDoc = ddlParamListDoc cfg ap.Parameters commentMap wrapParams
     let asDoc = kw cfg "AS"
     let bodyDoc =
         match ap.StatementList with
@@ -974,7 +997,8 @@ and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatemen
 and private createProcedureDoc (cfg: FormattingStyle) (cp: CreateProcedureStatement) : Doc =
     let header = kw cfg "CREATE" <++> kw cfg "PROCEDURE" <++> schemaObjectNameDoc cfg cp.ProcedureReference.Name
     let commentMap = getParamTrailingComments cp.Parameters
-    let paramsDoc = ddlParamListDoc cfg cp.Parameters commentMap
+    let wrapParams = procedureParamsHaveParens (cp :> TSqlStatement) cp.Parameters
+    let paramsDoc = ddlParamListDoc cfg cp.Parameters commentMap wrapParams
     let asDoc = kw cfg "AS"
     let bodyDoc =
         match cp.StatementList with
@@ -1271,7 +1295,7 @@ and private statementDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
 and private handleInlineTvf (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
     let header = kw cfg "ALTER" <++> kw cfg "FUNCTION" <++> schemaObjectNameDoc cfg af.Name
     let commentMap = getParamTrailingComments af.Parameters
-    let paramsDoc = ddlParamListDoc cfg af.Parameters commentMap
+    let paramsDoc = ddlParamListDoc cfg af.Parameters commentMap true
     let returnsDoc = kw cfg "RETURNS" <++> kw cfg "TABLE"
     let asDoc = kw cfg "AS"
 
