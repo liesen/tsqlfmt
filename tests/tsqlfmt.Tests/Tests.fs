@@ -6,16 +6,13 @@ open TSqlFormatter.Config
 open TSqlFormatter.Formatter
 
 let private testDataDir =
-    // Navigate from test/tsqlfmt.Tests/bin/Debug/net10.0 up to repo root/tests
     let assemblyDir = System.Reflection.Assembly.GetExecutingAssembly().Location |> Path.GetDirectoryName
     let mutable dir = assemblyDir
-    // Walk up until we find the tests/ directory
-    while dir <> null && not (Directory.Exists(Path.Combine(dir, "tests"))) do
+    while dir <> null && not (Directory.Exists(Path.Combine(dir, "tests", "tsqlfmt.Tests", "TestData"))) do
         dir <- Path.GetDirectoryName(dir)
-    if dir <> null then Path.Combine(dir, "tests")
+    if dir <> null then Path.Combine(dir, "tests", "tsqlfmt.Tests", "TestData")
     else
-        // Fallback: relative from working directory
-        Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "..", "tests"))
+        Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "tests", "tsqlfmt.Tests", "TestData"))
 
 let private configPath =
     let assemblyDir = System.Reflection.Assembly.GetExecutingAssembly().Location |> Path.GetDirectoryName

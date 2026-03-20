@@ -2,7 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/tsqlfmt/tsqlfmt.fsproj" />
   </Folder>
-  <Folder Name="/test/">
-    <Project Path="test/tsqlfmt.Tests/tsqlfmt.Tests.fsproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/tsqlfmt.Tests/tsqlfmt.Tests.fsproj" />
   </Folder>
 </Solution>
