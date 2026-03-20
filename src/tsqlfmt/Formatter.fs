@@ -267,72 +267,57 @@ and private topDoc (cfg: FormattingStyle) (top: TopRowFilter) : Doc =
 
 // ─── CASE expressions ───
 
-and private searchedCaseDoc (cfg: FormattingStyle) (c: SearchedCaseExpression) : Doc =
-    // Build the flat version to measure length
-    let flatParts =
-        [ yield keyword cfg "CASE"
-          for wc in c.WhenClauses do
-              yield keyword cfg "WHEN" <++> boolExprDoc cfg wc.WhenExpression <++> keyword cfg "THEN" <++> exprDoc cfg wc.ThenExpression
-          if c.ElseExpression <> null then
-              yield keyword cfg "ELSE" <++> exprDoc cfg c.ElseExpression
-          yield keyword cfg "END" ]
-    let flatDoc = hcat flatParts
-
-    if cfg.caseExpressions.collapseShortCaseExpressions then
+and private collapseIfShort (cfg: FormattingStyle) (enabled: bool) (maxLength: int) (flatDoc: Doc) (expandedDoc: Doc) : Doc =
+    if enabled then
         let flatStr = render cfg.whitespace.wrapLinesLongerThan flatDoc
-        if flatStr.Length <= cfg.caseExpressions.collapseCaseExpressionsShorterThan && not (flatStr.Contains('\n')) then
-            flatDoc
-        else
-            expandedCaseDoc cfg c
+        if flatStr.Length <= maxLength && not (flatStr.Contains('\n')) then flatDoc else expandedDoc
     else
-        expandedCaseDoc cfg c
+        expandedDoc
 
-and private expandedCaseDoc (cfg: FormattingStyle) (c: SearchedCaseExpression) : Doc =
+and private caseBodyLines (elseDoc: Doc option) (whenDocs: Doc list) =
+    [ yield! whenDocs
+      match elseDoc with
+      | Some doc -> yield doc
+      | None -> () ]
+
+and private expandedCaseFromParts (cfg: FormattingStyle) (caseHead: Doc) (whenDocs: Doc list) (elseDoc: Doc option) : Doc =
+    let body = caseBodyLines elseDoc whenDocs |> join line |> fun docs -> nest (indentWidth cfg) (line <+> docs)
+    caseHead <+> body <+> line <+> keyword cfg "END"
+
+and private searchedCaseDoc (cfg: FormattingStyle) (c: SearchedCaseExpression) : Doc =
     let whenDocs =
         [ for wc in c.WhenClauses do
-            yield keyword cfg "WHEN" <++> boolExprDoc cfg wc.WhenExpression <++> keyword cfg "THEN" <++> exprDoc cfg wc.ThenExpression ]
-    let body = nest (indentWidth cfg) (line <+> join line whenDocs)
+              yield keyword cfg "WHEN" <++> boolExprDoc cfg wc.WhenExpression <++> keyword cfg "THEN" <++> exprDoc cfg wc.ThenExpression ]
     let elseDoc =
-        if c.ElseExpression <> null then
-            line <+> keyword cfg "ELSE" <++> exprDoc cfg c.ElseExpression
-        else empty
-    keyword cfg "CASE" <+> body <+> elseDoc <+> line <+> keyword cfg "END"
+        if c.ElseExpression <> null then Some (keyword cfg "ELSE" <++> exprDoc cfg c.ElseExpression) else None
+    let flatParts =
+        [ yield keyword cfg "CASE"
+          yield! whenDocs
+          match elseDoc with
+          | Some doc -> yield doc
+          | None -> ()
+          yield keyword cfg "END" ]
+    let flatDoc = hcat flatParts
+    let expandedDoc = expandedCaseFromParts cfg (keyword cfg "CASE") whenDocs elseDoc
+    collapseIfShort cfg cfg.caseExpressions.collapseShortCaseExpressions cfg.caseExpressions.collapseCaseExpressionsShorterThan flatDoc expandedDoc
 
 and private simpleCaseDoc (cfg: FormattingStyle) (c: SimpleCaseExpression) : Doc =
     let inputExpr = exprDoc cfg c.InputExpression
+    let whenDocs =
+        [ for wc in c.WhenClauses do
+              yield keyword cfg "WHEN" <++> exprDoc cfg wc.WhenExpression <++> keyword cfg "THEN" <++> exprDoc cfg wc.ThenExpression ]
+    let elseDoc =
+        if c.ElseExpression <> null then Some (keyword cfg "ELSE" <++> exprDoc cfg c.ElseExpression) else None
     let flatParts =
         [ yield keyword cfg "CASE" <++> inputExpr
-          for wc in c.WhenClauses do
-              yield keyword cfg "WHEN" <++> exprDoc cfg wc.WhenExpression <++> keyword cfg "THEN" <++> exprDoc cfg wc.ThenExpression
-          if c.ElseExpression <> null then
-              yield keyword cfg "ELSE" <++> exprDoc cfg c.ElseExpression
+          yield! whenDocs
+          match elseDoc with
+          | Some doc -> yield doc
+          | None -> ()
           yield keyword cfg "END" ]
     let flatDoc = hcat flatParts
-
-    if cfg.caseExpressions.collapseShortCaseExpressions then
-        let flatStr = render cfg.whitespace.wrapLinesLongerThan flatDoc
-        if flatStr.Length <= cfg.caseExpressions.collapseCaseExpressionsShorterThan && not (flatStr.Contains('\n')) then
-            flatDoc
-        else
-            let whenDocs =
-                [ for wc in c.WhenClauses do
-                    yield keyword cfg "WHEN" <++> exprDoc cfg wc.WhenExpression <++> keyword cfg "THEN" <++> exprDoc cfg wc.ThenExpression ]
-            let body = nest (indentWidth cfg) (line <+> join line whenDocs)
-            let elseDoc =
-                if c.ElseExpression <> null then
-                    line <+> keyword cfg "ELSE" <++> exprDoc cfg c.ElseExpression
-                else empty
-            keyword cfg "CASE" <++> inputExpr <+> body <+> elseDoc <+> line <+> keyword cfg "END"
-    else
-        let whenDocs =
-            [ for wc in c.WhenClauses do
-                yield keyword cfg "WHEN" <++> exprDoc cfg wc.WhenExpression <++> keyword cfg "THEN" <++> exprDoc cfg wc.ThenExpression ]
-        let body = nest (indentWidth cfg) (line <+> join line whenDocs)
-        let elseDoc =
-            if c.ElseExpression <> null then
-                line <+> keyword cfg "ELSE" <++> exprDoc cfg c.ElseExpression
-            else empty
-        keyword cfg "CASE" <++> inputExpr <+> body <+> elseDoc <+> line <+> keyword cfg "END"
+    let expandedDoc = expandedCaseFromParts cfg (keyword cfg "CASE" <++> inputExpr) whenDocs elseDoc
+    collapseIfShort cfg cfg.caseExpressions.collapseShortCaseExpressions cfg.caseExpressions.collapseCaseExpressionsShorterThan flatDoc expandedDoc
 
 // ─── CAST / CONVERT ───
 
@@ -1072,6 +1057,39 @@ and private createProcedureDoc (cfg: FormattingStyle) (cp: CreateProcedureStatem
     let bodyDoc = statementListDoc cfg (line <+> line) empty cp.StatementList
     routineWithAsDoc cfg header paramsDoc bodyDoc
 
+and private viewColumnsDoc (cfg: FormattingStyle) (columns: IList<Identifier>) : Doc =
+    if columns = null || columns.Count = 0 then
+        empty
+    else
+        let columnDocs = columns |> Seq.map identDoc |> Seq.toList
+        text "(" <+> join (text "," <+> line) columnDocs <+> text ")"
+
+and private viewOptionsDoc (cfg: FormattingStyle) (options: IList<ViewOption>) : Doc =
+    if options = null || options.Count = 0 then
+        empty
+    else
+        let optionDocs = options |> Seq.map (tokenStreamDoc cfg) |> Seq.toList
+        line <+> formatList cfg (keyword cfg "WITH") optionDocs
+
+and private viewStatementDoc (cfg: FormattingStyle) (verb: string) (vs: ViewStatementBody) : Doc =
+    let header = keyword cfg verb <++> keyword cfg "VIEW" <++> schemaObjectNameDoc cfg vs.SchemaObjectName
+    let columnsDoc = viewColumnsDoc cfg vs.Columns
+    let optionsDoc = viewOptionsDoc cfg vs.ViewOptions
+    let asDoc = line <+> keyword cfg "AS"
+    let selectDoc = line <+> selectStatementDoc cfg vs.SelectStatement
+    let checkOptionDoc =
+        if vs.WithCheckOption then
+            line <+> keyword cfg "WITH" <++> keyword cfg "CHECK" <++> keyword cfg "OPTION"
+        else empty
+
+    let terminatorDoc =
+        let stream = vs.ScriptTokenStream
+        if stream <> null && vs.LastTokenIndex >= vs.FirstTokenIndex && stream.[vs.LastTokenIndex].TokenType = TSqlTokenType.Semicolon then
+            text ";"
+        else empty
+
+    header <+> columnsDoc <+> optionsDoc <+> asDoc <+> selectDoc <+> checkOptionDoc <+> terminatorDoc
+
 and private createTableElementDoc (cfg: FormattingStyle) (frag: TSqlFragment) : Doc =
     match frag with
     | :? ColumnDefinition as col ->
@@ -1466,6 +1484,9 @@ and private statementDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
     | :? DeleteStatement as del -> deleteDoc cfg del
     | :? MergeStatement as merge -> mergeDoc cfg merge
     | :? CreateTableStatement as ct -> createTableDoc cfg ct
+    | :? CreateViewStatement as cv -> viewStatementDoc cfg "CREATE" cv
+    | :? AlterViewStatement as av -> viewStatementDoc cfg "ALTER" av
+    | :? CreateOrAlterViewStatement as coav -> viewStatementDoc cfg "CREATE OR ALTER" coav
     | :? AlterFunctionStatement as af -> alterFunctionDoc cfg af
     | :? CreateFunctionStatement as cf -> createFunctionDoc cfg cf
     | :? AlterProcedureStatement as ap -> alterProcedureDoc cfg ap

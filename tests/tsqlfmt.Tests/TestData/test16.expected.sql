@@ -3,7 +3,7 @@ SELECT t.id,
         WHEN t.status = 1 THEN 'Active'
         WHEN t.status = 2 THEN 'Pending'
         WHEN t.status = 3 THEN 'Suspended'
-    ELSE 'Unknown'
+        ELSE 'Unknown'
     END AS status_label,
     COALESCE(t.display_name, t.login_name, 'N/A') AS resolved_name,
     NULLIF(t.error_code, 0) AS meaningful_error,
