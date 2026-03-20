@@ -19,15 +19,17 @@ let private indentWidth (cfg: FormattingStyle) = cfg.whitespace.numberOfSpacesIn
 /// Format a clause-level comma list: first item on the same line as the keyword,
 /// continuation items indented one level on new lines.
 /// E.g. "SELECT col1,\n    col2,\n    col3"
-let private clauseCommaList (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
+let private indentListItems (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
     match items with
     | [] -> keyword
+    // Multiline items use a hanging indent relative to the clause keyword.
+    // Inner indentation still belongs to the item's own formatter.
     | [single] -> keyword <++> nest (indentWidth cfg) single
     | first :: rest ->
         let restDoc = join (text "," <+> line) rest
         keyword <++> nest (indentWidth cfg) first <+> text "," <+> nest (indentWidth cfg) (line <+> restDoc)
 
-/// Like clauseCommaList, but collapses onto one line when it fits.
+/// Like indentListItems, but collapses onto one line when it fits.
 /// Used for ORDER BY, GROUP BY where short lists should stay inline.
 let private clauseCommaGroup (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
     match items with
@@ -35,7 +37,7 @@ let private clauseCommaGroup (cfg: FormattingStyle) (keyword: Doc) (items: Doc l
     | [single] -> keyword <++> single
     | _ ->
         let flatDoc = keyword <++> join (text ", ") items |> flatten
-        let expandedDoc = clauseCommaList cfg keyword items
+        let expandedDoc = indentListItems cfg keyword items
         TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
 
 /// Get the raw SQL text of a fragment from its token stream.
@@ -597,7 +599,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
         qs.SelectElements
         |> Seq.map (fun e -> exprDoc cfg e)
         |> Seq.toList
-    let selectClause = clauseCommaList cfg selectKwWithTop selectItems
+    let selectClause = indentListItems cfg selectKwWithTop selectItems
 
     let parts =
         [ yield selectClause
@@ -1306,7 +1308,7 @@ and private updateDoc (cfg: FormattingStyle) (upd: UpdateStatement) : Doc =
 
     let parts =
         [ yield keyword cfg "UPDATE" <++> target
-          yield clauseCommaList cfg (keyword cfg "SET") setClauses
+          yield indentListItems cfg (keyword cfg "SET") setClauses
 
           if spec.FromClause <> null && spec.FromClause.TableReferences <> null && spec.FromClause.TableReferences.Count > 0 then
               yield keyword cfg "FROM" <++> tableRefDoc cfg spec.FromClause.TableReferences.[0]
@@ -1384,7 +1386,7 @@ and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
             | :? UpdateMergeAction as u ->
                 let setClauses = u.SetClauses |> Seq.map setClauseDoc |> Seq.toList
                 keyword cfg "THEN" <+>
-                nest (indentWidth cfg) (line <+> clauseCommaList cfg (keyword cfg "UPDATE" <++> keyword cfg "SET") setClauses)
+                nest (indentWidth cfg) (line <+> indentListItems cfg (keyword cfg "UPDATE" <++> keyword cfg "SET") setClauses)
             | :? InsertMergeAction as ins ->
                 let cols =
                     if ins.Columns <> null && ins.Columns.Count > 0 then
@@ -1428,7 +1430,7 @@ and private declareDoc (cfg: FormattingStyle) (decl: DeclareVariableStatement) :
                 else empty
             nameDoc <++> typeDoc <+> valueDoc
         ) |> Seq.toList
-    clauseCommaList cfg (keyword cfg "DECLARE") varDocs
+    indentListItems cfg (keyword cfg "DECLARE") varDocs
 
 and private setVarDoc (cfg: FormattingStyle) (sv: SetVariableStatement) : Doc =
     let varDoc = text sv.Variable.Name
