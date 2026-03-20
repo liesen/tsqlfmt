@@ -7,6 +7,7 @@ open TSqlFormatter.Config
 open TSqlFormatter.Formatter
 
 let private usage = """Usage: tsqlfmt [OPTIONS] [FILE]
+       tsqlfmt formatSql [OPTIONS] [FILE]
 
 Format T-SQL code.
 
@@ -15,8 +16,13 @@ Formatted SQL is written to stdout.
 
 Options:
   --config PATH   Path to a JSON configuration file.
-                  If omitted, loads 'formattingstyle.json' from the current directory when present;
-                  otherwise uses built-in defaults.
+                   If omitted, loads 'formattingstyle.json' from the current directory when present;
+                   otherwise uses built-in defaults.
+  --adsStylesPath PATH
+                  Path to a directory of SQL Prompt-style formatting files.
+  --styleName, -n NAME
+                  Style name to load from available style files. Defaults to 'Default'.
+  --applyCasing   Accepted for SQL Prompt compatibility.
   --check         Check mode. Exits with code 1 if the input would change.
   --in-place      Overwrite the input file with formatted output.
   --help          Print usage information.
@@ -29,17 +35,50 @@ Exit Codes:
 
 type CliArgs = {
     configPath: string option
+    stylesPath: string option
+    styleName: string
+    styleNameSpecified: bool
+    applyCasing: bool
     checkMode: bool
     inPlace: bool
     showHelp: bool
     inputFile: string option
 }
 
-let private parseArgs (argv: string[]) : Result<CliArgs, string> =
+let defaultCliArgs = {
+    configPath = None
+    stylesPath = None
+    styleName = "Default"
+    styleNameSpecified = false
+    applyCasing = false
+    checkMode = false
+    inPlace = false
+    showHelp = false
+    inputFile = None
+}
+
+let private isSupportedCommand (arg: string) =
+    arg = "formatSql"
+
+let private isKnownButUnsupportedCommand (arg: string) =
+    match arg with
+    | "listAvailableStyles"
+    | "createStyle"
+    | "styleDeleted"
+    | "styleEdited"
+    | "activeStyleChanged"
+    | "adsStarted" -> true
+    | _ -> false
+
+let parseArgs (argv: string[]) : Result<CliArgs, string> =
     let rec loop i (args: CliArgs) =
         if i >= argv.Length then Ok args
         else
             match argv.[i] with
+            | arg when i = 0 && isSupportedCommand arg ->
+                loop (i + 1) args
+            | arg when i = 0 && isKnownButUnsupportedCommand arg ->
+                Error (sprintf "Unsupported SQL Prompt command: %s" arg)
             | "--help" | "-h" ->
                 loop (i + 1) { args with showHelp = true }
             | "--config" ->
@@ -47,6 +86,18 @@ let private parseArgs (argv: string[]) : Result<CliArgs, string> =
                     loop (i + 2) { args with configPath = Some argv.[i + 1] }
                 else
                     Error "--config requires a PATH argument"
+            | "--adsStylesPath" ->
+                if i + 1 < argv.Length then
+                    loop (i + 2) { args with stylesPath = Some argv.[i + 1] }
+                else
+                    Error "--adsStylesPath requires a PATH argument"
+            | "--styleName" | "-n" ->
+                if i + 1 < argv.Length then
+                    loop (i + 2) { args with styleName = argv.[i + 1]; styleNameSpecified = true }
+                else
+                    Error "--styleName requires a NAME argument"
+            | "--applyCasing" ->
+                loop (i + 1) { args with applyCasing = true }
             | "--check" ->
                 loop (i + 1) { args with checkMode = true }
             | "--in-place" ->
@@ -57,13 +108,55 @@ let private parseArgs (argv: string[]) : Result<CliArgs, string> =
                 match args.inputFile with
                 | None -> loop (i + 1) { args with inputFile = Some file }
                 | Some _ -> Error "Only one input file may be specified"
-    loop 0 {
-        configPath = None
-        checkMode = false
-        inPlace = false
-        showHelp = false
-        inputFile = None
-    }
+    loop 0 defaultCliArgs
+
+let resolveConfigPath (currentDirectory: string) (args: CliArgs) : Result<string option, string> =
+    let tryFindNamedStyle (searchDirectories: string list) (styleName: string) =
+        let matches =
+            searchDirectories
+            |> List.distinct
+            |> List.filter Directory.Exists
+            |> List.collect (fun directory ->
+                Directory.GetFiles(directory)
+                |> Array.choose (fun path ->
+                    let fileName = Path.GetFileName(path)
+                    let baseName = Path.GetFileNameWithoutExtension(path)
+                    let rank =
+                        if String.Equals(baseName, styleName, StringComparison.OrdinalIgnoreCase) then Some 0
+                        elif String.Equals(styleName, "Default", StringComparison.OrdinalIgnoreCase) && String.Equals(fileName, "formattingstyle.json", StringComparison.OrdinalIgnoreCase) then Some 1
+                        elif String.Equals(styleName, "Default", StringComparison.OrdinalIgnoreCase) && String.Equals(fileName, "default-style.json", StringComparison.OrdinalIgnoreCase) then Some 2
+                        else None
+                    rank |> Option.map (fun r -> r, path))
+                |> Array.toList)
+
+        match matches |> List.sortBy fst |> List.tryHead with
+        | Some (_, path) -> Ok (Some path)
+        | None when String.Equals(styleName, "Default", StringComparison.OrdinalIgnoreCase) -> Ok None
+        | None -> Error (sprintf "Style '%s' could not be found" styleName)
+
+    let searchDirectories =
+        let executableDirectory =
+            match Environment.ProcessPath with
+            | null -> None
+            | processPath -> Path.GetDirectoryName(processPath) |> Option.ofObj
+
+        [ args.stylesPath
+          Some currentDirectory
+          executableDirectory ]
+        |> List.choose id
+
+    match args.configPath, args.stylesPath with
+    | Some configPath, _ ->
+        if File.Exists(configPath) then Ok (Some configPath)
+        else Error (sprintf "Config file not found: %s" configPath)
+    | None, _ when args.styleNameSpecified || args.stylesPath.IsSome ->
+        tryFindNamedStyle searchDirectories args.styleName
+    | None, None ->
+        let defaultPath = Path.Combine(currentDirectory, "formattingstyle.json")
+        if File.Exists(defaultPath) then Ok (Some defaultPath)
+        else Ok None
+    | None, Some _ ->
+        Ok None
 
 [<EntryPoint>]
 let main argv =
@@ -77,22 +170,19 @@ let main argv =
         printf "%s" usage
         0
     | Ok args ->
-        // Resolve config
-        let configPath =
-            match args.configPath with
-            | Some p -> p
-            | None ->
-                let defaultPath = Path.Combine(Directory.GetCurrentDirectory(), "formattingstyle.json")
-                if File.Exists(defaultPath) then defaultPath
-                else ""
         let config =
-            if configPath <> "" && File.Exists(configPath) then
+            match resolveConfigPath (Directory.GetCurrentDirectory()) args with
+            | Error msg ->
+                eprintfn "Error: %s" msg
+                exit 2
+                defaultStyle // unreachable
+            | Ok (Some configPath) ->
                 try loadConfig configPath
                 with ex ->
                     eprintfn "Error loading config '%s': %s" configPath ex.Message
                     exit 2
                     defaultStyle // unreachable
-            else
+            | Ok None ->
                 defaultStyle
 
         // Validate --in-place requires a file

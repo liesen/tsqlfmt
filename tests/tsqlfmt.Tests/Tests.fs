@@ -1,9 +1,11 @@
 module Tests
 
+open System
 open System.IO
 open Xunit
 open TSqlFormatter.Config
 open TSqlFormatter.Formatter
+open TSqlFormatter.Program
 
 let private testDataDir =
     let assemblyDir = System.Reflection.Assembly.GetExecutingAssembly().Location |> Path.GetDirectoryName
@@ -24,6 +26,12 @@ let private configPath =
         Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "..", "default-style.json"))
 
 let private config = loadConfig configPath
+
+let private writeTempStyle (dir: string) (name: string) (keywordStyle: string) =
+    let path = Path.Combine(dir, name)
+    let json = sprintf "{\"casing\":{\"reservedKeywords\":\"%s\"}}" keywordStyle
+    File.WriteAllText(path, json)
+    path
 
 let testCases () : seq<obj[]> =
     Directory.GetFiles(testDataDir, "*.actual.sql")
@@ -69,3 +77,80 @@ let ``format test`` (testName: string) =
                     sprintf "\nFirst difference at line %d:\nExpected: [%s]\nActual:   [%s]" (diffLine + 1) eLine fLine
                 else ""
             Assert.Fail(sprintf "Output does not match expected for %s. Debug output written to %s.%s" testName debugPath diffInfo)
+
+[<Fact>]
+let ``parseArgs accepts sqlprompt formatSql command`` () =
+    let parsed = parseArgs [| "formatSql"; "--styleName"; "Default"; "input.sql" |]
+    match parsed with
+    | Error msg -> Assert.Fail msg
+    | Ok args ->
+        Assert.Equal("Default", args.styleName)
+        Assert.Equal(Some "input.sql", args.inputFile)
+
+[<Fact>]
+let ``parseArgs rejects unsupported sqlprompt command`` () =
+    let parsed = parseArgs [| "listAvailableStyles" |]
+    match parsed with
+    | Ok _ -> Assert.Fail("Expected unsupported command to fail")
+    | Error msg -> Assert.Contains("Unsupported SQL Prompt command", msg)
+
+[<Fact>]
+let ``resolveConfigPath ignores missing styles directory for default style`` () =
+    let missingDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+    let args = { defaultCliArgs with stylesPath = Some missingDir; styleName = "Default"; styleNameSpecified = true }
+    let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
+    match resolved with
+    | Error msg -> Assert.Fail msg
+    | Ok _ -> ()
+
+[<Fact>]
+let ``resolveConfigPath rejects missing named style without styles directory`` () =
+    let missingDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+    let args = { defaultCliArgs with stylesPath = Some missingDir; styleName = "MyStyle"; styleNameSpecified = true }
+    let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
+    match resolved with
+    | Ok _ -> Assert.Fail("Expected missing style to fail")
+    | Error msg -> Assert.Contains("Style 'MyStyle' could not be found", msg)
+
+[<Fact>]
+let ``resolveConfigPath rejects missing named style`` () =
+    let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(stylesDir) |> ignore
+    try
+        let args = { defaultCliArgs with stylesPath = Some stylesDir; styleName = "Missing"; styleNameSpecified = true }
+        let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
+        match resolved with
+        | Ok _ -> Assert.Fail("Expected missing style to fail")
+        | Error msg -> Assert.Contains("Style 'Missing' could not be found", msg)
+    finally
+        Directory.Delete(stylesDir, true)
+
+[<Fact>]
+let ``resolveConfigPath uses named style from styles directory`` () =
+    let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(stylesDir) |> ignore
+    try
+        let stylePath = writeTempStyle stylesDir "MyStyle.json" "lowercase"
+        let args = { defaultCliArgs with stylesPath = Some stylesDir; styleName = "MyStyle" }
+        let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
+        match resolved with
+        | Error msg -> Assert.Fail msg
+        | Ok None -> Assert.Fail("Expected a style path")
+        | Ok (Some path) -> Assert.Equal(stylePath, path)
+    finally
+        Directory.Delete(stylesDir, true)
+
+[<Fact>]
+let ``resolveConfigPath falls back to formattingstyle json for default style`` () =
+    let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(stylesDir) |> ignore
+    try
+        let stylePath = writeTempStyle stylesDir "formattingstyle.json" "uppercase"
+        let args = { defaultCliArgs with stylesPath = Some stylesDir; styleName = "Default" }
+        let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
+        match resolved with
+        | Error msg -> Assert.Fail msg
+        | Ok None -> Assert.Fail("Expected a style path")
+        | Ok (Some path) -> Assert.Equal(stylePath, path)
+    finally
+        Directory.Delete(stylesDir, true)
