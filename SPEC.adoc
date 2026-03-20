@@ -227,6 +227,16 @@ let rec toDoc (cfg: FormattingStyle) (node: TSqlFragment) : Doc =
 The fallback `tokenStreamDoc` renders any unhandled node by emitting its tokens directly from the token stream, preserving the original text.
 This keeps the formatter safe on unsupported syntax: it falls back to the original text instead of crashing.
 
+=== Formatter Design Principles
+
+Formatting decisions should come from AST shape, token structure, or explicit layout intent carried through helper interfaces.
+
+Do not inspect rendered `Doc` output to decide how to format a node.
+If a helper needs rendered text to choose a layout, the helper boundary is wrong and the missing intent should become an explicit input.
+
+Prefer one general formatting routine per AST node shape over ad hoc special cases.
+Factor common structure into shared helpers for patterns such as parenthesized bodies, comma-separated lists, clause headers, and inline-vs-block bodies.
+
 === Node Types
 
 The following ScriptDOM node types require dedicated formatting functions:
