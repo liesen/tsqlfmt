@@ -27,6 +27,17 @@ let private configPath =
 
 let private config = loadConfig configPath
 
+let private defaultCliArgs = {
+    configPath = None
+    stylesPath = None
+    styleName = "Default"
+    styleNameSpecified = false
+    applyCasing = false
+    checkMode = false
+    inPlace = false
+    inputFile = None
+}
+
 let private writeTempStyle (dir: string) (name: string) (keywordStyle: string) =
     let path = Path.Combine(dir, name)
     let json = sprintf "{\"casing\":{\"reservedKeywords\":\"%s\"}}" keywordStyle
@@ -86,6 +97,13 @@ let ``parseArgs accepts sqlprompt formatSql command`` () =
     | Ok args ->
         Assert.Equal("Default", args.styleName)
         Assert.Equal(Some "input.sql", args.inputFile)
+
+[<Fact>]
+let ``parseArgs accepts auth token and ignores it`` () =
+    let parsed = parseArgs [| "formatSql"; "--authToken"; "secret"; "--styleName"; "Default" |]
+    match parsed with
+    | Error msg -> Assert.Fail msg
+    | Ok args -> Assert.Equal("Default", args.styleName)
 
 [<Fact>]
 let ``parseArgs rejects unsupported sqlprompt command`` () =

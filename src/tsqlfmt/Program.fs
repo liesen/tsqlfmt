@@ -3,37 +3,53 @@ module TSqlFormatter.Program
 
 open System
 open System.IO
+open Argu
 open TSqlFormatter.Config
 open TSqlFormatter.Formatter
 
-let private usage = """Usage: tsqlfmt [OPTIONS] [FILE]
-       tsqlfmt formatSql [OPTIONS] [FILE]
+[<CliPrefix(CliPrefix.None)>]
+type FormatSqlArgs =
+    | [<CustomCommandLine("authToken", "t")>] AuthToken of token: string
+    | [<CustomCommandLine("config")>] Config of path: string
+    | [<CustomCommandLine("adsStylesPath")>] AdsStylesPath of path: string
+    | [<CustomCommandLine("styleName", "n")>] StyleName of name: string
+    | [<CustomCommandLine("applyCasing")>] ApplyCasing
+    | [<CustomCommandLine("check")>] Check
+    | [<CustomCommandLine("in-place")>] InPlace
+    | [<MainCommand>] File of path: string
 
-Format T-SQL code.
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | AuthToken _ ->
+                "Accepted for SQL Prompt compatibility and ignored."
+            | Config _ ->
+                "Path to a JSON configuration file. If omitted, loads 'formattingstyle.json' from the current directory when present; otherwise uses built-in defaults."
+            | AdsStylesPath _ ->
+                "Path to a directory of SQL Prompt-style formatting files."
+            | StyleName _ ->
+                "Style name to load from available style files. Defaults to 'Default'."
+            | ApplyCasing ->
+                "Accepted for SQL Prompt compatibility."
+            | Check ->
+                "Check mode. Exits with code 1 if the input would change."
+            | InPlace ->
+                "Overwrite the input file with formatted output."
+            | File _ ->
+                "Input file path. If omitted or '-', reads from stdin."
 
-When FILE is omitted or '-', reads from stdin.
-Formatted SQL is written to stdout.
+[<CliPrefix(CliPrefix.None)>]
+type CliArgs =
+    | [<CliPrefix(CliPrefix.None)>]
+      [<CustomCommandLine("formatSql")>]
+      FormatSql of ParseResults<FormatSqlArgs>
 
-Options:
-  --config PATH   Path to a JSON configuration file.
-                   If omitted, loads 'formattingstyle.json' from the current directory when present;
-                   otherwise uses built-in defaults.
-  --adsStylesPath PATH
-                  Path to a directory of SQL Prompt-style formatting files.
-  --styleName, -n NAME
-                  Style name to load from available style files. Defaults to 'Default'.
-  --applyCasing   Accepted for SQL Prompt compatibility.
-  --check         Check mode. Exits with code 1 if the input would change.
-  --in-place      Overwrite the input file with formatted output.
-  --help          Print usage information.
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | FormatSql _ -> "Format SQL."
 
-Exit Codes:
-  0  Success (or no changes in --check mode)
-  1  Input would change (--check mode), or formatting error
-  2  Invalid arguments, file not found, or config load error
-"""
-
-type CliArgs = {
+type ResolvedArgs = {
     configPath: string option
     stylesPath: string option
     styleName: string
@@ -41,24 +57,14 @@ type CliArgs = {
     applyCasing: bool
     checkMode: bool
     inPlace: bool
-    showHelp: bool
     inputFile: string option
 }
 
-let defaultCliArgs = {
-    configPath = None
-    stylesPath = None
-    styleName = "Default"
-    styleNameSpecified = false
-    applyCasing = false
-    checkMode = false
-    inPlace = false
-    showHelp = false
-    inputFile = None
-}
+let private cliParser =
+    ArgumentParser.Create<CliArgs>(programName = "tsqlfmt")
 
-let private isSupportedCommand (arg: string) =
-    arg = "formatSql"
+let private formatSqlParser =
+    cliParser.GetSubCommandParser <@ FormatSql @>
 
 let private isKnownButUnsupportedCommand (arg: string) =
     match arg with
@@ -70,47 +76,45 @@ let private isKnownButUnsupportedCommand (arg: string) =
     | "adsStarted" -> true
     | _ -> false
 
-let parseArgs (argv: string[]) : Result<CliArgs, string> =
-    let rec loop i (args: CliArgs) =
-        if i >= argv.Length then Ok args
-        else
-            match argv.[i] with
-            | arg when i = 0 && isSupportedCommand arg ->
-                loop (i + 1) args
-            | arg when i = 0 && isKnownButUnsupportedCommand arg ->
-                Error (sprintf "Unsupported SQL Prompt command: %s" arg)
-            | "--help" | "-h" ->
-                loop (i + 1) { args with showHelp = true }
-            | "--config" ->
-                if i + 1 < argv.Length then
-                    loop (i + 2) { args with configPath = Some argv.[i + 1] }
-                else
-                    Error "--config requires a PATH argument"
-            | "--adsStylesPath" ->
-                if i + 1 < argv.Length then
-                    loop (i + 2) { args with stylesPath = Some argv.[i + 1] }
-                else
-                    Error "--adsStylesPath requires a PATH argument"
-            | "--styleName" | "-n" ->
-                if i + 1 < argv.Length then
-                    loop (i + 2) { args with styleName = argv.[i + 1]; styleNameSpecified = true }
-                else
-                    Error "--styleName requires a NAME argument"
-            | "--applyCasing" ->
-                loop (i + 1) { args with applyCasing = true }
-            | "--check" ->
-                loop (i + 1) { args with checkMode = true }
-            | "--in-place" ->
-                loop (i + 1) { args with inPlace = true }
-            | arg when arg.StartsWith("-") && arg <> "-" ->
-                Error (sprintf "Unknown option: %s" arg)
-            | file ->
-                match args.inputFile with
-                | None -> loop (i + 1) { args with inputFile = Some file }
-                | Some _ -> Error "Only one input file may be specified"
-    loop 0 defaultCliArgs
+let private parseFormatSqlArgs (results: ParseResults<FormatSqlArgs>) =
+    let styleName = results.GetResult(<@ StyleName @>, defaultValue = "Default")
+    {
+        configPath = results.TryGetResult <@ Config @>
+        stylesPath = results.TryGetResult <@ AdsStylesPath @>
+        styleName = styleName
+        styleNameSpecified = results.Contains <@ StyleName @>
+        applyCasing = results.Contains <@ ApplyCasing @>
+        checkMode = results.Contains <@ Check @>
+        inPlace = results.Contains <@ InPlace @>
+        inputFile = results.TryGetResult <@ File @>
+    }
 
-let resolveConfigPath (currentDirectory: string) (args: CliArgs) : Result<string option, string> =
+let parseArgs (argv: string[]) : Result<ResolvedArgs, string> =
+    try
+        match argv with
+        | [||] ->
+            formatSqlParser.ParseCommandLine(inputs = [||], raiseOnUsage = true)
+            |> parseFormatSqlArgs
+            |> Ok
+        | [| command |] when isKnownButUnsupportedCommand command ->
+            Error (sprintf "Unsupported SQL Prompt command: %s" command)
+        | [| command; _ |] when isKnownButUnsupportedCommand command ->
+            Error (sprintf "Unsupported SQL Prompt command: %s" command)
+        | _ when argv.Length > 0 && argv.[0] = "formatSql" ->
+            cliParser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
+            |> function
+                | parsed when parsed.Contains <@ FormatSql @> -> parsed.GetResult <@ FormatSql @> |> parseFormatSqlArgs |> Ok
+                | _ -> Error "Unsupported command"
+        | _ when argv.Length > 0 && isKnownButUnsupportedCommand argv.[0] ->
+            Error (sprintf "Unsupported SQL Prompt command: %s" argv.[0])
+        | _ ->
+            formatSqlParser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
+            |> parseFormatSqlArgs
+            |> Ok
+    with
+    | :? ArguParseException as ex -> Error ex.Message
+
+let resolveConfigPath (currentDirectory: string) (args: ResolvedArgs) : Result<string option, string> =
     let tryFindNamedStyle (searchDirectories: string list) (styleName: string) =
         let matches =
             searchDirectories
@@ -164,61 +168,54 @@ let main argv =
     match parsed with
     | Error msg ->
         eprintfn "Error: %s" msg
-        eprintfn "%s" usage
+        eprintfn "%s" (formatSqlParser.PrintUsage())
         2
-    | Ok args when args.showHelp ->
-        printf "%s" usage
-        0
     | Ok args ->
         let config =
             match resolveConfigPath (Directory.GetCurrentDirectory()) args with
             | Error msg ->
                 eprintfn "Error: %s" msg
                 exit 2
-                defaultStyle // unreachable
+                defaultStyle
             | Ok (Some configPath) ->
                 try loadConfig configPath
                 with ex ->
                     eprintfn "Error loading config '%s': %s" configPath ex.Message
                     exit 2
-                    defaultStyle // unreachable
+                    defaultStyle
             | Ok None ->
                 defaultStyle
 
-        // Validate --in-place requires a file
         if args.inPlace && (args.inputFile.IsNone || args.inputFile = Some "-") then
             eprintfn "Error: --in-place requires a file path argument"
             2
         else
+            let inputSql =
+                match args.inputFile with
+                | None | Some "-" -> Console.In.ReadToEnd()
+                | Some path ->
+                    if File.Exists(path) then
+                        File.ReadAllText(path)
+                    else
+                        eprintfn "Error: file not found: %s" path
+                        exit 2
+                        ""
 
-        // Read input
-        let inputSql =
-            match args.inputFile with
-            | None | Some "-" -> Console.In.ReadToEnd()
-            | Some path ->
-                if File.Exists(path) then
-                    File.ReadAllText(path)
-                else
-                    eprintfn "Error: file not found: %s" path
-                    exit 2
-                    "" // unreachable
-
-        // Format
-        match format config inputSql with
-        | Error errors ->
-            for e in errors do
-                eprintfn "Parse error: %s" e
-            1
-        | Ok formatted ->
-            if args.checkMode then
-                if formatted = inputSql then
+            match format config inputSql with
+            | Error errors ->
+                for e in errors do
+                    eprintfn "Parse error: %s" e
+                1
+            | Ok formatted ->
+                if args.checkMode then
+                    if formatted = inputSql then
+                        0
+                    else
+                        eprintfn "Input would change."
+                        1
+                elif args.inPlace then
+                    File.WriteAllText(args.inputFile.Value, formatted)
                     0
                 else
-                    eprintfn "Input would change."
-                    1
-            elif args.inPlace then
-                File.WriteAllText(args.inputFile.Value, formatted)
-                0
-            else
-                printf "%s" formatted
-                0
+                    printf "%s" formatted
+                    0
