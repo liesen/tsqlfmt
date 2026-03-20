@@ -1,0 +1,5 @@
+CREATE FUNCTION dbo.fn_test26()
+RETURNS TABLE
+AS
+RETURN SELECT 25 AS col1,
+    'test' AS col2

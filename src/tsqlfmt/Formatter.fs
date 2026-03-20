@@ -1,6 +1,7 @@
 /// Core T-SQL formatter: parses SQL via ScriptDOM, transforms AST to Doc, renders to string.
 module TSqlFormatter.Formatter
 
+open System
 open System.IO
 open System.Collections.Generic
 open Microsoft.SqlServer.TransactSql.ScriptDom
@@ -161,7 +162,7 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
     | :? InPredicate as inp -> inPredicateDoc cfg inp
     | :? LikePredicate as lk -> likePredicateDoc cfg lk
     | :? ExistsPredicate as ep ->
-        keyword cfg "EXISTS" <++> text "(" <+> queryExprDoc cfg ep.Subquery.QueryExpression <+> text ")"
+        keyword cfg "EXISTS" <++> inlineParenthesizedQueryDoc cfg true (queryExprDoc cfg ep.Subquery.QueryExpression)
     | :? BooleanTernaryExpression as be -> betweenDoc cfg be
     | :? BinaryExpression as binex -> binaryExprDoc cfg binex
     | :? UnaryExpression as unex ->
@@ -184,6 +185,13 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
 
 and private boolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     exprDoc cfg expr
+
+and private standaloneBoolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
+    match expr with
+    | :? ExistsPredicate as ep ->
+        keyword cfg "EXISTS" <++> blockParenthesizedQueryDoc cfg true (queryExprDoc cfg ep.Subquery.QueryExpression)
+    | _ ->
+        boolExprDoc cfg expr
 
 and private columnRefDoc (_cfg: FormattingStyle) (col: ColumnReferenceExpression) : Doc =
     if col.MultiPartIdentifier <> null then
@@ -474,20 +482,34 @@ and private boolParenDoc (cfg: FormattingStyle) (bp: BooleanParenthesisExpressio
     let expandedDoc = text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
     TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
 
+and private queryParensDoc (cfg: FormattingStyle) (allowCollapse: bool) (expandedDoc: Doc) (inner: Doc) : Doc =
+    let flatDoc = text "(" <+> flatten inner <+> text ")"
+
+    if allowCollapse then
+        let flatStr = render cfg.whitespace.wrapLinesLongerThan (flatten inner)
+        if cfg.dml.collapseShortSubqueries
+           && flatStr.Length < cfg.dml.collapseSubqueriesShorterThan
+           && not (flatStr.Contains('\n')) then
+            flatDoc
+        else
+            expandedDoc
+    else
+        expandedDoc
+
+and private blockParenthesizedQueryDoc (cfg: FormattingStyle) (allowCollapse: bool) (inner: Doc) : Doc =
+    let expandedDoc = text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
+    queryParensDoc cfg allowCollapse expandedDoc inner
+
+and private inlineParenthesizedQueryDoc (cfg: FormattingStyle) (allowCollapse: bool) (inner: Doc) : Doc =
+    let expandedDoc = text "(" <+> inner <+> text ")"
+    queryParensDoc cfg allowCollapse expandedDoc inner
+
 and private inPredicateDoc (cfg: FormattingStyle) (inp: InPredicate) : Doc =
     let lhs = exprDoc cfg inp.Expression
     let notPart = if inp.NotDefined then keyword cfg "NOT" <++> empty else empty
     let inKw = keyword cfg "IN"
     if inp.Subquery <> null then
-        let subDoc = queryExprDoc cfg inp.Subquery.QueryExpression
-        // Check for collapse
-        let flatSub = render cfg.whitespace.wrapLinesLongerThan subDoc
-        if cfg.dml.collapseShortSubqueries && flatSub.Length < cfg.dml.collapseSubqueriesShorterThan && not (flatSub.Contains('\n')) then
-            lhs <++> notPart <+> inKw <++> text "(" <+> subDoc <+> text ")"
-        else
-            // expandedSplit: content at nest+indent, closing paren at nest level
-            // (whereConditionDoc wraps the first expression in nest (indentWidth cfg), providing the outer indent)
-            lhs <++> notPart <+> inKw <++> text "(" <+> nest (indentWidth cfg) (line <+> subDoc) <+> line <+> text ")"
+        lhs <++> notPart <+> inKw <++> blockParenthesizedQueryDoc cfg true (queryExprDoc cfg inp.Subquery.QueryExpression)
     else
         let valDocs = inp.Values |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
         // Use Union to allow the renderer to collapse onto one line when it fits.
@@ -542,12 +564,7 @@ and private parenExprDoc (cfg: FormattingStyle) (p: ParenthesisExpression) : Doc
     text "(" <+> exprDoc cfg p.Expression <+> text ")"
 
 and private scalarSubqueryDoc (cfg: FormattingStyle) (sq: ScalarSubquery) : Doc =
-    let inner = queryExprDoc cfg sq.QueryExpression
-    let flatStr = render cfg.whitespace.wrapLinesLongerThan inner
-    if cfg.dml.collapseShortSubqueries && flatStr.Length < cfg.dml.collapseSubqueriesShorterThan && not (flatStr.Contains('\n')) then
-        text "(" <+> inner <+> text ")"
-    else
-        text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
+    blockParenthesizedQueryDoc cfg true (queryExprDoc cfg sq.QueryExpression)
 
 // ─── Query expressions ───
 
@@ -559,7 +576,7 @@ and private querySpecOrExprDoc (cfg: FormattingStyle) (qe: QueryExpression) (int
     | :? QuerySpecification as qs -> querySpecDoc cfg qs intoTarget
     | :? BinaryQueryExpression as bqe -> binaryQueryDoc cfg bqe
     | :? QueryParenthesisExpression as qpe ->
-        text "(" <+> nest (indentWidth cfg) (line <+> queryExprDoc cfg qpe.QueryExpression) <+> line <+> text ")"
+        blockParenthesizedQueryDoc cfg false (queryExprDoc cfg qpe.QueryExpression)
     | _ -> tokenStreamDoc cfg qe
 
 and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTarget: Doc option) : Doc =
@@ -867,7 +884,11 @@ and private ddlParamListDoc (cfg: FormattingStyle) (parameters: System.Collectio
             |> Seq.toList
         let paramsBody = join line paramDocs
         if wrapInParens then
-            text " (" <+> nest (indentWidth cfg) (line <+> paramsBody) <+> line <+> text ")"
+            let isSingleLine = parameters.Count = 1 && trailingCommentMap.IsEmpty
+            if isSingleLine then
+                text "(" <+> flatten paramsBody <+> text ")"
+            else
+                text " (" <+> nest (indentWidth cfg) (line <+> paramsBody) <+> line <+> text ")"
         else
             nest (indentWidth cfg) (line <+> paramsBody)
 
@@ -922,11 +943,15 @@ and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement)
     let bodyDoc =
         match af.ReturnType with
         | :? SelectFunctionReturnType as sfrt ->
-            // Inline TVF: RETURNS TABLE AS RETURN SELECT ...
             let returnsDoc = keyword cfg "RETURNS" <++> keyword cfg "TABLE"
-            let asDoc = keyword cfg "AS"
-            let selectDoc = selectStatementDoc cfg sfrt.SelectStatement
-            returnsDoc <+> line <+> asDoc <+> line <+> keyword cfg "RETURN" <++> selectDoc
+            let selectText = fragmentText sfrt.SelectStatement |> fun s -> s.Trim()
+            if selectText.StartsWith("(") then
+                let asReturnDoc = keyword cfg "AS" <++> keyword cfg "RETURN"
+                returnsDoc <+> line <+> asReturnDoc <++> parenthesizedInlineTvfDoc cfg selectText
+            else
+                let asDoc = keyword cfg "AS"
+                let selectDoc = selectStatementDoc cfg sfrt.SelectStatement
+                returnsDoc <+> line <+> asDoc <+> line <+> keyword cfg "RETURN" <++> selectDoc
         | :? ScalarFunctionReturnType as srt ->
             let returnsDoc = keyword cfg "RETURNS" <++> dataTypeRefDoc cfg srt.DataType
             let asDoc = keyword cfg "AS"
@@ -964,21 +989,57 @@ and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatemen
     let header = keyword cfg "CREATE" <++> keyword cfg "FUNCTION" <++> schemaObjectNameDoc cfg cf.Name
     let commentMap = getParamTrailingComments cf.Parameters
     let paramsDoc = ddlParamListDoc cfg cf.Parameters commentMap true
-    let returnsDoc = keyword cfg "RETURNS" <++> (
-        match cf.ReturnType with
-        | :? TableValuedFunctionReturnType -> keyword cfg "TABLE"
-        | :? ScalarFunctionReturnType as srt -> dataTypeRefDoc cfg srt.DataType
-        | _ -> tokenStreamDoc cfg cf.ReturnType
-    )
-    let asDoc = keyword cfg "AS"
-    let bodyDoc =
-        match cf.StatementList with
-        | null -> tokenStreamDoc cfg cf
-        | stmtList ->
-            let stmts = stmtList.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
-            join line stmts
+    match cf.ReturnType with
+    | :? SelectFunctionReturnType as sfrt ->
+        let returnsDoc = keyword cfg "RETURNS" <++> keyword cfg "TABLE"
+        let stream = cf.ScriptTokenStream
+        let returnIdxOpt =
+            if stream <> null then
+                seq { cf.FirstTokenIndex .. cf.LastTokenIndex }
+                |> Seq.tryFind (fun i -> stream.[i].TokenType = TSqlTokenType.Return)
+            else None
 
-    header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc <+> line <+> bodyDoc
+        match returnIdxOpt with
+        | Some returnIdx ->
+            let selectStart =
+                seq { returnIdx + 1 .. cf.LastTokenIndex }
+                |> Seq.skipWhile (fun i -> stream.[i].TokenType = TSqlTokenType.WhiteSpace)
+                |> Seq.tryHead
+                |> Option.defaultValue (returnIdx + 1)
+
+            let selectSql =
+                seq { selectStart .. cf.LastTokenIndex }
+                |> Seq.map (fun i -> stream.[i].Text)
+                |> String.concat ""
+                |> fun s -> s.Trim()
+
+            if selectSql.StartsWith("(") then
+                let asReturnDoc = keyword cfg "AS" <++> keyword cfg "RETURN"
+                header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asReturnDoc <++> parenthesizedInlineTvfDoc cfg selectSql
+            else
+                let asDoc = keyword cfg "AS"
+                let selectDoc = inlineTvfSelectDoc cfg selectSql
+                header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc <+> line <+> keyword cfg "RETURN" <++> selectDoc
+        | None ->
+            let asDoc = keyword cfg "AS"
+            let selectDoc = selectStatementDoc cfg sfrt.SelectStatement
+            header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc <+> line <+> keyword cfg "RETURN" <++> selectDoc
+    | _ ->
+        let returnsDoc = keyword cfg "RETURNS" <++> (
+            match cf.ReturnType with
+            | :? TableValuedFunctionReturnType -> keyword cfg "TABLE"
+            | :? ScalarFunctionReturnType as srt -> dataTypeRefDoc cfg srt.DataType
+            | _ -> tokenStreamDoc cfg cf.ReturnType
+        )
+        let asDoc = keyword cfg "AS"
+        let bodyDoc =
+            match cf.StatementList with
+            | null -> tokenStreamDoc cfg cf
+            | stmtList ->
+                let stmts = stmtList.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
+                join line stmts
+
+        header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc <+> line <+> bodyDoc
 
 and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatement) : Doc =
     let header = keyword cfg "ALTER" <++> keyword cfg "PROCEDURE" <++> schemaObjectNameDoc cfg ap.ProcedureReference.Name
@@ -1008,6 +1069,136 @@ and private createProcedureDoc (cfg: FormattingStyle) (cp: CreateProcedureStatem
             join (line <+> line) stmts
     header <+> paramsDoc <+> line <+> asDoc <+> line <+> bodyDoc
 
+and private createTableElementDoc (cfg: FormattingStyle) (frag: TSqlFragment) : Doc =
+    match frag with
+    | :? ColumnDefinition as col ->
+        let nameDoc = identDoc col.ColumnIdentifier
+        let typeDoc = dataTypeRefDoc cfg col.DataType
+        let tail =
+            let stream = col.ScriptTokenStream
+            if stream = null then ""
+            else
+                let startIdx =
+                    if col.DataType <> null then col.DataType.LastTokenIndex + 1
+                    else col.ColumnIdentifier.LastTokenIndex + 1
+
+                let result, _ =
+                    seq { startIdx .. col.LastTokenIndex }
+                    |> Seq.map (fun i -> stream.[i])
+                    |> Seq.fold (fun (sb: System.Text.StringBuilder, prevWs) tok ->
+                        match tok.TokenType with
+                        | TSqlTokenType.WhiteSpace ->
+                            if not prevWs then sb.Append(' ') |> ignore
+                            (sb, true)
+                        | TSqlTokenType.EndOfFile ->
+                            (sb, prevWs)
+                        | _ ->
+                            sb.Append(tok.Text) |> ignore
+                            (sb, false)
+                    ) (System.Text.StringBuilder(), false)
+                result.ToString().Trim()
+
+        if String.IsNullOrWhiteSpace tail then
+            nameDoc <++> typeDoc
+        else
+            nameDoc <++> typeDoc <++> text tail
+    | _ ->
+        tokenStreamDoc cfg frag
+
+and private createTableDoc (cfg: FormattingStyle) (ct: CreateTableStatement) : Doc =
+    let header = keyword cfg "CREATE" <++> keyword cfg "TABLE" <++> schemaObjectNameDoc cfg ct.SchemaObjectName
+    let definition = ct.Definition
+
+    let elements =
+        [ if definition <> null then
+              for col in definition.ColumnDefinitions do
+                  yield createTableElementDoc cfg col
+              for constraintDef in definition.TableConstraints do
+                  yield tokenStreamDoc cfg constraintDef ]
+
+    let bodyDoc =
+        match elements with
+        | [] -> text "()"
+        | _ ->
+            text " (" <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) elements) <+> line <+> text ")"
+
+    let selectDoc =
+        if ct.SelectStatement <> null then
+            line <+> selectStatementDoc cfg ct.SelectStatement
+        else empty
+
+    let terminatorDoc =
+        let stream = ct.ScriptTokenStream
+        if stream <> null && ct.LastTokenIndex >= ct.FirstTokenIndex && stream.[ct.LastTokenIndex].TokenType = TSqlTokenType.Semicolon then
+            text ";"
+        else empty
+
+    header <+> bodyDoc <+> selectDoc <+> terminatorDoc
+
+and private inlineTvfSelectDoc (cfg: FormattingStyle) (selectSql: string) : Doc =
+    let normalizedSql =
+        if selectSql.StartsWith("(") && selectSql.EndsWith(")") then
+            let inner = selectSql.Substring(1, selectSql.Length - 2).Trim()
+            if inner.StartsWith(";with", StringComparison.OrdinalIgnoreCase) then
+                inner.Substring(1).TrimStart()
+            elif inner.StartsWith("with", StringComparison.OrdinalIgnoreCase) then
+                inner
+            else
+                selectSql
+        else
+            selectSql
+
+    let parser = TSql160Parser(true)
+    use reader = new StringReader(normalizedSql)
+    let fragment, errors = parser.Parse(reader)
+    if errors.Count = 0 then
+        match fragment with
+        | :? TSqlScript as script when script.Batches.Count > 0 && script.Batches.[0].Statements.Count > 0 ->
+            let doc =
+                if normalizedSql.StartsWith("with", StringComparison.OrdinalIgnoreCase) then
+                    tokenStreamDoc cfg fragment
+                else
+                    statementDoc cfg script.Batches.[0].Statements.[0]
+            if normalizedSql <> selectSql then
+                text "(" <+> nest (indentWidth cfg) (line <+> doc) <+> line <+> text ")"
+            else
+                doc
+        | _ -> text selectSql
+    else
+        text selectSql
+
+and private parenthesizedInlineTvfDoc (cfg: FormattingStyle) (selectSql: string) : Doc =
+    let inner = selectSql.Substring(1, selectSql.Length - 2).Trim()
+    let normalizedInner =
+        if inner.StartsWith(";with", StringComparison.OrdinalIgnoreCase) then
+            inner.Substring(1).TrimStart()
+        else
+            inner
+
+    let inlineCfg =
+        { cfg with
+            formatterExtensions =
+                { cfg.formatterExtensions with
+                    cte =
+                        { cfg.formatterExtensions.cte with
+                            omitLeadingSemicolon = true } } }
+
+    let selectDoc =
+        let parser = TSql160Parser(true)
+        use reader = new StringReader(normalizedInner)
+        let fragment, errors = parser.Parse(reader)
+        if errors.Count = 0 then
+            match fragment with
+            | :? TSqlScript as script when script.Batches.Count > 0 && script.Batches.[0].Statements.Count > 0 ->
+                match script.Batches.[0].Statements.[0] with
+                | :? SelectStatement as ss -> selectStatementDoc inlineCfg ss
+                | stmt -> statementDoc inlineCfg stmt
+            | _ -> text normalizedInner
+        else
+            text normalizedInner
+
+    text "(" <+> nest (indentWidth cfg) (line <+> selectDoc) <+> line <+> text ")"
+
 // ─── Control flow ───
 
 and private beginEndDoc (cfg: FormattingStyle) (be: BeginEndBlockStatement) : Doc =
@@ -1018,16 +1209,23 @@ and private beginEndDoc (cfg: FormattingStyle) (be: BeginEndBlockStatement) : Do
     keyword cfg "BEGIN" <+> nest (indentWidth cfg) (line <+> join (line <+> line) stmts) <+> line <+> keyword cfg "END"
 
 and private ifDoc (cfg: FormattingStyle) (ifs: IfStatement) : Doc =
-    let cond = exprDoc cfg ifs.Predicate
-    let thenDoc = statementDoc cfg ifs.ThenStatement
+    let cond = standaloneBoolExprDoc cfg ifs.Predicate
+    let thenDoc =
+        let doc = statementDoc cfg ifs.ThenStatement
+        match ifs.ThenStatement with
+        | :? BeginEndBlockStatement -> line <+> doc
+        | _ -> nest (indentWidth cfg) (line <+> doc)
     let elseDoc =
         if ifs.ElseStatement <> null then
-            line <+> keyword cfg "ELSE" <+> line <+> statementDoc cfg ifs.ElseStatement
+            let elseStmtDoc = statementDoc cfg ifs.ElseStatement
+            match ifs.ElseStatement with
+            | :? BeginEndBlockStatement -> line <+> keyword cfg "ELSE" <+> line <+> elseStmtDoc
+            | _ -> line <+> keyword cfg "ELSE" <+> nest (indentWidth cfg) (line <+> elseStmtDoc)
         else empty
-    keyword cfg "IF" <++> cond <+> line <+> thenDoc <+> elseDoc
+    keyword cfg "IF" <++> cond <+> thenDoc <+> elseDoc
 
 and private whileDoc (cfg: FormattingStyle) (ws: WhileStatement) : Doc =
-    let cond = exprDoc cfg ws.Predicate
+    let cond = standaloneBoolExprDoc cfg ws.Predicate
     let bodyDoc = statementDoc cfg ws.Statement
     keyword cfg "WHILE" <++> cond <+> line <+> bodyDoc
 
@@ -1264,6 +1462,7 @@ and private statementDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
     | :? UpdateStatement as upd -> updateDoc cfg upd
     | :? DeleteStatement as del -> deleteDoc cfg del
     | :? MergeStatement as merge -> mergeDoc cfg merge
+    | :? CreateTableStatement as ct -> createTableDoc cfg ct
     | :? AlterFunctionStatement as af -> alterFunctionDoc cfg af
     | :? CreateFunctionStatement as cf -> createFunctionDoc cfg cf
     | :? AlterProcedureStatement as ap -> alterProcedureDoc cfg ap
@@ -1323,17 +1522,7 @@ and private handleInlineTvf (cfg: FormattingStyle) (af: AlterFunctionStatement) 
             |> String.concat ""
             |> fun s -> s.Trim()
 
-        let parser = TSql160Parser(true)
-        use reader = new StringReader(selectSql)
-        let fragment, errors = parser.Parse(reader)
-        let selectDoc =
-            if errors.Count = 0 then
-                match fragment with
-                | :? TSqlScript as script when script.Batches.Count > 0 && script.Batches.[0].Statements.Count > 0 ->
-                    statementDoc cfg script.Batches.[0].Statements.[0]
-                | _ -> text selectSql
-            else text selectSql
-
+        let selectDoc = inlineTvfSelectDoc cfg selectSql
         header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc <+> line <+> keyword cfg "RETURN" <++> selectDoc
     | None ->
         header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc

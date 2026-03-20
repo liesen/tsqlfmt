@@ -1,0 +1,4 @@
+CREATE TABLE test25 (
+    id INT PRIMARY KEY,
+    name NVARCHAR(50) NOT NULL
+);
