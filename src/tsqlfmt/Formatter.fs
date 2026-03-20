@@ -892,6 +892,74 @@ and private ddlParamListDoc (cfg: FormattingStyle) (parameters: System.Collectio
         else
             nest (indentWidth cfg) (line <+> paramsBody)
 
+and private statementListDoc (cfg: FormattingStyle) (separator: Doc) (fallback: Doc) (statementList: StatementList) : Doc =
+    match statementList with
+    | null -> fallback
+    | stmtList ->
+        stmtList.Statements
+        |> Seq.map (fun s -> statementDoc cfg s)
+        |> Seq.toList
+        |> join separator
+
+and private routineWithAsDoc (cfg: FormattingStyle) (header: Doc) (paramsDoc: Doc) (bodyDoc: Doc) : Doc =
+    header <+> paramsDoc <+> line <+> keyword cfg "AS" <+> line <+> bodyDoc
+
+and private routineWithReturnsDoc (cfg: FormattingStyle) (header: Doc) (paramsDoc: Doc) (returnsDoc: Doc) (bodyDoc: Doc) : Doc =
+    header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> bodyDoc
+
+and private functionHeaderDoc (cfg: FormattingStyle) (verb: string) (name: SchemaObjectName) (parameters: System.Collections.Generic.IList<ProcedureParameter>) : Doc * Doc =
+    let header = keyword cfg verb <++> keyword cfg "FUNCTION" <++> schemaObjectNameDoc cfg name
+    let commentMap = getParamTrailingComments parameters
+    let paramsDoc = ddlParamListDoc cfg parameters commentMap true
+    header, paramsDoc
+
+and private regularFunctionReturnsDoc (cfg: FormattingStyle) (returnType: FunctionReturnType) : Doc =
+    keyword cfg "RETURNS" <++>
+    match returnType with
+    | :? TableValuedFunctionReturnType -> keyword cfg "TABLE"
+    | :? ScalarFunctionReturnType as srt -> dataTypeRefDoc cfg srt.DataType
+    | _ -> tokenStreamDoc cfg returnType
+
+and private inlineRoutineDoc (cfg: FormattingStyle) (sameLineAs: bool) (header: Doc) (paramsDoc: Doc) (returnsDoc: Doc) (bodyDoc: Doc) : Doc =
+    if sameLineAs then
+        header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> keyword cfg "AS" <++> bodyDoc
+    else
+        header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> bodyDoc
+
+and private inlineTvfReturnSql (stmt: TSqlStatement) : string option =
+    let stream = stmt.ScriptTokenStream
+    if stream = null then None
+    else
+        seq { stmt.FirstTokenIndex .. stmt.LastTokenIndex }
+        |> Seq.tryFind (fun i -> stream.[i].TokenType = TSqlTokenType.Return)
+        |> Option.map (fun returnIdx ->
+            let selectStart =
+                seq { returnIdx + 1 .. stmt.LastTokenIndex }
+                |> Seq.skipWhile (fun i -> stream.[i].TokenType = TSqlTokenType.WhiteSpace)
+                |> Seq.tryHead
+                |> Option.defaultValue (returnIdx + 1)
+
+            seq { selectStart .. stmt.LastTokenIndex }
+            |> Seq.map (fun i -> stream.[i].Text)
+            |> String.concat ""
+            |> fun s -> s.Trim())
+
+and private inlineTvfBodyDoc (cfg: FormattingStyle) (selectSql: string) : Doc =
+    if selectSql.StartsWith("(") then
+        parenthesizedInlineTvfDoc cfg selectSql
+    else
+        inlineTvfSelectDoc cfg selectSql
+
+and private selectFunctionBodyDoc (cfg: FormattingStyle) (stmt: TSqlStatement) (selectStatement: SelectStatement) : bool * Doc =
+    match inlineTvfReturnSql stmt with
+    | Some selectSql ->
+        if selectSql.StartsWith("(") then
+            true, keyword cfg "RETURN" <++> parenthesizedInlineTvfDoc cfg selectSql
+        else
+            false, keyword cfg "RETURN" <++> inlineTvfSelectDoc cfg selectSql
+    | None ->
+        false, keyword cfg "RETURN" <++> selectStatementDoc cfg selectStatement
+
 and private procedureParamsHaveParens (stmt: TSqlStatement) (parameters: System.Collections.Generic.IList<ProcedureParameter>) : bool =
     if stmt = null || parameters = null || parameters.Count = 0 then false
     else
@@ -937,137 +1005,56 @@ and private getParamTrailingComments (parameters: System.Collections.Generic.ILi
         |> Map.ofSeq
 
 and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
-    let header = keyword cfg "ALTER" <++> keyword cfg "FUNCTION" <++> schemaObjectNameDoc cfg af.Name
-    let commentMap = getParamTrailingComments af.Parameters
-    let paramsDoc = ddlParamListDoc cfg af.Parameters commentMap true
+    let header, paramsDoc = functionHeaderDoc cfg "ALTER" af.Name af.Parameters
     let bodyDoc =
         match af.ReturnType with
         | :? SelectFunctionReturnType as sfrt ->
             let returnsDoc = keyword cfg "RETURNS" <++> keyword cfg "TABLE"
-            let selectText = fragmentText sfrt.SelectStatement |> fun s -> s.Trim()
-            if selectText.StartsWith("(") then
-                let asReturnDoc = keyword cfg "AS" <++> keyword cfg "RETURN"
-                returnsDoc <+> line <+> asReturnDoc <++> parenthesizedInlineTvfDoc cfg selectText
-            else
-                let asDoc = keyword cfg "AS"
-                let selectDoc = selectStatementDoc cfg sfrt.SelectStatement
-                returnsDoc <+> line <+> asDoc <+> line <+> keyword cfg "RETURN" <++> selectDoc
+            let sameLineAs, returnDoc = selectFunctionBodyDoc cfg af sfrt.SelectStatement
+            if sameLineAs then returnsDoc <+> line <+> keyword cfg "AS" <++> returnDoc
+            else returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> returnDoc
         | :? ScalarFunctionReturnType as srt ->
             let returnsDoc = keyword cfg "RETURNS" <++> dataTypeRefDoc cfg srt.DataType
-            let asDoc = keyword cfg "AS"
-            let stmtDoc =
-                match af.StatementList with
-                | null -> empty
-                | stmtList ->
-                    let stmts = stmtList.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
-                    join line stmts
-            returnsDoc <+> line <+> asDoc <+> line <+> stmtDoc
+            let stmtDoc = statementListDoc cfg line empty af.StatementList
+            returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> stmtDoc
         | :? TableValuedFunctionReturnType ->
             let returnsDoc = keyword cfg "RETURNS" <++> keyword cfg "TABLE"
-            let asDoc = keyword cfg "AS"
-            let stmtDoc =
-                match af.StatementList with
-                | null -> tokenStreamDoc cfg af
-                | stmtList ->
-                    let stmts = stmtList.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
-                    join line stmts
-            returnsDoc <+> line <+> asDoc <+> line <+> stmtDoc
+            let stmtDoc = statementListDoc cfg line (tokenStreamDoc cfg af) af.StatementList
+            returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> stmtDoc
         | _ ->
             let returnsDoc = keyword cfg "RETURNS" <++> tokenStreamDoc cfg af.ReturnType
-            let asDoc = keyword cfg "AS"
-            let stmtDoc =
-                match af.StatementList with
-                | null -> tokenStreamDoc cfg af
-                | stmtList ->
-                    let stmts = stmtList.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
-                    join line stmts
-            returnsDoc <+> line <+> asDoc <+> line <+> stmtDoc
+            let stmtDoc = statementListDoc cfg line (tokenStreamDoc cfg af) af.StatementList
+            returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> stmtDoc
 
     header <+> paramsDoc <+> line <+> bodyDoc
 
 and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatement) : Doc =
-    let header = keyword cfg "CREATE" <++> keyword cfg "FUNCTION" <++> schemaObjectNameDoc cfg cf.Name
-    let commentMap = getParamTrailingComments cf.Parameters
-    let paramsDoc = ddlParamListDoc cfg cf.Parameters commentMap true
+    let header, paramsDoc = functionHeaderDoc cfg "CREATE" cf.Name cf.Parameters
     match cf.ReturnType with
     | :? SelectFunctionReturnType as sfrt ->
         let returnsDoc = keyword cfg "RETURNS" <++> keyword cfg "TABLE"
-        let stream = cf.ScriptTokenStream
-        let returnIdxOpt =
-            if stream <> null then
-                seq { cf.FirstTokenIndex .. cf.LastTokenIndex }
-                |> Seq.tryFind (fun i -> stream.[i].TokenType = TSqlTokenType.Return)
-            else None
-
-        match returnIdxOpt with
-        | Some returnIdx ->
-            let selectStart =
-                seq { returnIdx + 1 .. cf.LastTokenIndex }
-                |> Seq.skipWhile (fun i -> stream.[i].TokenType = TSqlTokenType.WhiteSpace)
-                |> Seq.tryHead
-                |> Option.defaultValue (returnIdx + 1)
-
-            let selectSql =
-                seq { selectStart .. cf.LastTokenIndex }
-                |> Seq.map (fun i -> stream.[i].Text)
-                |> String.concat ""
-                |> fun s -> s.Trim()
-
-            if selectSql.StartsWith("(") then
-                let asReturnDoc = keyword cfg "AS" <++> keyword cfg "RETURN"
-                header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asReturnDoc <++> parenthesizedInlineTvfDoc cfg selectSql
-            else
-                let asDoc = keyword cfg "AS"
-                let selectDoc = inlineTvfSelectDoc cfg selectSql
-                header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc <+> line <+> keyword cfg "RETURN" <++> selectDoc
-        | None ->
-            let asDoc = keyword cfg "AS"
-            let selectDoc = selectStatementDoc cfg sfrt.SelectStatement
-            header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc <+> line <+> keyword cfg "RETURN" <++> selectDoc
+        let sameLineAs, bodyDoc = selectFunctionBodyDoc cfg cf sfrt.SelectStatement
+        inlineRoutineDoc cfg sameLineAs header paramsDoc returnsDoc bodyDoc
     | _ ->
-        let returnsDoc = keyword cfg "RETURNS" <++> (
-            match cf.ReturnType with
-            | :? TableValuedFunctionReturnType -> keyword cfg "TABLE"
-            | :? ScalarFunctionReturnType as srt -> dataTypeRefDoc cfg srt.DataType
-            | _ -> tokenStreamDoc cfg cf.ReturnType
-        )
-        let asDoc = keyword cfg "AS"
-        let bodyDoc =
-            match cf.StatementList with
-            | null -> tokenStreamDoc cfg cf
-            | stmtList ->
-                let stmts = stmtList.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
-                join line stmts
-
-        header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc <+> line <+> bodyDoc
+        let returnsDoc = regularFunctionReturnsDoc cfg cf.ReturnType
+        let bodyDoc = statementListDoc cfg line (tokenStreamDoc cfg cf) cf.StatementList
+        routineWithReturnsDoc cfg header paramsDoc returnsDoc bodyDoc
 
 and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatement) : Doc =
     let header = keyword cfg "ALTER" <++> keyword cfg "PROCEDURE" <++> schemaObjectNameDoc cfg ap.ProcedureReference.Name
     let commentMap = getParamTrailingComments ap.Parameters
     let wrapParams = procedureParamsHaveParens (ap :> TSqlStatement) ap.Parameters
     let paramsDoc = ddlParamListDoc cfg ap.Parameters commentMap wrapParams
-    let asDoc = keyword cfg "AS"
-    let bodyDoc =
-        match ap.StatementList with
-        | null -> empty
-        | stmtList ->
-            let stmts = stmtList.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
-            join (line <+> line) stmts
-    header <+> paramsDoc <+> line <+> asDoc <+> line <+> bodyDoc
+    let bodyDoc = statementListDoc cfg (line <+> line) empty ap.StatementList
+    routineWithAsDoc cfg header paramsDoc bodyDoc
 
 and private createProcedureDoc (cfg: FormattingStyle) (cp: CreateProcedureStatement) : Doc =
     let header = keyword cfg "CREATE" <++> keyword cfg "PROCEDURE" <++> schemaObjectNameDoc cfg cp.ProcedureReference.Name
     let commentMap = getParamTrailingComments cp.Parameters
     let wrapParams = procedureParamsHaveParens (cp :> TSqlStatement) cp.Parameters
     let paramsDoc = ddlParamListDoc cfg cp.Parameters commentMap wrapParams
-    let asDoc = keyword cfg "AS"
-    let bodyDoc =
-        match cp.StatementList with
-        | null -> empty
-        | stmtList ->
-            let stmts = stmtList.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
-            join (line <+> line) stmts
-    header <+> paramsDoc <+> line <+> asDoc <+> line <+> bodyDoc
+    let bodyDoc = statementListDoc cfg (line <+> line) empty cp.StatementList
+    routineWithAsDoc cfg header paramsDoc bodyDoc
 
 and private createTableElementDoc (cfg: FormattingStyle) (frag: TSqlFragment) : Doc =
     match frag with
