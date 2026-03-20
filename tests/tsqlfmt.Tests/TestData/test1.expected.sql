@@ -49,4 +49,6 @@ WHERE pos.upload_date = 20260101
     AND pr.id IS NULL
     AND pos.archived IS NULL
     AND pos.valid = 1
-ORDER BY error, portfolio_name, id
+ORDER BY error,
+    portfolio_name,
+    id

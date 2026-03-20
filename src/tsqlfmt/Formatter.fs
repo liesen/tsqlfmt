@@ -16,41 +16,40 @@ let private functionName (cfg: FormattingStyle) (s: string) = text (caseFunction
 let private dataType (cfg: FormattingStyle) (s: string) = text (caseDataType cfg.casing s)
 let private indentWidth (cfg: FormattingStyle) = cfg.whitespace.numberOfSpacesInTabs
 
-type private ListLayout = {
-    hangingIndent: bool
-    // Intermediate policy hook while list placement is still partly chosen by call site.
-    // The long-term goal is to derive this from existing list settings instead.
-    allowCollapse: bool
-}
+let private canCollapseList (cfg: FormattingStyle) (items: Doc list) =
+    match items with
+    | []
+    | [_] -> false
+    | _ ->
+        match cfg.lists.placeSubsequentItemsOnNewLines with
+        | PlaceOnNewLine.Never -> true
+        | PlaceOnNewLine.Always -> false
+        | _ -> false
 
-let private listLayout (cfg: FormattingStyle) (allowCollapse: bool) =
-    { hangingIndent = cfg.lists.indentListItems
-      allowCollapse = allowCollapse }
-
-let private expandedListDoc (cfg: FormattingStyle) (layout: ListLayout) (keyword: Doc) (items: Doc list) : Doc =
+let private expandedListDoc (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
     match items with
     | [] -> keyword
     | [single] ->
-        if layout.hangingIndent then
+        if cfg.lists.indentListItems then
             keyword <++> nest (indentWidth cfg) single
         else
             keyword <++> single
     | first :: rest ->
         let restDoc = join (text "," <+> line) rest
         let firstDoc =
-            if layout.hangingIndent then nest (indentWidth cfg) first else first
+            if cfg.lists.indentListItems then nest (indentWidth cfg) first else first
         keyword <++> firstDoc <+> text "," <+> nest (indentWidth cfg) (line <+> restDoc)
 
-let private formatList (cfg: FormattingStyle) (layout: ListLayout) (keyword: Doc) (items: Doc list) : Doc =
+let private formatList (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
     match items with
     | [] -> keyword
-    | [single] when not layout.hangingIndent -> keyword <++> single
-    | _ when layout.allowCollapse ->
+    | [single] when not cfg.lists.indentListItems -> keyword <++> single
+    | _ when canCollapseList cfg items ->
         let flatDoc = keyword <++> join (text ", ") items |> flatten
-        let expandedDoc = expandedListDoc cfg layout keyword items
+        let expandedDoc = expandedListDoc cfg keyword items
         TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
     | _ ->
-        expandedListDoc cfg layout keyword items
+        expandedListDoc cfg keyword items
 
 /// Get the raw SQL text of a fragment from its token stream.
 let private fragmentText (frag: TSqlFragment) : string =
@@ -611,7 +610,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
         qs.SelectElements
         |> Seq.map (fun e -> exprDoc cfg e)
         |> Seq.toList
-    let selectClause = formatList cfg (listLayout cfg false) selectKwWithTop selectItems
+    let selectClause = formatList cfg selectKwWithTop selectItems
 
     let parts =
         [ yield selectClause
@@ -640,7 +639,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
                       | :? ExpressionGroupingSpecification as egs -> exprDoc cfg egs.Expression
                       | _ -> tokenStreamDoc cfg g)
                   |> Seq.toList
-              yield formatList cfg (listLayout cfg true) (keyword cfg "GROUP" <++> keyword cfg "BY") groupItems
+              yield formatList cfg (keyword cfg "GROUP" <++> keyword cfg "BY") groupItems
 
           // HAVING clause
           if qs.HavingClause <> null && qs.HavingClause.SearchCondition <> null then
@@ -649,7 +648,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
           // ORDER BY clause
           if qs.OrderByClause <> null && qs.OrderByClause.OrderByElements <> null && qs.OrderByClause.OrderByElements.Count > 0 then
               let orderItems = qs.OrderByClause.OrderByElements |> Seq.map (fun o -> orderByElemDoc cfg o) |> Seq.toList
-              yield formatList cfg (listLayout cfg true) (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems ]
+              yield formatList cfg (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems ]
 
     join line parts
 
@@ -823,7 +822,7 @@ and private binaryQueryDoc (cfg: FormattingStyle) (bqe: BinaryQueryExpression) :
     // ORDER BY on BinaryQueryExpression
     if bqe.OrderByClause <> null && bqe.OrderByClause.OrderByElements <> null && bqe.OrderByClause.OrderByElements.Count > 0 then
         let orderItems = bqe.OrderByClause.OrderByElements |> Seq.map (fun o -> orderByElemDoc cfg o) |> Seq.toList
-        result <+> line <+> formatList cfg (listLayout cfg true) (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems
+        result <+> line <+> formatList cfg (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems
     else result
 
 // ─── SELECT statement (top-level, with ORDER BY, FOR, etc.) ───
@@ -1320,7 +1319,7 @@ and private updateDoc (cfg: FormattingStyle) (upd: UpdateStatement) : Doc =
 
     let parts =
         [ yield keyword cfg "UPDATE" <++> target
-          yield formatList cfg (listLayout cfg false) (keyword cfg "SET") setClauses
+          yield formatList cfg (keyword cfg "SET") setClauses
 
           if spec.FromClause <> null && spec.FromClause.TableReferences <> null && spec.FromClause.TableReferences.Count > 0 then
               yield keyword cfg "FROM" <++> tableRefDoc cfg spec.FromClause.TableReferences.[0]
@@ -1398,7 +1397,7 @@ and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
             | :? UpdateMergeAction as u ->
                 let setClauses = u.SetClauses |> Seq.map setClauseDoc |> Seq.toList
                 keyword cfg "THEN" <+>
-                nest (indentWidth cfg) (line <+> formatList cfg (listLayout cfg false) (keyword cfg "UPDATE" <++> keyword cfg "SET") setClauses)
+                nest (indentWidth cfg) (line <+> formatList cfg (keyword cfg "UPDATE" <++> keyword cfg "SET") setClauses)
             | :? InsertMergeAction as ins ->
                 let cols =
                     if ins.Columns <> null && ins.Columns.Count > 0 then
@@ -1442,7 +1441,7 @@ and private declareDoc (cfg: FormattingStyle) (decl: DeclareVariableStatement) :
                 else empty
             nameDoc <++> typeDoc <+> valueDoc
         ) |> Seq.toList
-    formatList cfg (listLayout cfg false) (keyword cfg "DECLARE") varDocs
+    formatList cfg (keyword cfg "DECLARE") varDocs
 
 and private setVarDoc (cfg: FormattingStyle) (sv: SetVariableStatement) : Doc =
     let varDoc = text sv.Variable.Name

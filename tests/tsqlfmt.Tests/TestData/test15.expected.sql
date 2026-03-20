@@ -12,7 +12,8 @@ RegionTotals AS (
     FROM ActiveAccounts aa
     INNER JOIN dbo.regions r
         ON r.region_id = aa.region_id
-    GROUP BY aa.region_id, r.region_name
+    GROUP BY aa.region_id,
+        r.region_name
 )
 SELECT rt.region_name,
     rt.account_count
