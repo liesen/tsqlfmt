@@ -1,5 +1,6 @@
 bin/
 obj/
+artifact/
 *.debug.sql
 *.sqlfluff.sql
 .sqlfluff

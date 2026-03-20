@@ -17,6 +17,21 @@ dotnet run --project src/tsqlfmt -- [OPTIONS] [FILE]
 
 When `FILE` is omitted or `-`, the formatter reads from standard input and writes formatted SQL to standard output.
 
+== Building
+
+[source,shell]
+----
+dotnet test tsqlfmt.slnx
+
+dotnet publish src/tsqlfmt/tsqlfmt.fsproj \
+  -c Release \
+  -r win-x64 \
+  --self-contained true \
+  -p:PublishSingleFile=true
+----
+
+The Windows publish produces a standalone `tsqlfmt.exe` that runs without a separate .NET installation.
+
 == Resources
 
 * SQL ScriptDOM documentation: https://learn.microsoft.com/en-us/dotnet/api/microsoft.sqlserver.transactsql.scriptdom?view=sql-transactsql-161

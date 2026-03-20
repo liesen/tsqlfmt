@@ -1,0 +1,46 @@
+name: Publish Windows Binary
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish self-contained Windows executable
+        run: >-
+          dotnet publish src/tsqlfmt/tsqlfmt.fsproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:PublishTrimmed=false
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          --output artifact/publish
+
+      - name: Package Windows artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact/package | Out-Null
+          Copy-Item artifact/publish/tsqlfmt.exe artifact/package/
+          Copy-Item default-style.json artifact/package/
+          Compress-Archive -Path artifact/package/* -DestinationPath artifact/tsqlfmt-win-x64.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsqlfmt-win-x64
+          path: artifact/tsqlfmt-win-x64.zip
