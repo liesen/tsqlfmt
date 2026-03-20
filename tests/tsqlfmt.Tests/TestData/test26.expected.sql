@@ -1,5 +1,9 @@
 CREATE FUNCTION dbo.fn_test26()
 RETURNS TABLE
 AS
-RETURN SELECT 25 AS col1,
+RETURN SELECT CASE @@SERVERNAME
+        WHEN 'A' THEN 65
+        WHEN 'B' THEN 66
+    END AS col0,
+    25 AS col1,
     'test' AS col2

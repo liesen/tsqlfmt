@@ -22,10 +22,10 @@ let private indentWidth (cfg: FormattingStyle) = cfg.whitespace.numberOfSpacesIn
 let private clauseCommaList (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
     match items with
     | [] -> keyword
-    | [single] -> keyword <++> single
+    | [single] -> keyword <++> nest (indentWidth cfg) single
     | first :: rest ->
         let restDoc = join (text "," <+> line) rest
-        keyword <++> first <+> text "," <+> nest (indentWidth cfg) (line <+> restDoc)
+        keyword <++> nest (indentWidth cfg) first <+> text "," <+> nest (indentWidth cfg) (line <+> restDoc)
 
 /// Like clauseCommaList, but collapses onto one line when it fits.
 /// Used for ORDER BY, GROUP BY where short lists should stay inline.
@@ -593,7 +593,10 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
             selectKw <++> topDoc cfg qs.TopRowFilter
         else selectKw
 
-    let selectItems = qs.SelectElements |> Seq.map (fun e -> exprDoc cfg e) |> Seq.toList
+    let selectItems =
+        qs.SelectElements
+        |> Seq.map (fun e -> exprDoc cfg e)
+        |> Seq.toList
     let selectClause = clauseCommaList cfg selectKwWithTop selectItems
 
     let parts =
