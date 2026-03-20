@@ -6,7 +6,7 @@ open TSqlFormatter.Config
 open TSqlFormatter.Formatter
 
 let private testDataDir =
-    // Navigate from test/TSqlFormatter.Tests/bin/Debug/net10.0 up to repo root/tests
+    // Navigate from test/tsqlfmt.Tests/bin/Debug/net10.0 up to repo root/tests
     let assemblyDir = System.Reflection.Assembly.GetExecutingAssembly().Location |> Path.GetDirectoryName
     let mutable dir = assemblyDir
     // Walk up until we find the tests/ directory

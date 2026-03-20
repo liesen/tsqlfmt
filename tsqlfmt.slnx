@@ -1,8 +1,8 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/TSqlFormatter/TSqlFormatter.fsproj" />
+    <Project Path="src/tsqlfmt/tsqlfmt.fsproj" />
   </Folder>
   <Folder Name="/test/">
-    <Project Path="test/TSqlFormatter.Tests/TSqlFormatter.Tests.fsproj" />
+    <Project Path="test/tsqlfmt.Tests/tsqlfmt.Tests.fsproj" />
   </Folder>
 </Solution>

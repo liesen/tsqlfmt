@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\TSqlFormatter\TSqlFormatter.fsproj" />
+    <ProjectReference Include="..\..\src\tsqlfmt\tsqlfmt.fsproj" />
   </ItemGroup>
 
 </Project>
