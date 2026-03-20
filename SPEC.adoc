@@ -237,6 +237,9 @@ If a helper needs rendered text to choose a layout, the helper boundary is wrong
 Prefer one general formatting routine per AST node shape over ad hoc special cases.
 Factor common structure into shared helpers for patterns such as parenthesized bodies, comma-separated lists, clause headers, and inline-vs-block bodies.
 
+Tests are signals, not authority.
+If an expected output conflicts with these principles, fix the test or the shared formatter design instead of encoding the mismatch as a special case.
+
 === Node Types
 
 The following ScriptDOM node types require dedicated formatting functions:

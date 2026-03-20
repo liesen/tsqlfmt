@@ -10,3 +10,4 @@ This repo is a T-SQL formatter built on ScriptDOM and a `Doc` pipeline.
 - Keep refactors small and reviewable.
 - Preserve behavior unless the change is intentional and covered by tests.
 - When a test fails, look for the missing structural formatter or shared helper; do not patch one case at a time.
+- Treat tests as signals, not authority. If an expected output conflicts with these rules, fix the test or the shared formatter design instead of encoding the mismatch.
