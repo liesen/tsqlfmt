@@ -31,16 +31,8 @@ jobs:
           -p:DebugSymbols=false
           --output artifact/publish
 
-      - name: Package Windows artifact
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifact/package | Out-Null
-          Copy-Item artifact/publish/tsqlfmt.exe artifact/package/
-          Copy-Item default-style.json artifact/package/
-          Compress-Archive -Path artifact/package/* -DestinationPath artifact/tsqlfmt-win-x64.zip
-
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: tsqlfmt-win-x64
-          path: artifact/tsqlfmt-win-x64.zip
+          path: artifact/publish/tsqlfmt.exe
