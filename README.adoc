@@ -12,7 +12,7 @@ The main profile in this repository is `default-style.json`.
 
 [source,shell]
 ----
-dotnet run --project src/TSqlFormatter -- [OPTIONS] [FILE]
+dotnet run --project src/tsqlfmt -- [OPTIONS] [FILE]
 ----
 
 When `FILE` is omitted or `-`, the formatter reads from standard input and writes formatted SQL to standard output.
