@@ -28,14 +28,10 @@ let private configPath =
 let private config = loadConfig configPath
 
 let private defaultCliArgs = {
-    configPath = None
     stylesPath = None
     styleName = "Default"
     styleNameSpecified = false
     applyCasing = false
-    checkMode = false
-    inPlace = false
-    inputFile = None
 }
 
 let private writeTempStyle (dir: string) (name: string) (keywordStyle: string) =
@@ -91,12 +87,10 @@ let ``format test`` (testName: string) =
 
 [<Fact>]
 let ``parseArgs accepts sqlprompt formatSql command`` () =
-    let parsed = parseArgs [| "formatSql"; "--styleName"; "Default"; "input.sql" |]
+    let parsed = parseArgs [| "formatSql"; "--styleName"; "Default" |]
     match parsed with
     | Error msg -> Assert.Fail msg
-    | Ok args ->
-        Assert.Equal("Default", args.styleName)
-        Assert.Equal(Some "input.sql", args.inputFile)
+    | Ok args -> Assert.Equal("Default", args.styleName)
 
 [<Fact>]
 let ``parseArgs accepts auth token and ignores it`` () =
@@ -104,6 +98,13 @@ let ``parseArgs accepts auth token and ignores it`` () =
     match parsed with
     | Error msg -> Assert.Fail msg
     | Ok args -> Assert.Equal("Default", args.styleName)
+
+[<Fact>]
+let ``parseArgs rejects direct non-sqlprompt invocation`` () =
+    let parsed = parseArgs [| "--styleName"; "Default" |]
+    match parsed with
+    | Ok _ -> Assert.Fail("Expected direct invocation to fail")
+    | Error _ -> ()
 
 [<Fact>]
 let ``parseArgs rejects unsupported sqlprompt command`` () =

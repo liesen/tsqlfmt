@@ -12,10 +12,10 @@ The main profile in this repository is `default-style.json`.
 
 [source,shell]
 ----
-dotnet run --project src/tsqlfmt -- [OPTIONS] [FILE]
+dotnet run --project src/tsqlfmt -- formatSql --authToken ignored --styleName Default < input.sql
 ----
 
-When `FILE` is omitted or `-`, the formatter reads from standard input and writes formatted SQL to standard output.
+The formatter reads from standard input and writes formatted SQL to standard output.
 
 == Building
 
