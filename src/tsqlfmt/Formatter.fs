@@ -16,6 +16,56 @@ let private functionName (cfg: FormattingStyle) (s: string) = text (caseFunction
 let private dataType (cfg: FormattingStyle) (s: string) = text (caseDataType cfg.casing s)
 let private indentWidth (cfg: FormattingStyle) = cfg.whitespace.numberOfSpacesInTabs
 
+type private SingleLineMeasure = {
+    length: int
+    hasComments: bool
+}
+
+let private fragmentSingleLineMeasure (frag: TSqlFragment) : SingleLineMeasure =
+    if frag = null || frag.ScriptTokenStream = null then
+        { length = 0; hasComments = false }
+    else
+        let mutable length = 0
+        let mutable hasComments = false
+        let mutable pendingSpace = false
+        let mutable emittedToken = false
+
+        for i = frag.FirstTokenIndex to frag.LastTokenIndex do
+            let tok = frag.ScriptTokenStream.[i]
+            match tok.TokenType with
+            | TSqlTokenType.WhiteSpace ->
+                if emittedToken then pendingSpace <- true
+            | TSqlTokenType.SingleLineComment
+            | TSqlTokenType.MultilineComment ->
+                hasComments <- true
+            | TSqlTokenType.EndOfFile ->
+                ()
+            | _ ->
+                if pendingSpace then
+                    length <- length + 1
+                    pendingSpace <- false
+                length <- length + tok.Text.Length
+                emittedToken <- true
+
+        { length = length; hasComments = hasComments }
+
+let private canCollapseFragment (enabled: bool) (maxLength: int) (frag: TSqlFragment) =
+    if not enabled then
+        false
+    else
+        let measure = fragmentSingleLineMeasure frag
+        not measure.hasComments && measure.length <= maxLength
+
+let private canCollapseFragments (enabled: bool) (maxLength: int) (fragments: TSqlFragment seq) =
+    if not enabled then
+        false
+    else
+        let measures = fragments |> Seq.map fragmentSingleLineMeasure |> Seq.toList
+        let hasComments = measures |> List.exists (fun m -> m.hasComments)
+        let separatorsLength = max 0 ((List.length measures - 1) * 2)
+        let totalLength = measures |> List.sumBy (fun m -> m.length) |> (+) separatorsLength
+        not hasComments && totalLength <= maxLength
+
 let private canCollapseList (cfg: FormattingStyle) (items: Doc list) =
     match items with
     | []
@@ -175,7 +225,7 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
     | :? InPredicate as inp -> inPredicateDoc cfg inp
     | :? LikePredicate as lk -> likePredicateDoc cfg lk
     | :? ExistsPredicate as ep ->
-        keyword cfg "EXISTS" <++> inlineParenthesizedQueryDoc cfg true (queryExprDoc cfg ep.Subquery.QueryExpression)
+        keyword cfg "EXISTS" <++> inlineParenthesizedQueryDoc cfg true ep.Subquery.QueryExpression (queryExprDoc cfg ep.Subquery.QueryExpression)
     | :? BooleanTernaryExpression as be -> betweenDoc cfg be
     | :? BinaryExpression as binex -> binaryExprDoc cfg binex
     | :? UnaryExpression as unex ->
@@ -202,7 +252,7 @@ and private boolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
 and private standaloneBoolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     match expr with
     | :? ExistsPredicate as ep ->
-        keyword cfg "EXISTS" <++> blockParenthesizedQueryDoc cfg true (queryExprDoc cfg ep.Subquery.QueryExpression)
+        keyword cfg "EXISTS" <++> blockParenthesizedQueryDoc cfg true ep.Subquery.QueryExpression (queryExprDoc cfg ep.Subquery.QueryExpression)
     | _ ->
         boolExprDoc cfg expr
 
@@ -267,10 +317,9 @@ and private topDoc (cfg: FormattingStyle) (top: TopRowFilter) : Doc =
 
 // ─── CASE expressions ───
 
-and private collapseIfShort (cfg: FormattingStyle) (enabled: bool) (maxLength: int) (flatDoc: Doc) (expandedDoc: Doc) : Doc =
-    if enabled then
-        let flatStr = render cfg.whitespace.wrapLinesLongerThan flatDoc
-        if flatStr.Length <= maxLength && not (flatStr.Contains('\n')) then flatDoc else expandedDoc
+and private collapseIfShort (enabled: bool) (maxLength: int) (frag: TSqlFragment) (flatDoc: Doc) (expandedDoc: Doc) : Doc =
+    if canCollapseFragment enabled maxLength frag then
+        flatDoc
     else
         expandedDoc
 
@@ -299,7 +348,7 @@ and private searchedCaseDoc (cfg: FormattingStyle) (c: SearchedCaseExpression) :
           yield keyword cfg "END" ]
     let flatDoc = hcat flatParts
     let expandedDoc = expandedCaseFromParts cfg (keyword cfg "CASE") whenDocs elseDoc
-    collapseIfShort cfg cfg.caseExpressions.collapseShortCaseExpressions cfg.caseExpressions.collapseCaseExpressionsShorterThan flatDoc expandedDoc
+    collapseIfShort cfg.caseExpressions.collapseShortCaseExpressions cfg.caseExpressions.collapseCaseExpressionsShorterThan c flatDoc expandedDoc
 
 and private simpleCaseDoc (cfg: FormattingStyle) (c: SimpleCaseExpression) : Doc =
     let inputExpr = exprDoc cfg c.InputExpression
@@ -317,7 +366,7 @@ and private simpleCaseDoc (cfg: FormattingStyle) (c: SimpleCaseExpression) : Doc
           yield keyword cfg "END" ]
     let flatDoc = hcat flatParts
     let expandedDoc = expandedCaseFromParts cfg (keyword cfg "CASE" <++> inputExpr) whenDocs elseDoc
-    collapseIfShort cfg cfg.caseExpressions.collapseShortCaseExpressions cfg.caseExpressions.collapseCaseExpressionsShorterThan flatDoc expandedDoc
+    collapseIfShort cfg.caseExpressions.collapseShortCaseExpressions cfg.caseExpressions.collapseCaseExpressionsShorterThan c flatDoc expandedDoc
 
 // ─── CAST / CONVERT ───
 
@@ -480,34 +529,28 @@ and private boolParenDoc (cfg: FormattingStyle) (bp: BooleanParenthesisExpressio
     let expandedDoc = text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
     TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
 
-and private queryParensDoc (cfg: FormattingStyle) (allowCollapse: bool) (expandedDoc: Doc) (inner: Doc) : Doc =
+and private queryParensDoc (cfg: FormattingStyle) (allowCollapse: bool) (queryExpr: QueryExpression) (expandedDoc: Doc) (inner: Doc) : Doc =
     let flatDoc = text "(" <+> flatten inner <+> text ")"
 
-    if allowCollapse then
-        let flatStr = render cfg.whitespace.wrapLinesLongerThan (flatten inner)
-        if cfg.dml.collapseShortSubqueries
-           && flatStr.Length < cfg.dml.collapseSubqueriesShorterThan
-           && not (flatStr.Contains('\n')) then
-            flatDoc
-        else
-            expandedDoc
+    if allowCollapse && canCollapseFragment cfg.dml.collapseShortSubqueries cfg.dml.collapseSubqueriesShorterThan queryExpr then
+        flatDoc
     else
         expandedDoc
 
-and private blockParenthesizedQueryDoc (cfg: FormattingStyle) (allowCollapse: bool) (inner: Doc) : Doc =
+and private blockParenthesizedQueryDoc (cfg: FormattingStyle) (allowCollapse: bool) (queryExpr: QueryExpression) (inner: Doc) : Doc =
     let expandedDoc = text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
-    queryParensDoc cfg allowCollapse expandedDoc inner
+    queryParensDoc cfg allowCollapse queryExpr expandedDoc inner
 
-and private inlineParenthesizedQueryDoc (cfg: FormattingStyle) (allowCollapse: bool) (inner: Doc) : Doc =
+and private inlineParenthesizedQueryDoc (cfg: FormattingStyle) (allowCollapse: bool) (queryExpr: QueryExpression) (inner: Doc) : Doc =
     let expandedDoc = text "(" <+> inner <+> text ")"
-    queryParensDoc cfg allowCollapse expandedDoc inner
+    queryParensDoc cfg allowCollapse queryExpr expandedDoc inner
 
 and private inPredicateDoc (cfg: FormattingStyle) (inp: InPredicate) : Doc =
     let lhs = exprDoc cfg inp.Expression
     let notPart = if inp.NotDefined then keyword cfg "NOT" <++> empty else empty
     let inKw = keyword cfg "IN"
     if inp.Subquery <> null then
-        lhs <++> notPart <+> inKw <++> blockParenthesizedQueryDoc cfg true (queryExprDoc cfg inp.Subquery.QueryExpression)
+        lhs <++> notPart <+> inKw <++> blockParenthesizedQueryDoc cfg true inp.Subquery.QueryExpression (queryExprDoc cfg inp.Subquery.QueryExpression)
     else
         let valDocs = inp.Values |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
         // Use Union to allow the renderer to collapse onto one line when it fits.
@@ -562,7 +605,7 @@ and private parenExprDoc (cfg: FormattingStyle) (p: ParenthesisExpression) : Doc
     text "(" <+> exprDoc cfg p.Expression <+> text ")"
 
 and private scalarSubqueryDoc (cfg: FormattingStyle) (sq: ScalarSubquery) : Doc =
-    blockParenthesizedQueryDoc cfg true (queryExprDoc cfg sq.QueryExpression)
+    blockParenthesizedQueryDoc cfg true sq.QueryExpression (queryExprDoc cfg sq.QueryExpression)
 
 // ─── Query expressions ───
 
@@ -574,7 +617,7 @@ and private querySpecOrExprDoc (cfg: FormattingStyle) (qe: QueryExpression) (int
     | :? QuerySpecification as qs -> querySpecDoc cfg qs intoTarget
     | :? BinaryQueryExpression as bqe -> binaryQueryDoc cfg bqe
     | :? QueryParenthesisExpression as qpe ->
-        blockParenthesizedQueryDoc cfg false (queryExprDoc cfg qpe.QueryExpression)
+        blockParenthesizedQueryDoc cfg false qpe.QueryExpression (queryExprDoc cfg qpe.QueryExpression)
     | _ -> tokenStreamDoc cfg qe
 
 and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTarget: Doc option) : Doc =
@@ -769,11 +812,8 @@ and private schemaObjectFuncTableDoc (cfg: FormattingStyle) (softr: SchemaObject
     let args =
         if softr.Parameters <> null && softr.Parameters.Count > 0 then
             let argDocs = softr.Parameters |> Seq.map (fun a -> exprDoc cfg a) |> Seq.toList
-            // expandedSplit: first arg inline with (, rest indented 2*indent, closing paren at indent
             let flatArgs = join (text ", ") argDocs
-            let flatStr = render cfg.whitespace.wrapLinesLongerThan flatArgs
-            // Collapse if parenthesis content is shorter than the collapse threshold
-            if cfg.parentheses.collapseShortParenthesisContents && flatStr.Length < cfg.parentheses.collapseParenthesesShorterThan && not (flatStr.Contains('\n')) then
+            if canCollapseFragments cfg.parentheses.collapseShortParenthesisContents cfg.parentheses.collapseParenthesesShorterThan (softr.Parameters |> Seq.cast<TSqlFragment>) then
                 text "(" <+> flatArgs <+> text ")"
             else
                 let argBody = commaSep argDocs

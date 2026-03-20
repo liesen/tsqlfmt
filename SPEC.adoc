@@ -234,6 +234,9 @@ Formatting decisions should come from AST shape, token structure, or explicit la
 Do not inspect rendered `Doc` output to decide how to format a node.
 If a helper needs rendered text to choose a layout, the helper boundary is wrong and the missing intent should become an explicit input.
 
+For "collapse if it fits" behavior, prefer `Doc` alternatives that the pretty-printer can choose at layout time.
+Avoid ad hoc width checks over rendered output or token streams unless there is no better structural option yet.
+
 Prefer one general formatting routine per AST node shape over ad hoc special cases.
 Factor common structure into shared helpers for patterns such as parenthesized bodies, comma-separated lists, clause headers, and inline-vs-block bodies.
 
