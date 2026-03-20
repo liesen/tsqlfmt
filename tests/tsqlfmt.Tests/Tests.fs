@@ -3,6 +3,7 @@ module Tests
 open System
 open System.IO
 open Xunit
+open TSqlFormatter.CliArgs
 open TSqlFormatter.Config
 open TSqlFormatter.Formatter
 open TSqlFormatter.Program
