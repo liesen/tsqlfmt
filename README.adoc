@@ -1,9 +1,9 @@
 = tsqlfmt
 
 `tsqlfmt` is a command-line formatter for T-SQL.
-It uses Microsoft's SQL ScriptDOM to parse SQL, then renders formatted output from the parsed syntax tree.
+It parses SQL with Microsoft's SQL ScriptDOM, then renders formatted output from the syntax tree.
 
-The formatter reads SQL Prompt-style JSON configuration files.
+It reads SQL Prompt-style JSON configuration files and aims to be a mostly drop-in replacement for SQL Prompt formatting in automated workflows and editor integrations.
 It also supports project-specific options under `formatterExtensions`.
 
 The main profile in this repository is `default-style.json`.
@@ -20,13 +20,23 @@ When `FILE` is omitted or `-`, the formatter reads from standard input and write
 == Resources
 
 * SQL ScriptDOM documentation: https://learn.microsoft.com/en-us/dotnet/api/microsoft.sqlserver.transactsql.scriptdom?view=sql-transactsql-161
+* SQL Prompt formatting and styles: https://documentation.red-gate.com/sp/sql-code-formatting-and-styles
+** Customizing your formatting style: https://documentation.red-gate.com/sp/sql-code-formatting-and-styles/customizing-your-formatting-style
+** Quick reference: https://documentation.red-gate.com/sp/sql-code-formatting-and-styles/working-with-sql-code-formatting-and-styles-quick-ref
+** SQL Prompt actions: https://documentation.red-gate.com/sp/sql-refactoring/sql-prompt-actions
+** Using a shared folder for formatting styles: https://documentation.red-gate.com/sp/sql-code-formatting-and-styles/using-a-shared-folder-for-formatting-styles
 * Azure Data Studio SQL tools service: https://github.com/microsoft/sqltoolsservice
 ** T-SQL formatter: https://github.com/microsoft/sqltoolsservice/blob/main/src/Microsoft.SqlTools.ServiceLayer/Formatter/TSqlFormatterService.cs
 * PoorMansTSqlFormatter: https://github.com/TaoK/PoorMansTSqlFormatter
 ** Fork: https://github.com/bungeemonkee/PoorMansTSqlFormatterRedux
+* FsPretty: https://github.com/mjsottile/FsPretty/blob/master/src/FsPretty/Library.fs
+
+=== LSP References
+
+These are not part of the current scope, but they may be useful later.
+
 * Ionide Language Server Protocol implementation: https://github.com/ionide/LanguageServerProtocol
 ** csharp-language-server in Ionide.LanguageServerProtocol: https://github.com/razzmatazz/csharp-language-server
 * Roslyn LSP in C# (not available as a library): https://github.com/dotnet/roslyn/tree/main/src/Features/LanguageServer/Microsoft.CodeAnalysis.LanguageServer
 * OmniSharp LSP in C#: https://github.com/OmniSharp/csharp-language-server-protocol
 * Language Server Protocol types generator: https://github.com/microsoft/lsprotocol
-* FsPretty: https://github.com/mjsottile/FsPretty/blob/master/src/FsPretty/Library.fs
