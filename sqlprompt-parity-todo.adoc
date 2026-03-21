@@ -1,0 +1,63 @@
+= SQL Prompt Parity Priorities
+
+These are the first five parity gaps to work on, based on the current fixture-backed SQL Prompt parity suite.
+
+== 1. Leave-as-is casing when `--applyCasing` is absent
+
+Importance:: Highest. This affects nearly every statement kind and makes many parity failures noisy.
+
+Observed in:: `tests/tsqlfmt.Tests/TestData/test1.actual.sql`, `tests/tsqlfmt.Tests/TestData/test13.actual.sql`, `tests/tsqlfmt.Tests/TestData/test21.actual.sql`, `tests/tsqlfmt.Tests/TestData/test28.actual.sql`, `tests/tsqlfmt.Tests/TestData/test30.actual.sql`
+
+SQL Prompt does:: Preserve most original keyword, function, and type casing when `--applyCasing` is not passed.
+
+tsqlfmt does:: Recase many structurally formatted nodes to uppercase anyway.
+
+Why first:: This is broad, user-visible, and hides more specific layout mismatches behind casing-only diffs.
+
+== 2. Multiline select-list indentation and hanging continuation policy
+
+Importance:: High. This is a core formatter behavior and shows up across many everyday queries.
+
+Observed in:: `tests/tsqlfmt.Tests/TestData/test5.actual.sql`, `tests/tsqlfmt.Tests/TestData/test6.actual.sql`, `tests/tsqlfmt.Tests/TestData/test8.actual.sql`, `tests/tsqlfmt.Tests/TestData/test16.actual.sql`, `tests/tsqlfmt.Tests/TestData/test19.actual.sql`
+
+SQL Prompt does:: Align continuation items deeper, typically under the first item rather than at one fixed indent level.
+
+tsqlfmt does:: Use a simpler fixed-indent continuation layout.
+
+Why second:: This affects readability in the most common query shape and likely wants the continuation-policy refactor we already discussed.
+
+== 3. Routine header and object-body layout for procedures, functions, views, and tables
+
+Importance:: High. These are major statement forms and our current structure differs early in the statement.
+
+Observed in:: `tests/tsqlfmt.Tests/TestData/test2.actual.sql`, `tests/tsqlfmt.Tests/TestData/test22.actual.sql`, `tests/tsqlfmt.Tests/TestData/test25.actual.sql`, `tests/tsqlfmt.Tests/TestData/test26.actual.sql`, `tests/tsqlfmt.Tests/TestData/test27.actual.sql`
+
+SQL Prompt does:: Prefer line breaks before parameter lists, `RETURNS`, `AS`, and opening parentheses in several routine/object forms.
+
+tsqlfmt does:: Keep more of the header on one line.
+
+Why third:: These statements are structurally important, and the diffs suggest missing shared header-shape formatters rather than isolated edge cases.
+
+== 4. Insert column and values layout, including parenthesized clause placement
+
+Importance:: Medium-high. Insert statements are common, and the current shape differs substantially from SQL Prompt.
+
+Observed in:: `tests/tsqlfmt.Tests/TestData/test9.actual.sql`, `tests/tsqlfmt.Tests/TestData/test10.actual.sql`, `tests/tsqlfmt.Tests/TestData/test20.actual.sql`
+
+SQL Prompt does:: Break column lists and value tuples onto dedicated lines more aggressively.
+
+tsqlfmt does:: Keep `INSERT INTO ... (...) VALUES ...` flatter.
+
+Why fourth:: This is a focused family of mismatches with clear fixtures and likely one reusable formatter path.
+
+== 5. Parenthesized subquery and boolean-condition collapse choices
+
+Importance:: Medium. These are important, but narrower than the first four categories.
+
+Observed in:: `tests/tsqlfmt.Tests/TestData/test24.actual.sql`, `tests/tsqlfmt.Tests/TestData/test4.actual.sql`, `tests/tsqlfmt.Tests/TestData/test11.actual.sql`, `tests/tsqlfmt.Tests/TestData/test29.actual.sql`
+
+SQL Prompt does:: Keep some `EXISTS (SELECT ...)` and similar condition forms collapsed, and uses different boolean continuation alignment.
+
+tsqlfmt does:: Expand some parenthesized subqueries and use our current boolean continuation rules.
+
+Why fifth:: This likely depends on the same continuation-policy work as select lists, but it is still worth tracking as its own parity bucket.
