@@ -258,6 +258,32 @@ let private splitBooleanInterComments (bb: BooleanBinaryExpression) : string lis
 
         beforeOp, afterOp
 
+let private ownLineCommentsInRange (stream: IList<TSqlParserToken>) (startIdx: int) (endIdx: int) : string list =
+    if stream = null || endIdx < startIdx then []
+    else
+        let mutable seenNewLine = false
+        [ for i in startIdx .. endIdx do
+            let tok = stream.[i]
+            match tok.TokenType with
+            | TSqlTokenType.WhiteSpace when tok.Text.Contains('\n') || tok.Text.Contains('\r') ->
+                seenNewLine <- true
+            | TSqlTokenType.SingleLineComment
+            | TSqlTokenType.MultilineComment when seenNewLine ->
+                yield tok.Text.TrimEnd()
+            | _ -> () ]
+
+let private docsWithLeadingComments<'T when 'T :> TSqlFragment> (render: 'T -> Doc) (items: 'T list) : Doc list =
+    items
+    |> List.mapi (fun i item ->
+        let itemDoc = render item
+        if i = 0 then
+            itemDoc
+        else
+            let leadingComments = leadingInterComments items.[i - 1] item
+            match leadingComments with
+            | [] -> itemDoc
+            | comments -> join line (comments |> List.map text) <+> line <+> itemDoc)
+
 // ─── Expression formatting ───
 
 let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
@@ -1045,8 +1071,9 @@ and private statementListDoc (cfg: FormattingStyle) (separator: Doc) (fallback: 
     | null -> fallback
     | stmtList ->
         stmtList.Statements
-        |> Seq.map (fun s -> statementDoc cfg s)
+        |> Seq.cast<TSqlStatement>
         |> Seq.toList
+        |> docsWithLeadingComments (statementDoc cfg)
         |> join separator
 
 and private routineWithAsDoc (cfg: FormattingStyle) (header: Doc) (paramsDoc: Doc) (bodyDoc: Doc) : Doc =
@@ -1372,7 +1399,21 @@ and private parenthesizedInlineTvfDoc (cfg: FormattingStyle) (selectSql: string)
 and private beginEndDoc (cfg: FormattingStyle) (be: BeginEndBlockStatement) : Doc =
     let stmts =
         if be.StatementList <> null then
-            be.StatementList.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
+            let statements = be.StatementList.Statements |> Seq.cast<TSqlStatement> |> Seq.toList
+
+            match statements with
+            | [] -> []
+            | first :: rest ->
+                let leadingComments =
+                    ownLineCommentsInRange be.ScriptTokenStream (be.FirstTokenIndex + 1) (first.FirstTokenIndex - 1)
+
+                let firstDoc =
+                    let doc = statementDoc cfg first
+                    match leadingComments with
+                    | [] -> doc
+                    | comments -> join line (comments |> List.map text) <+> line <+> doc
+
+                firstDoc :: (rest |> docsWithLeadingComments (statementDoc cfg))
         else []
     keyword cfg "BEGIN" <+> nest (indentWidth cfg) (line <+> join (line <+> line) stmts) <+> line <+> keyword cfg "END"
 
