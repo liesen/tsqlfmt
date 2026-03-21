@@ -5,4 +5,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/tsqlfmt.Tests/tsqlfmt.Tests.fsproj" />
   </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/tsqlfmt.Benchmarks/tsqlfmt.Benchmarks.fsproj" />
+  </Folder>
 </Solution>
