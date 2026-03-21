@@ -185,23 +185,32 @@ let private interComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : st
         elif not (System.Object.ReferenceEquals(stream, nextFrag.ScriptTokenStream)) then []
         else collectComments stream (prevFrag.LastTokenIndex + 1) (nextFrag.FirstTokenIndex - 1)
 
+let private tokensInRange (stream: IList<TSqlParserToken>) (startIdx: int) (endIdx: int) : TSqlParserToken list =
+    if stream = null || endIdx < startIdx then []
+    else [ for i in startIdx .. endIdx -> stream.[i] ]
+
+let private ownLineComments (tokens: TSqlParserToken list) : string list =
+    tokens
+    |> List.fold (fun (seenNewLine, comments) tok ->
+        match tok.TokenType with
+        | TSqlTokenType.WhiteSpace when tok.Text.Contains('\n') || tok.Text.Contains('\r') ->
+            true, comments
+        | TSqlTokenType.SingleLineComment
+        | TSqlTokenType.MultilineComment when seenNewLine ->
+            seenNewLine, tok.Text.TrimEnd() :: comments
+        | _ ->
+            seenNewLine, comments
+    ) (false, [])
+    |> snd
+    |> List.rev
+
 let private leadingInterComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : string list =
     if prevFrag = null || nextFrag = null then []
     else
         let stream = prevFrag.ScriptTokenStream
         if stream = null || nextFrag.ScriptTokenStream = null then []
         elif not (System.Object.ReferenceEquals(stream, nextFrag.ScriptTokenStream)) then []
-        else
-            let mutable seenNewLine = false
-            [ for i in prevFrag.LastTokenIndex + 1 .. nextFrag.FirstTokenIndex - 1 do
-                let tok = stream.[i]
-                match tok.TokenType with
-                | TSqlTokenType.WhiteSpace when tok.Text.Contains('\n') || tok.Text.Contains('\r') ->
-                    seenNewLine <- true
-                | TSqlTokenType.SingleLineComment
-                | TSqlTokenType.MultilineComment when seenNewLine ->
-                    yield tok.Text.TrimEnd()
-                | _ -> () ]
+        else tokensInRange stream (prevFrag.LastTokenIndex + 1) (nextFrag.FirstTokenIndex - 1) |> ownLineComments
 
 /// Attach trailing comment on the same line.
 let private trailingComment (frag: TSqlFragment) : Doc =
@@ -238,51 +247,48 @@ let private splitBooleanInterComments (bb: BooleanBinaryExpression) : string lis
     if stream = null || bb.FirstExpression = null || bb.SecondExpression = null then
         [], []
     else
-        let mutable seenOperator = false
-        let mutable beforeOp = []
-        let mutable afterOp = []
-
-        for i = bb.FirstExpression.LastTokenIndex + 1 to bb.SecondExpression.FirstTokenIndex - 1 do
-            let tok = stream.[i]
+        tokensInRange stream (bb.FirstExpression.LastTokenIndex + 1) (bb.SecondExpression.FirstTokenIndex - 1)
+        |> List.fold (fun (seenOperator, beforeOp, afterOp) tok ->
             match tok.TokenType with
             | TSqlTokenType.And
             | TSqlTokenType.Or ->
-                seenOperator <- true
+                true, beforeOp, afterOp
             | TSqlTokenType.SingleLineComment
             | TSqlTokenType.MultilineComment ->
                 if seenOperator then
-                    afterOp <- afterOp @ [tok.Text.TrimEnd()]
+                    true, beforeOp, tok.Text.TrimEnd() :: afterOp
                 else
-                    beforeOp <- beforeOp @ [tok.Text.TrimEnd()]
-            | _ -> ()
-
-        beforeOp, afterOp
+                    false, tok.Text.TrimEnd() :: beforeOp, afterOp
+            | _ ->
+                seenOperator, beforeOp, afterOp
+        ) (false, [], [])
+        |> fun (_, beforeOp, afterOp) -> List.rev beforeOp, List.rev afterOp
 
 let private ownLineCommentsInRange (stream: IList<TSqlParserToken>) (startIdx: int) (endIdx: int) : string list =
-    if stream = null || endIdx < startIdx then []
-    else
-        let mutable seenNewLine = false
-        [ for i in startIdx .. endIdx do
-            let tok = stream.[i]
-            match tok.TokenType with
-            | TSqlTokenType.WhiteSpace when tok.Text.Contains('\n') || tok.Text.Contains('\r') ->
-                seenNewLine <- true
-            | TSqlTokenType.SingleLineComment
-            | TSqlTokenType.MultilineComment when seenNewLine ->
-                yield tok.Text.TrimEnd()
-            | _ -> () ]
+    tokensInRange stream startIdx endIdx |> ownLineComments
 
-let private docsWithLeadingComments<'T when 'T :> TSqlFragment> (render: 'T -> Doc) (items: 'T list) : Doc list =
+let private attachOwnLineComments (comments: string list) (doc: Doc) : Doc =
+    match comments with
+    | [] -> doc
+    | _ -> join line (comments |> List.map text) <+> line <+> doc
+
+let private attachInlineLeadingComments (comments: string list) (doc: Doc) : Doc =
+    match comments with
+    | [] -> doc
+    | _ -> join (text " ") (comments |> List.map text) <++> doc
+
+let private renderItemsWithLeadingComments<'T when 'T :> TSqlFragment>
+    (render: 'T -> Doc)
+    (leadingComments: 'T option -> 'T -> string list)
+    (attachComments: string list -> Doc -> Doc)
+    (items: 'T list)
+    : Doc list =
     items
-    |> List.mapi (fun i item ->
-        let itemDoc = render item
-        if i = 0 then
-            itemDoc
-        else
-            let leadingComments = leadingInterComments items.[i - 1] item
-            match leadingComments with
-            | [] -> itemDoc
-            | comments -> join line (comments |> List.map text) <+> line <+> itemDoc)
+    |> List.mapFold (fun prev item ->
+        let doc = render item |> attachComments (leadingComments prev item)
+        doc, Some item
+    ) None
+    |> fst
 
 // ─── Expression formatting ───
 
@@ -746,17 +752,13 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
     let selectElements = qs.SelectElements |> Seq.toList
     let selectItems =
         selectElements
-        |> List.mapi (fun i e ->
-            let itemDoc =
-                if fragmentHasComments e then exprDoc cfg e
-                else exprDoc cfg e |> withTrailingComment e
-            if i = 0 then
-                itemDoc
-            else
-                let leadingComments = leadingInterComments selectElements.[i - 1] e
-                match leadingComments with
-                | [] -> itemDoc
-                | comments -> join (text " ") (comments |> List.map text) <++> itemDoc)
+        |> renderItemsWithLeadingComments
+            (fun e -> if fragmentHasComments e then exprDoc cfg e else exprDoc cfg e |> withTrailingComment e)
+            (fun prev e ->
+                match prev with
+                | None -> []
+                | Some prevItem -> leadingInterComments prevItem e)
+            attachInlineLeadingComments
     let selectClause = formatList cfg selectKwWithTop selectItems
 
     let parts =
@@ -1073,7 +1075,13 @@ and private statementListDoc (cfg: FormattingStyle) (separator: Doc) (fallback: 
         stmtList.Statements
         |> Seq.cast<TSqlStatement>
         |> Seq.toList
-        |> docsWithLeadingComments (statementDoc cfg)
+        |> renderItemsWithLeadingComments
+            (statementDoc cfg)
+            (fun prev stmt ->
+                match prev with
+                | None -> []
+                | Some prevStmt -> leadingInterComments prevStmt stmt)
+            attachOwnLineComments
         |> join separator
 
 and private routineWithAsDoc (cfg: FormattingStyle) (header: Doc) (paramsDoc: Doc) (bodyDoc: Doc) : Doc =
@@ -1401,19 +1409,14 @@ and private beginEndDoc (cfg: FormattingStyle) (be: BeginEndBlockStatement) : Do
         if be.StatementList <> null then
             let statements = be.StatementList.Statements |> Seq.cast<TSqlStatement> |> Seq.toList
 
-            match statements with
-            | [] -> []
-            | first :: rest ->
-                let leadingComments =
-                    ownLineCommentsInRange be.ScriptTokenStream (be.FirstTokenIndex + 1) (first.FirstTokenIndex - 1)
-
-                let firstDoc =
-                    let doc = statementDoc cfg first
-                    match leadingComments with
-                    | [] -> doc
-                    | comments -> join line (comments |> List.map text) <+> line <+> doc
-
-                firstDoc :: (rest |> docsWithLeadingComments (statementDoc cfg))
+            statements
+            |> renderItemsWithLeadingComments
+                (statementDoc cfg)
+                (fun prev stmt ->
+                    match prev with
+                    | Some prevStmt -> leadingInterComments prevStmt stmt
+                    | None -> ownLineCommentsInRange be.ScriptTokenStream (be.FirstTokenIndex + 1) (stmt.FirstTokenIndex - 1))
+                attachOwnLineComments
         else []
     keyword cfg "BEGIN" <+> nest (indentWidth cfg) (line <+> join (line <+> line) stmts) <+> line <+> keyword cfg "END"
 
