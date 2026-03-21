@@ -487,6 +487,47 @@ type FormattingStyle = {
     formatterExtensions: FormatterExtensionsConfig
 }
 
+let private unsupportedRightAlignmentMessage settingName valueName =
+    sprintf "%s = %s is not supported. tsqlfmt supports structural indentation, but not right-aligned layouts." settingName valueName
+
+let validateConfig (style: FormattingStyle) : FormattingStyle =
+    let fail settingName valueName = invalidArg settingName (unsupportedRightAlignmentMessage settingName valueName)
+
+    match style.dml.clauses.clauseAlignment with
+    | ClauseAlignment.RightAligned -> fail "dml.clauses.clauseAlignment" "rightAligned"
+    | _ -> ()
+
+    match style.cte.asAlignment with
+    | Alignment.RightAligned -> fail "cte.asAlignment" "rightAligned"
+    | _ -> ()
+
+    match style.joinStatements.join.keywordAlignment with
+    | JoinKeywordAlignment.RightAlignedToFrom -> fail "joinStatements.join.keywordAlignment" "rightAlignedToFrom"
+    | _ -> ()
+
+    match style.joinStatements.on.keywordAlignment with
+    | OnKeywordAlignment.RightAlignedToJoin -> fail "joinStatements.on.keywordAlignment" "rightAlignedToJoin"
+    | OnKeywordAlignment.RightAlignedToInner -> fail "joinStatements.on.keywordAlignment" "rightAlignedToInner"
+    | _ -> ()
+
+    match style.caseExpressions.endAlignment with
+    | EndAlignment.RightAlignedToWhen -> fail "caseExpressions.endAlignment" "rightAlignedToWhen"
+    | _ -> ()
+
+    match style.operators.andOr.alignment with
+    | Alignment.RightAligned -> fail "operators.andOr.alignment" "rightAligned"
+    | _ -> ()
+
+    match style.operators.between.andAlignment with
+    | Alignment.RightAligned -> fail "operators.between.andAlignment" "rightAligned"
+    | _ -> ()
+
+    match style.operators.``in``.alignment with
+    | InAlignment.RightAligned -> fail "operators.in.alignment" "rightAligned"
+    | _ -> ()
+
+    style
+
 // ─── Defaults ───
 
 let defaultNewLines = {
@@ -706,23 +747,22 @@ let defaultFormatterExtensions = {
     setOperations = defaultSetOperationsExtensions
 }
 
-let defaultStyle : FormattingStyle = {
-    whitespace = defaultWhitespace
-    lists = defaultLists
-    parentheses = defaultParentheses
-    casing = defaultCasing
-    dml = defaultDml
-    ddl = defaultDdl
-    controlFlow = defaultControlFlow
-    cte = defaultCte
-    variables = defaultVariables
-    joinStatements = defaultJoinStatements
-    insertStatements = defaultInsertStatements
-    functionCalls = defaultFunctionCalls
-    caseExpressions = defaultCaseExpressions
-    operators = defaultOperators
-    formatterExtensions = defaultFormatterExtensions
-}
+let defaultStyle : FormattingStyle =
+    { whitespace = defaultWhitespace
+      lists = defaultLists
+      parentheses = defaultParentheses
+      casing = defaultCasing
+      dml = defaultDml
+      ddl = defaultDdl
+      controlFlow = defaultControlFlow
+      cte = defaultCte
+      variables = defaultVariables
+      joinStatements = defaultJoinStatements
+      insertStatements = defaultInsertStatements
+      functionCalls = defaultFunctionCalls
+      caseExpressions = defaultCaseExpressions
+      operators = defaultOperators
+      formatterExtensions = defaultFormatterExtensions }
 
 // ─── JSON Loading ───
 
@@ -751,6 +791,8 @@ let private getJsonEnum<'T when 'T :> System.Enum and 'T : struct> (el: JsonElem
     | None -> def
 
 /// Merge a partially-specified JSON config over the defaults.
+/// This parses the full SQL Prompt-style config shape first.
+/// Validation of unsupported layout modes is a separate step.
 let loadConfig (path: string) : FormattingStyle =
     let json = File.ReadAllText(path)
 

@@ -74,13 +74,13 @@ let main argv =
                 exit 2
                 defaultStyle
             | Ok (Some configPath) ->
-                try loadConfig configPath
+                try loadConfig configPath |> validateConfig
                 with ex ->
                     eprintfn "Error loading config '%s': %s" configPath ex.Message
                     exit 2
                     defaultStyle
             | Ok None ->
-                defaultStyle
+                defaultStyle |> validateConfig
             |> withOptionalCasing args.applyCasing
 
         let inputSql = Console.In.ReadToEnd()

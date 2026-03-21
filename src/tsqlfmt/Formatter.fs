@@ -76,6 +76,23 @@ let private canCollapseList (cfg: FormattingStyle) (items: Doc list) =
         | PlaceOnNewLine.Always -> false
         | _ -> false
 
+// Lists, boolean chains, and CASE bodies all share the same broad continuation shape:
+// a construct keyword followed by one or more continuation items.
+//
+// ToConstruct:
+//   WHERE a = 1
+//   AND b = 2
+//
+// ToFirstItem:
+//   WHERE a = 1
+//         AND b = 2
+//
+// We intentionally do not support right-aligned variants such as:
+//   WHERE a = 1
+//     AND b = 2
+// where the right edge of AND aligns to the right edge of WHERE. The current
+// Doc model handles fixed indentation well via Nest, but it does not express
+// right-edge anchoring cleanly.
 let private expandedListDoc (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
     match items with
     | [] -> keyword
