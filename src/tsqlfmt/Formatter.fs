@@ -83,6 +83,10 @@ let private canCollapseList (cfg: FormattingStyle) (items: Doc list) =
 //   WHERE a = 1
 //   AND b = 2
 //
+// Indented:
+//   WHERE a = 1
+//       AND b = 2
+//
 // ToFirstItem:
 //   WHERE a = 1
 //         AND b = 2
