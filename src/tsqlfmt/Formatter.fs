@@ -56,6 +56,9 @@ let private canCollapseFragment (enabled: bool) (maxLength: int) (frag: TSqlFrag
         let measure = fragmentSingleLineMeasure frag
         not measure.hasComments && measure.length <= maxLength
 
+let private fragmentHasComments (frag: TSqlFragment) =
+    fragmentSingleLineMeasure frag |> fun measure -> measure.hasComments
+
 let private canCollapseFragments (enabled: bool) (maxLength: int) (fragments: TSqlFragment seq) =
     if not enabled then
         false
@@ -182,6 +185,24 @@ let private interComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : st
         elif not (System.Object.ReferenceEquals(stream, nextFrag.ScriptTokenStream)) then []
         else collectComments stream (prevFrag.LastTokenIndex + 1) (nextFrag.FirstTokenIndex - 1)
 
+let private leadingInterComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : string list =
+    if prevFrag = null || nextFrag = null then []
+    else
+        let stream = prevFrag.ScriptTokenStream
+        if stream = null || nextFrag.ScriptTokenStream = null then []
+        elif not (System.Object.ReferenceEquals(stream, nextFrag.ScriptTokenStream)) then []
+        else
+            let mutable seenNewLine = false
+            [ for i in prevFrag.LastTokenIndex + 1 .. nextFrag.FirstTokenIndex - 1 do
+                let tok = stream.[i]
+                match tok.TokenType with
+                | TSqlTokenType.WhiteSpace when tok.Text.Contains('\n') || tok.Text.Contains('\r') ->
+                    seenNewLine <- true
+                | TSqlTokenType.SingleLineComment
+                | TSqlTokenType.MultilineComment when seenNewLine ->
+                    yield tok.Text.TrimEnd()
+                | _ -> () ]
+
 /// Attach trailing comment on the same line.
 let private trailingComment (frag: TSqlFragment) : Doc =
     if frag = null then empty
@@ -203,6 +224,39 @@ let private trailingComment (frag: TSqlFragment) : Doc =
                         text " " <+> text tok.Text
                     | _ -> empty
             scan (frag.LastTokenIndex + 1)
+
+let private withTrailingComment (frag: TSqlFragment) (doc: Doc) : Doc =
+    doc <+> trailingComment frag
+
+let private appendInlineComments (doc: Doc) (comments: string list) : Doc =
+    match comments with
+    | [] -> doc
+    | _ -> doc <+> text " " <+> join (text " ") (comments |> List.map text)
+
+let private splitBooleanInterComments (bb: BooleanBinaryExpression) : string list * string list =
+    let stream = bb.ScriptTokenStream
+    if stream = null || bb.FirstExpression = null || bb.SecondExpression = null then
+        [], []
+    else
+        let mutable seenOperator = false
+        let mutable beforeOp = []
+        let mutable afterOp = []
+
+        for i = bb.FirstExpression.LastTokenIndex + 1 to bb.SecondExpression.FirstTokenIndex - 1 do
+            let tok = stream.[i]
+            match tok.TokenType with
+            | TSqlTokenType.And
+            | TSqlTokenType.Or ->
+                seenOperator <- true
+            | TSqlTokenType.SingleLineComment
+            | TSqlTokenType.MultilineComment ->
+                if seenOperator then
+                    afterOp <- afterOp @ [tok.Text.TrimEnd()]
+                else
+                    beforeOp <- beforeOp @ [tok.Text.TrimEnd()]
+            | _ -> ()
+
+        beforeOp, afterOp
 
 // ─── Expression formatting ───
 
@@ -306,22 +360,25 @@ and private selectStarDoc (_cfg: FormattingStyle) (star: SelectStarExpression) :
         text "*"
 
 and private selectScalarDoc (cfg: FormattingStyle) (sse: SelectScalarExpression) : Doc =
-    let e = exprDoc cfg sse.Expression
-    match sse.ColumnName with
-    | null -> e
-    | alias ->
-        let aliasDoc = identOrValueDoc alias
-        // Check if AS keyword was present in original source by scanning tokens
-        let hasAs =
-            let stream = sse.ScriptTokenStream
-            if stream <> null then
-                seq { sse.Expression.LastTokenIndex + 1 .. alias.FirstTokenIndex - 1 }
-                |> Seq.exists (fun i -> stream.[i].TokenType = TSqlTokenType.As)
-            else true // default to having AS
-        if hasAs then
-            e <++> keyword cfg "AS" <++> aliasDoc
-        else
-            e <++> aliasDoc
+    if fragmentHasComments sse then
+        tokenStreamDoc cfg sse
+    else
+        let e = exprDoc cfg sse.Expression
+        match sse.ColumnName with
+        | null -> e
+        | alias ->
+            let aliasDoc = identOrValueDoc alias
+            // Check if AS keyword was present in original source by scanning tokens
+            let hasAs =
+                let stream = sse.ScriptTokenStream
+                if stream <> null then
+                    seq { sse.Expression.LastTokenIndex + 1 .. alias.FirstTokenIndex - 1 }
+                    |> Seq.exists (fun i -> stream.[i].TokenType = TSqlTokenType.As)
+                else true // default to having AS
+            if hasAs then
+                e <++> keyword cfg "AS" <++> aliasDoc
+            else
+                e <++> aliasDoc
 
 and private selectSetVarDoc (cfg: FormattingStyle) (ssv: SelectSetVariable) : Doc =
     text ssv.Variable.Name <++> text "=" <++> exprDoc cfg ssv.Expression
@@ -517,24 +574,27 @@ and private nullIfDoc (cfg: FormattingStyle) (n: NullIfExpression) : Doc =
 // ─── Boolean expressions ───
 
 and private boolCompDoc (cfg: FormattingStyle) (bc: BooleanComparisonExpression) : Doc =
-    let op =
-        match bc.ComparisonType with
-        | BooleanComparisonType.Equals -> "="
-        | BooleanComparisonType.NotEqualToBrackets -> "<>"
-        | BooleanComparisonType.NotEqualToExclamation -> "!="
-        | BooleanComparisonType.GreaterThan -> ">"
-        | BooleanComparisonType.GreaterThanOrEqualTo -> ">="
-        | BooleanComparisonType.LessThan -> "<"
-        | BooleanComparisonType.LessThanOrEqualTo -> "<="
-        | BooleanComparisonType.NotGreaterThan -> "!>"
-        | BooleanComparisonType.NotLessThan -> "!<"
-        | _ -> "="
-    let lhs = exprDoc cfg bc.FirstExpression
-    let rhs = exprDoc cfg bc.SecondExpression
-    if cfg.operators.comparison.addSpacesAround then
-        lhs <++> text op <++> rhs
+    if fragmentHasComments bc then
+        tokenStreamDoc cfg bc
     else
-        lhs <+> text op <+> rhs
+        let op =
+            match bc.ComparisonType with
+            | BooleanComparisonType.Equals -> "="
+            | BooleanComparisonType.NotEqualToBrackets -> "<>"
+            | BooleanComparisonType.NotEqualToExclamation -> "!="
+            | BooleanComparisonType.GreaterThan -> ">"
+            | BooleanComparisonType.GreaterThanOrEqualTo -> ">="
+            | BooleanComparisonType.LessThan -> "<"
+            | BooleanComparisonType.LessThanOrEqualTo -> "<="
+            | BooleanComparisonType.NotGreaterThan -> "!>"
+            | BooleanComparisonType.NotLessThan -> "!<"
+            | _ -> "="
+        let lhs = exprDoc cfg bc.FirstExpression
+        let rhs = exprDoc cfg bc.SecondExpression
+        if cfg.operators.comparison.addSpacesAround then
+            lhs <++> text op <++> rhs
+        else
+            lhs <+> text op <+> rhs
 
 and private boolBinaryDoc (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc =
     let opText =
@@ -657,10 +717,20 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
             selectKw <++> topDoc cfg qs.TopRowFilter
         else selectKw
 
+    let selectElements = qs.SelectElements |> Seq.toList
     let selectItems =
-        qs.SelectElements
-        |> Seq.map (fun e -> exprDoc cfg e)
-        |> Seq.toList
+        selectElements
+        |> List.mapi (fun i e ->
+            let itemDoc =
+                if fragmentHasComments e then exprDoc cfg e
+                else exprDoc cfg e |> withTrailingComment e
+            if i = 0 then
+                itemDoc
+            else
+                let leadingComments = leadingInterComments selectElements.[i - 1] e
+                match leadingComments with
+                | [] -> itemDoc
+                | comments -> join (text " ") (comments |> List.map text) <++> itemDoc)
     let selectClause = formatList cfg selectKwWithTop selectItems
 
     let parts =
@@ -723,8 +793,19 @@ and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression
             flattenBoolChain cfg lbb
         | _ -> [exprDoc cfg bb.FirstExpression]
 
-    let rightPart = keyword cfg opText <++> exprDoc cfg bb.SecondExpression
-    leftParts @ [rightPart]
+    let beforeOpComments, afterOpComments = splitBooleanInterComments bb
+    let leftPartsWithComments =
+        match List.rev leftParts with
+        | last :: restRev -> List.rev (appendInlineComments last beforeOpComments :: restRev)
+        | [] -> []
+
+    let rightExpr = exprDoc cfg bb.SecondExpression
+    let rightPart =
+        match afterOpComments with
+        | [] -> keyword cfg opText <++> rightExpr
+        | comments -> keyword cfg opText <++> join (text " ") (comments |> List.map text) <++> rightExpr
+
+    leftPartsWithComments @ [rightPart]
 
 and private booleanChainDoc (cfg: FormattingStyle) (nestFirst: bool) (bb: BooleanBinaryExpression) : Doc =
     let parts = flattenBoolChain cfg bb
@@ -1561,8 +1642,8 @@ and private statementDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
     | :? IfStatement as ifs -> ifDoc cfg ifs
     | :? WhileStatement as ws -> whileDoc cfg ws
     | :? TryCatchStatement as tc -> tryCatchDoc cfg tc
-    | :? DeclareVariableStatement as dv -> declareDoc cfg dv
-    | :? SetVariableStatement as sv -> setVarDoc cfg sv
+    | :? DeclareVariableStatement as dv -> withTrailingComment dv (declareDoc cfg dv)
+    | :? SetVariableStatement as sv -> withTrailingComment sv (setVarDoc cfg sv)
     | :? ReturnStatement as rs ->
         if rs.Expression <> null then
             keyword cfg "RETURN" <++> exprDoc cfg rs.Expression
@@ -1572,7 +1653,7 @@ and private statementDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
             // In that case, fall back to token stream
             tokenStreamDoc cfg rs
     | :? PrintStatement as ps ->
-        keyword cfg "PRINT" <++> exprDoc cfg ps.Expression
+        withTrailingComment ps (keyword cfg "PRINT" <++> exprDoc cfg ps.Expression)
     | :? ExecuteStatement as es -> tokenStreamDoc cfg es
     | :? RaiseErrorStatement as re -> tokenStreamDoc cfg re
     | :? ThrowStatement as ts -> tokenStreamDoc cfg ts
