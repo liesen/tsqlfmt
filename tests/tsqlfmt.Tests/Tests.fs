@@ -41,6 +41,9 @@ let private writeTempStyle (dir: string) (name: string) (keywordStyle: string) =
     File.WriteAllText(path, json)
     path
 
+let private withOptionalCasing applyCasing config =
+    if applyCasing then config else { config with casing = defaultCasing }
+
 let testCases () : seq<obj[]> =
     Directory.GetFiles(testDataDir, "*.actual.sql")
     |> Array.map (fun path ->
@@ -174,3 +177,31 @@ let ``resolveConfigPath falls back to formattingstyle json for default style`` (
         | Ok (Some path) -> Assert.Equal(stylePath, path)
     finally
         Directory.Delete(stylesDir, true)
+
+[<Fact>]
+let ``withOptionalCasing disables style casing when applyCasing is false`` () =
+    let configWithCasing =
+        { defaultStyle with
+            casing =
+                { defaultCasing with
+                    reservedKeywords = CasingStyle.Uppercase
+                    builtInFunctions = CasingStyle.Uppercase
+                    builtInDataTypes = CasingStyle.Uppercase } }
+
+    let result = withOptionalCasing false configWithCasing
+
+    Assert.Equal(CasingStyle.LeaveAsIs, result.casing.reservedKeywords)
+    Assert.Equal(CasingStyle.LeaveAsIs, result.casing.builtInFunctions)
+    Assert.Equal(CasingStyle.LeaveAsIs, result.casing.builtInDataTypes)
+
+[<Fact>]
+let ``withOptionalCasing preserves style casing when applyCasing is true`` () =
+    let configWithCasing =
+        { defaultStyle with
+            casing =
+                { defaultCasing with
+                    reservedKeywords = CasingStyle.Uppercase } }
+
+    let result = withOptionalCasing true configWithCasing
+
+    Assert.Equal(CasingStyle.Uppercase, result.casing.reservedKeywords)

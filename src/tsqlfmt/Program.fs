@@ -7,6 +7,15 @@ open TSqlFormatter.CliArgs
 open TSqlFormatter.Config
 open TSqlFormatter.Formatter
 
+let private withOptionalCasing (applyCasing: bool) (config: FormattingStyle) =
+    // SQL Prompt treats --applyCasing as a gate on the style's existing casing rules.
+    // This is not ideal because the style already contains the casing intent, but we
+    // keep the behavior for compatibility with SQL Prompt's CLI contract.
+    if applyCasing then
+        config
+    else
+        { config with casing = defaultCasing }
+
 let resolveConfigPath (currentDirectory: string) (args: ResolvedArgs) : Result<string option, string> =
     let tryFindNamedStyle (searchDirectories: string list) (styleName: string) =
         let matches =
@@ -72,6 +81,7 @@ let main argv =
                     defaultStyle
             | Ok None ->
                 defaultStyle
+            |> withOptionalCasing args.applyCasing
 
         let inputSql = Console.In.ReadToEnd()
 
