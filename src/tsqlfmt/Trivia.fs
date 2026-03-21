@@ -1,4 +1,4 @@
-module TSqlFormatter.Comments
+module TSqlFormatter.Trivia
 
 open System.Collections.Generic
 open Microsoft.SqlServer.TransactSql.ScriptDom

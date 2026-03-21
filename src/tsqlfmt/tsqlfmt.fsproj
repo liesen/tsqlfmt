@@ -7,7 +7,7 @@
 
   <ItemGroup>
     <Compile Include="Doc.fs" />
-    <Compile Include="Comments.fs" />
+    <Compile Include="Trivia.fs" />
     <Compile Include="Config.fs" />
     <Compile Include="Keywords.fs" />
     <Compile Include="Formatter.fs" />

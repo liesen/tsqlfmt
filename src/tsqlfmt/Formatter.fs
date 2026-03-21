@@ -6,7 +6,7 @@ open System.IO
 open System.Collections.Generic
 open Microsoft.SqlServer.TransactSql.ScriptDom
 open TSqlFormatter.Doc
-open TSqlFormatter.Comments
+open TSqlFormatter.Trivia
 open TSqlFormatter.Config
 open TSqlFormatter.Keywords
 
