@@ -1,10 +1,11 @@
-= SQL Prompt Parity Priorities
+= SQL Prompt Parity Gaps
 
-These are the first five parity gaps to work on, based on the current fixture-backed SQL Prompt parity suite.
+These are five important SQL Prompt parity gaps from the current fixture-backed parity suite.
+The focus here is not priority order. The focus is what `tsqlfmt` does not yet implement in SQL Prompt-compatible form, and which style settings appear to drive the difference.
 
 == 1. Leave-as-is casing when `--applyCasing` is absent
 
-Importance:: Highest. This affects nearly every statement kind and makes many parity failures noisy.
+Current gap:: `tsqlfmt` still recases many structurally formatted nodes even when SQL Prompt compatibility expects original casing to be preserved.
 
 Observed in:: `tests/tsqlfmt.Tests/TestData/test1.actual.sql`, `tests/tsqlfmt.Tests/TestData/test13.actual.sql`, `tests/tsqlfmt.Tests/TestData/test21.actual.sql`, `tests/tsqlfmt.Tests/TestData/test28.actual.sql`, `tests/tsqlfmt.Tests/TestData/test30.actual.sql`
 
@@ -12,11 +13,30 @@ SQL Prompt does:: Preserve most original keyword, function, and type casing when
 
 tsqlfmt does:: Recase many structurally formatted nodes to uppercase anyway.
 
-Why first:: This is broad, user-visible, and hides more specific layout mismatches behind casing-only diffs.
+Related settings:: `casing.reservedKeywords`, `casing.builtInFunctions`, `casing.builtInDataTypes`, and the SQL Prompt-compatible `--applyCasing` CLI switch.
+
+Example::
++
+[cols="a,a",options="header"]
+|===
+|SQL Prompt |tsqlfmt
+
+a|
+[source,sql]
+----
+SELECT Cast(pos.upload_date as date) as 'Date'
+----
+
+a|
+[source,sql]
+----
+SELECT CAST(pos.upload_date AS DATE) AS 'Date'
+----
+|===
 
 == 2. Multiline select-list indentation and hanging continuation policy
 
-Importance:: High. This is a core formatter behavior and shows up across many everyday queries.
+Current gap:: `tsqlfmt` does not currently implement SQL Prompt-style first-item alignment for multiline select lists, and more generally keeps using its own simpler continuation layout.
 
 Observed in:: `tests/tsqlfmt.Tests/TestData/test5.actual.sql`, `tests/tsqlfmt.Tests/TestData/test6.actual.sql`, `tests/tsqlfmt.Tests/TestData/test8.actual.sql`, `tests/tsqlfmt.Tests/TestData/test16.actual.sql`, `tests/tsqlfmt.Tests/TestData/test19.actual.sql`
 
@@ -24,11 +44,36 @@ SQL Prompt does:: Align continuation items deeper, typically under the first ite
 
 tsqlfmt does:: Use a simpler fixed-indent continuation layout.
 
-Why second:: This affects readability in the most common query shape and likely wants the continuation-policy refactor we already discussed.
+Related settings:: `lists.alignSubsequentItemsWithFirstItem`, `lists.alignItemsAcrossClauses`, and, for related continuation behavior, `operators.andOr.alignment`.
+
+Example::
++
+[cols="a,a",options="header"]
+|===
+|SQL Prompt |tsqlfmt
+
+a|
+[source,sql]
+----
+SELECT id,
+       name,
+       a,
+       b
+----
+
+a|
+[source,sql]
+----
+SELECT id,
+    name,
+    a,
+    b
+----
+|===
 
 == 3. Routine header and object-body layout for procedures, functions, views, and tables
 
-Importance:: High. These are major statement forms and our current structure differs early in the statement.
+Current gap:: `tsqlfmt` does not yet format several routine and object headers in the same shape as SQL Prompt, especially around opening parentheses, parameter lists, `RETURNS`, and `AS`.
 
 Observed in:: `tests/tsqlfmt.Tests/TestData/test2.actual.sql`, `tests/tsqlfmt.Tests/TestData/test22.actual.sql`, `tests/tsqlfmt.Tests/TestData/test25.actual.sql`, `tests/tsqlfmt.Tests/TestData/test26.actual.sql`, `tests/tsqlfmt.Tests/TestData/test27.actual.sql`
 
@@ -36,11 +81,35 @@ SQL Prompt does:: Prefer line breaks before parameter lists, `RETURNS`, `AS`, an
 
 tsqlfmt does:: Keep more of the header on one line.
 
-Why third:: These statements are structurally important, and the diffs suggest missing shared header-shape formatters rather than isolated edge cases.
+Related settings:: Mostly `ddl.parenthesisStyle`, `ddl.indentParenthesesContents`, `ddl.collapseShortStatements`, `ddl.collapseStatementsShorterThan`, plus construct-specific formatter logic. There is no single dedicated routine-header setting today.
+
+Example::
++
+[cols="a,a",options="header"]
+|===
+|SQL Prompt |tsqlfmt
+
+a|
+[source,sql]
+----
+create function dbo.fn_test26
+()
+returns table
+as
+----
+
+a|
+[source,sql]
+----
+CREATE FUNCTION dbo.fn_test26()
+RETURNS TABLE
+AS
+----
+|===
 
 == 4. Insert column and values layout, including parenthesized clause placement
 
-Importance:: Medium-high. Insert statements are common, and the current shape differs substantially from SQL Prompt.
+Current gap:: `tsqlfmt` does not yet follow SQL Prompt's more expanded insert-column and values layout in several common cases.
 
 Observed in:: `tests/tsqlfmt.Tests/TestData/test9.actual.sql`, `tests/tsqlfmt.Tests/TestData/test10.actual.sql`, `tests/tsqlfmt.Tests/TestData/test20.actual.sql`
 
@@ -48,11 +117,37 @@ SQL Prompt does:: Break column lists and value tuples onto dedicated lines more 
 
 tsqlfmt does:: Keep `INSERT INTO ... (...) VALUES ...` flatter.
 
-Why fourth:: This is a focused family of mismatches with clear fixtures and likely one reusable formatter path.
+Related settings:: `insertStatements.columns.parenthesisStyle`, `insertStatements.columns.placeSubsequentColumnsOnNewLines`, `insertStatements.values.parenthesisStyle`, `insertStatements.values.indentContents`, `insertStatements.values.placeSubsequentValuesOnNewLines`.
+
+Example::
++
+[cols="a,a",options="header"]
+|===
+|SQL Prompt |tsqlfmt
+
+a|
+[source,sql]
+----
+INSERT INTO users
+(
+    id,
+    name,
+    email
+)
+VALUES (1, 'Alice', 'alice@example.com');
+----
+
+a|
+[source,sql]
+----
+INSERT INTO users (id, name, email)
+VALUES (1, 'Alice', 'alice@example.com');
+----
+|===
 
 == 5. Parenthesized subquery and boolean-condition collapse choices
 
-Importance:: Medium. These are important, but narrower than the first four categories.
+Current gap:: `tsqlfmt` does not yet match SQL Prompt's collapse choices for some short parenthesized subqueries and some boolean-condition continuation shapes.
 
 Observed in:: `tests/tsqlfmt.Tests/TestData/test24.actual.sql`, `tests/tsqlfmt.Tests/TestData/test4.actual.sql`, `tests/tsqlfmt.Tests/TestData/test11.actual.sql`, `tests/tsqlfmt.Tests/TestData/test29.actual.sql`
 
@@ -60,4 +155,29 @@ SQL Prompt does:: Keep some `EXISTS (SELECT ...)` and similar condition forms co
 
 tsqlfmt does:: Expand some parenthesized subqueries and use our current boolean continuation rules.
 
-Why fifth:: This likely depends on the same continuation-policy work as select lists, but it is still worth tracking as its own parity bucket.
+Related settings:: `dml.collapseShortSubqueries`, `dml.collapseSubqueriesShorterThan`, `parentheses.collapseShortParenthesisContents`, `parentheses.collapseParenthesesShorterThan`, and `operators.andOr.alignment`.
+
+Example::
++
+[cols="a,a",options="header"]
+|===
+|SQL Prompt |tsqlfmt
+
+a|
+[source,sql]
+----
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'test24')
+    SET @sql = 'DROP TABLE test24'
+----
+
+a|
+[source,sql]
+----
+IF EXISTS (
+    SELECT 1
+    FROM sys.tables
+    WHERE name = 'test24'
+)
+    SET @sql = 'DROP TABLE test24'
+----
+|===
