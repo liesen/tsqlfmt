@@ -6,6 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="TestSupport.fs" />
+    <Compile Include="SqlPromptParityTests.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>
 

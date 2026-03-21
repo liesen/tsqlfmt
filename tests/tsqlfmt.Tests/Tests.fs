@@ -7,26 +7,7 @@ open TSqlFormatter.CliArgs
 open TSqlFormatter.Config
 open TSqlFormatter.Formatter
 open TSqlFormatter.Program
-
-let private testDataDir =
-    let assemblyDir = System.Reflection.Assembly.GetExecutingAssembly().Location |> Path.GetDirectoryName
-    let mutable dir = assemblyDir
-    while dir <> null && not (Directory.Exists(Path.Combine(dir, "tests", "tsqlfmt.Tests", "TestData"))) do
-        dir <- Path.GetDirectoryName(dir)
-    if dir <> null then Path.Combine(dir, "tests", "tsqlfmt.Tests", "TestData")
-    else
-        Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "tests", "tsqlfmt.Tests", "TestData"))
-
-let private configPath =
-    let assemblyDir = System.Reflection.Assembly.GetExecutingAssembly().Location |> Path.GetDirectoryName
-    let mutable dir = assemblyDir
-    while dir <> null && not (File.Exists(Path.Combine(dir, "default-style.json"))) do
-        dir <- Path.GetDirectoryName(dir)
-    if dir <> null then Path.Combine(dir, "default-style.json")
-    else
-        Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "..", "default-style.json"))
-
-let private config = loadConfig configPath
+open TestSupport
 
 let private defaultCliArgs = {
     stylesPath = None
@@ -41,19 +22,8 @@ let private writeTempStyle (dir: string) (name: string) (keywordStyle: string) =
     File.WriteAllText(path, json)
     path
 
-let private withOptionalCasing applyCasing config =
-    if applyCasing then config else { config with casing = defaultCasing }
-
-let testCases () : seq<obj[]> =
-    Directory.GetFiles(testDataDir, "*.actual.sql")
-    |> Array.map (fun path ->
-        let name = Path.GetFileName(path).Replace(".actual.sql", "")
-        [| name :> obj |])
-    |> Array.sortBy (fun arr -> arr.[0] :?> string)
-    |> Seq.ofArray
-
 [<Theory>]
-[<MemberData(nameof testCases)>]
+[<MemberData("testCases", MemberType = typeof<FixtureData>)>]
 let ``format test`` (testName: string) =
     let actualPath = Path.Combine(testDataDir, testName + ".actual.sql")
     let expectedPath = Path.Combine(testDataDir, testName + ".expected.sql")
