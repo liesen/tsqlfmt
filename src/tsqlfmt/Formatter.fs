@@ -251,6 +251,8 @@ and private boolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
 
 and private standaloneBoolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     match expr with
+    | :? BooleanBinaryExpression as bb ->
+        standaloneBoolConditionDoc cfg bb
     | :? ExistsPredicate as ep ->
         keyword cfg "EXISTS" <++> blockParenthesizedQueryDoc cfg true ep.Subquery.QueryExpression (queryExprDoc cfg ep.Subquery.QueryExpression)
     | _ ->
@@ -684,17 +686,7 @@ and private whereConditionDoc (cfg: FormattingStyle) (expr: BooleanExpression) :
     // Flatten AND/OR chains with proper indentation
     match expr with
     | :? BooleanBinaryExpression as bb ->
-        let parts = flattenBoolChain cfg bb
-        match parts with
-        | [] -> empty
-        | [single] -> single
-        | first :: rest ->
-            // Wrap first in nest (indentWidth cfg) so that any line breaks inside it
-            // (e.g. IN subquery content) get an extra indent level.
-            // This makes expandedSplit IN subqueries indent correctly at both
-            // top-level WHERE and nested ON/AND contexts.
-            let restDoc = rest |> List.map id |> join line
-            nest (indentWidth cfg) first <+> nest (indentWidth cfg) (line <+> restDoc)
+        booleanChainDoc cfg true bb
     | _ -> nest (indentWidth cfg) (exprDoc cfg expr)
 
 and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc list =
@@ -712,6 +704,19 @@ and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression
 
     let rightPart = keyword cfg opText <++> exprDoc cfg bb.SecondExpression
     leftParts @ [rightPart]
+
+and private booleanChainDoc (cfg: FormattingStyle) (nestFirst: bool) (bb: BooleanBinaryExpression) : Doc =
+    let parts = flattenBoolChain cfg bb
+    match parts with
+    | [] -> empty
+    | [single] -> if nestFirst then nest (indentWidth cfg) single else single
+    | first :: rest ->
+        let firstDoc = if nestFirst then nest (indentWidth cfg) first else first
+        let restDoc = join line rest
+        firstDoc <+> nest (indentWidth cfg) (line <+> restDoc)
+
+and private standaloneBoolConditionDoc (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc =
+    booleanChainDoc cfg false bb
 
 and private orderByElemDoc (cfg: FormattingStyle) (o: ExpressionWithSortOrder) : Doc =
     let e = exprDoc cfg o.Expression
