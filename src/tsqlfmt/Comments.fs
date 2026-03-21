@@ -93,3 +93,9 @@ let renderItemsWithLeadingComments<'T when 'T :> TSqlFragment>
         doc, Some item
     ) None
     |> fst
+
+let hasTrailingSemicolon (frag: TSqlFragment) =
+    let stream = frag.ScriptTokenStream
+    stream <> null
+    && frag.LastTokenIndex >= frag.FirstTokenIndex
+    && stream.[frag.LastTokenIndex].TokenType = TSqlTokenType.Semicolon

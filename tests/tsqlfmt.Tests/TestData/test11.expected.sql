@@ -16,4 +16,4 @@ WHEN NOT MATCHED BY TARGET THEN
     INSERT (product_id, warehouse_id, quantity, last_updated)
     VALUES (source.product_id, source.warehouse_id, source.quantity, source.last_updated)
 WHEN NOT MATCHED BY SOURCE THEN
-    DELETE
+    DELETE;

@@ -202,6 +202,9 @@ let private trailingComment (frag: TSqlFragment) : Doc =
 let private withTrailingComment (frag: TSqlFragment) (doc: Doc) : Doc =
     doc <+> trailingComment frag
 
+let private withStatementTerminator (stmt: TSqlStatement) (doc: Doc) : Doc =
+    if hasTrailingSemicolon stmt then doc <+> text ";" else doc
+
 let private appendInlineComments (doc: Doc) (comments: string list) : Doc =
     match comments with
     | [] -> doc
@@ -1181,13 +1184,7 @@ and private viewStatementDoc (cfg: FormattingStyle) (verb: string) (vs: ViewStat
             line <+> keyword cfg "WITH" <++> keyword cfg "CHECK" <++> keyword cfg "OPTION"
         else empty
 
-    let terminatorDoc =
-        let stream = vs.ScriptTokenStream
-        if stream <> null && vs.LastTokenIndex >= vs.FirstTokenIndex && stream.[vs.LastTokenIndex].TokenType = TSqlTokenType.Semicolon then
-            text ";"
-        else empty
-
-    header <+> columnsDoc <+> optionsDoc <+> asDoc <+> selectDoc <+> checkOptionDoc <+> terminatorDoc
+    header <+> columnsDoc <+> optionsDoc <+> asDoc <+> selectDoc <+> checkOptionDoc
 
 and private createTableElementDoc (cfg: FormattingStyle) (frag: TSqlFragment) : Doc =
     match frag with
@@ -1247,13 +1244,7 @@ and private createTableDoc (cfg: FormattingStyle) (ct: CreateTableStatement) : D
             line <+> selectStatementDoc cfg ct.SelectStatement
         else empty
 
-    let terminatorDoc =
-        let stream = ct.ScriptTokenStream
-        if stream <> null && ct.LastTokenIndex >= ct.FirstTokenIndex && stream.[ct.LastTokenIndex].TokenType = TSqlTokenType.Semicolon then
-            text ";"
-        else empty
-
-    header <+> bodyDoc <+> selectDoc <+> terminatorDoc
+    header <+> bodyDoc <+> selectDoc
 
 and private inlineTvfSelectDoc (cfg: FormattingStyle) (selectSql: string) : Doc =
     let normalizedSql =
@@ -1361,11 +1352,11 @@ and private whileDoc (cfg: FormattingStyle) (ws: WhileStatement) : Doc =
 and private tryCatchDoc (cfg: FormattingStyle) (tc: TryCatchStatement) : Doc =
     let tryStmts =
         if tc.TryStatements <> null then
-            tc.TryStatements.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
+            tc.TryStatements.Statements |> Seq.cast<TSqlStatement> |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
         else []
     let catchStmts =
         if tc.CatchStatements <> null then
-            tc.CatchStatements.Statements |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
+            tc.CatchStatements.Statements |> Seq.cast<TSqlStatement> |> Seq.map (fun s -> statementDoc cfg s) |> Seq.toList
         else []
     keyword cfg "BEGIN" <++> keyword cfg "TRY" <+>
     nest (indentWidth cfg) (line <+> join (line <+> line) tryStmts) <+> line <+>
@@ -1586,35 +1577,32 @@ and private setVarDoc (cfg: FormattingStyle) (sv: SetVariableStatement) : Doc =
 
 and private statementDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
     match stmt with
-    | :? SelectStatement as ss -> selectStatementDoc cfg ss
-    | :? InsertStatement as ins -> insertDoc cfg ins
-    | :? UpdateStatement as upd -> updateDoc cfg upd
-    | :? DeleteStatement as del -> deleteDoc cfg del
-    | :? MergeStatement as merge -> mergeDoc cfg merge
-    | :? CreateTableStatement as ct -> createTableDoc cfg ct
-    | :? CreateViewStatement as cv -> viewStatementDoc cfg "CREATE" cv
-    | :? AlterViewStatement as av -> viewStatementDoc cfg "ALTER" av
-    | :? CreateOrAlterViewStatement as coav -> viewStatementDoc cfg "CREATE OR ALTER" coav
+    | :? SelectStatement as ss -> selectStatementDoc cfg ss |> withStatementTerminator ss
+    | :? InsertStatement as ins -> insertDoc cfg ins |> withStatementTerminator ins
+    | :? UpdateStatement as upd -> updateDoc cfg upd |> withStatementTerminator upd
+    | :? DeleteStatement as del -> deleteDoc cfg del |> withStatementTerminator del
+    | :? MergeStatement as merge -> mergeDoc cfg merge |> withStatementTerminator merge
+    | :? CreateTableStatement as ct -> createTableDoc cfg ct |> withStatementTerminator ct
+    | :? CreateViewStatement as cv -> viewStatementDoc cfg "CREATE" cv |> withStatementTerminator cv
+    | :? AlterViewStatement as av -> viewStatementDoc cfg "ALTER" av |> withStatementTerminator av
+    | :? CreateOrAlterViewStatement as coav -> viewStatementDoc cfg "CREATE OR ALTER" coav |> withStatementTerminator coav
     | :? AlterFunctionStatement as af -> alterFunctionDoc cfg af
     | :? CreateFunctionStatement as cf -> createFunctionDoc cfg cf
     | :? AlterProcedureStatement as ap -> alterProcedureDoc cfg ap
     | :? CreateProcedureStatement as cp -> createProcedureDoc cfg cp
-    | :? BeginEndBlockStatement as be -> beginEndDoc cfg be
+    | :? BeginEndBlockStatement as be -> beginEndDoc cfg be |> withStatementTerminator be
     | :? IfStatement as ifs -> ifDoc cfg ifs
     | :? WhileStatement as ws -> whileDoc cfg ws
     | :? TryCatchStatement as tc -> tryCatchDoc cfg tc
-    | :? DeclareVariableStatement as dv -> withTrailingComment dv (declareDoc cfg dv)
-    | :? SetVariableStatement as sv -> withTrailingComment sv (setVarDoc cfg sv)
+    | :? DeclareVariableStatement as dv -> withTrailingComment dv (declareDoc cfg dv) |> withStatementTerminator dv
+    | :? SetVariableStatement as sv -> withTrailingComment sv (setVarDoc cfg sv) |> withStatementTerminator sv
     | :? ReturnStatement as rs ->
         if rs.Expression <> null then
-            keyword cfg "RETURN" <++> exprDoc cfg rs.Expression
+            keyword cfg "RETURN" <++> exprDoc cfg rs.Expression |> withStatementTerminator rs
         else
-            // Check if this is a RETURN followed by a SELECT (inline TVF pattern)
-            // ScriptDOM may parse "RETURN SELECT ..." with Expression = null
-            // In that case, fall back to token stream
             tokenStreamDoc cfg rs
     | :? PrintStatement as ps ->
-        withTrailingComment ps (keyword cfg "PRINT" <++> exprDoc cfg ps.Expression)
+        withTrailingComment ps (keyword cfg "PRINT" <++> exprDoc cfg ps.Expression) |> withStatementTerminator ps
     | :? ExecuteStatement as es -> tokenStreamDoc cfg es
     | :? RaiseErrorStatement as re -> tokenStreamDoc cfg re
     | :? ThrowStatement as ts -> tokenStreamDoc cfg ts
@@ -1701,6 +1689,7 @@ let format (config: FormattingStyle) (sql: string) : Result<string, string list>
                 |> Seq.map (fun batch ->
                     let stmtDocs =
                         batch.Statements
+                        |> Seq.cast<TSqlStatement>
                         |> Seq.map (fun stmt -> statementDoc config stmt)
                         |> Seq.toList
                     join (line <+> line) stmtDocs

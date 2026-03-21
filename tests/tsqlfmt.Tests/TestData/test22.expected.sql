@@ -5,14 +5,14 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    DECLARE @processed INT = 0
+    DECLARE @processed INT = 0;
     
     SELECT TOP (@batchSize) r.id,
         r.status
     INTO #temp
     FROM dbo.pending_records r
     WHERE r.status = 'New'
-    ORDER BY r.priority DESC
+    ORDER BY r.priority DESC;
     
     IF @dryRun = 0
     BEGIN
@@ -21,12 +21,12 @@ BEGIN
             t.started_date = GETUTCDATE()
         FROM dbo.pending_records t
         INNER JOIN #temp tmp
-            ON tmp.id = t.id
+            ON tmp.id = t.id;
         
-        SET @processed = @@ROWCOUNT
+        SET @processed = @@ROWCOUNT;
     END
     
-    SELECT @processed AS records_processed
+    SELECT @processed AS records_processed;
     
     DROP TABLE #temp;
 END
@@ -36,5 +36,5 @@ CREATE PROCEDURE dbo.usp_CleanupRecords
 AS
 BEGIN
     DELETE dbo.archive_records
-    WHERE created_date < DATEADD(day, -@cutoffDays, GETUTCDATE())
+    WHERE created_date < DATEADD(day, -@cutoffDays, GETUTCDATE());
 END
