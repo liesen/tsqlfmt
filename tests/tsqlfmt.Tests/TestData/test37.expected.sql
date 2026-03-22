@@ -2,5 +2,4 @@ CREATE FUNCTION dbo.Test()
 RETURNS --Comment
 TABLE
 AS
-RETURN
-SELECT 1 AS value;
+RETURN SELECT 1 AS value;

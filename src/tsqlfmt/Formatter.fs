@@ -283,6 +283,93 @@ let private withTrailingComment (frag: TSqlFragment) (doc: Doc) : Doc = doc <+> 
 let private withStatementTerminator (stmt: TSqlStatement) (doc: Doc) : Doc =
     if hasTrailingSemicolon stmt then doc <+> text ";" else doc
 
+let private trailingCommentAfterTokenIndex (stream: IList<TSqlParserToken>) (lastTokenIndex: int) : Doc =
+    if stream = null then
+        empty
+    else
+        let rec scan idx =
+            if idx >= stream.Count then
+                empty
+            else
+                let tok = stream.[idx]
+
+                match tok.TokenType with
+                | TSqlTokenType.WhiteSpace ->
+                    if tok.Text.Contains('\n') || tok.Text.Contains('\r') then
+                        empty
+                    else
+                        scan (idx + 1)
+                | TSqlTokenType.SingleLineComment -> text " " <+> text (tok.Text.TrimEnd())
+                | TSqlTokenType.MultilineComment -> text " " <+> text tok.Text
+                | _ -> empty
+
+        scan (lastTokenIndex + 1)
+
+let private tokenIndexOfType (frag: TSqlFragment) (tokenType: TSqlTokenType) : int option =
+    let stream = frag.ScriptTokenStream
+
+    if stream = null then
+        None
+    else
+        seq { frag.FirstTokenIndex .. frag.LastTokenIndex }
+        |> Seq.tryFind (fun i -> stream.[i].TokenType = tokenType)
+
+let private tokenIndexOfIdentifier (frag: TSqlFragment) (value: string) : int option =
+    let stream = frag.ScriptTokenStream
+
+    if stream = null then
+        None
+    else
+        seq { frag.FirstTokenIndex .. frag.LastTokenIndex }
+        |> Seq.tryFind (fun i ->
+            stream.[i].TokenType = TSqlTokenType.Identifier
+            && String.Equals(stream.[i].Text, value, StringComparison.OrdinalIgnoreCase))
+
+let private returnsKeywordDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
+    let stream = stmt.ScriptTokenStream
+
+    if stream = null then
+        keyword cfg "RETURNS"
+    else
+        match tokenIndexOfIdentifier stmt "RETURNS" with
+        | Some idx -> keyword cfg "RETURNS" <+> trailingCommentAfterTokenIndex stream idx
+        | None -> keyword cfg "RETURNS"
+
+let private returnsKeywordHasTrailingComment (stmt: TSqlStatement) : bool =
+    let stream = stmt.ScriptTokenStream
+
+    if stream = null then
+        false
+    else
+        match tokenIndexOfIdentifier stmt "RETURNS" with
+        | Some idx -> trailingCommentAfterTokenIndex stream idx <> empty
+        | None -> false
+
+let private returnKeywordDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
+    let stream = stmt.ScriptTokenStream
+
+    if stream = null then
+        keyword cfg "RETURN"
+    else
+        match tokenIndexOfType stmt TSqlTokenType.Return with
+        | Some idx -> keyword cfg "RETURN" <+> trailingCommentAfterTokenIndex stream idx
+        | None -> keyword cfg "RETURN"
+
+let private returnKeywordHasTrailingComment (stmt: TSqlStatement) : bool =
+    let stream = stmt.ScriptTokenStream
+
+    if stream = null then
+        false
+    else
+        match tokenIndexOfType stmt TSqlTokenType.Return with
+        | Some idx -> trailingCommentAfterTokenIndex stream idx <> empty
+        | None -> false
+
+let private withStatementTerminatorAndComment (stmt: TSqlStatement) (doc: Doc) : Doc =
+    let withSemicolon = if hasTrailingSemicolon stmt then doc <+> text ";" else doc
+
+    withSemicolon <+> trailingComment stmt
+
 let private appendInlineComments (doc: Doc) (comments: string list) : Doc =
     match comments with
     | [] -> doc
@@ -1470,8 +1557,7 @@ and private inlineTvfReturnSql (stmt: TSqlStatement) : string option =
     if stream = null then
         None
     else
-        seq { stmt.FirstTokenIndex .. stmt.LastTokenIndex }
-        |> Seq.tryFind (fun i -> stream.[i].TokenType = TSqlTokenType.Return)
+        tokenIndexOfType stmt TSqlTokenType.Return
         |> Option.map (fun returnIdx ->
             let selectStart =
                 seq { returnIdx + 1 .. stmt.LastTokenIndex }
@@ -1498,10 +1584,12 @@ and private selectFunctionBodyDoc
     match inlineTvfReturnSql stmt with
     | Some selectSql ->
         if selectSql.StartsWith("(") then
-            true, keyword cfg "RETURN" <++> parenthesizedInlineTvfDoc cfg selectSql
+            true, returnKeywordDoc cfg stmt <++> parenthesizedInlineTvfDoc cfg selectSql
+        elif returnKeywordHasTrailingComment stmt then
+            false, returnKeywordDoc cfg stmt <+> line <+> inlineTvfSelectDoc cfg selectSql
         else
-            false, keyword cfg "RETURN" <++> inlineTvfSelectDoc cfg selectSql
-    | None -> false, keyword cfg "RETURN" <++> selectStatementDoc cfg selectStatement
+            false, returnKeywordDoc cfg stmt <++> inlineTvfSelectDoc cfg selectSql
+    | None -> false, returnKeywordDoc cfg stmt <++> selectStatementDoc cfg selectStatement
 
 and private procedureParamsHaveParens
     (stmt: TSqlStatement)
@@ -1572,7 +1660,12 @@ and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement)
     let bodyDoc =
         match af.ReturnType with
         | :? SelectFunctionReturnType as sfrt ->
-            let returnsDoc = keyword cfg "RETURNS" <++> keyword cfg "TABLE"
+            let returnsDoc =
+                if returnsKeywordHasTrailingComment af then
+                    returnsKeywordDoc cfg af <+> line <+> keyword cfg "TABLE"
+                else
+                    returnsKeywordDoc cfg af <++> keyword cfg "TABLE"
+
             let sameLineAs, returnDoc = selectFunctionBodyDoc cfg af sfrt.SelectStatement
 
             if sameLineAs then
@@ -1599,7 +1692,12 @@ and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatemen
 
     match cf.ReturnType with
     | :? SelectFunctionReturnType as sfrt ->
-        let returnsDoc = keyword cfg "RETURNS" <++> keyword cfg "TABLE"
+        let returnsDoc =
+            if returnsKeywordHasTrailingComment cf then
+                returnsKeywordDoc cfg cf <+> line <+> keyword cfg "TABLE"
+            else
+                returnsKeywordDoc cfg cf <++> keyword cfg "TABLE"
+
         let sameLineAs, bodyDoc = selectFunctionBodyDoc cfg cf sfrt.SelectStatement
         inlineRoutineDoc cfg sameLineAs header paramsDoc returnsDoc bodyDoc
     | _ ->
@@ -2202,17 +2300,15 @@ and private statementDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
     | :? IfStatement as ifs -> ifDoc cfg ifs
     | :? WhileStatement as ws -> whileDoc cfg ws
     | :? TryCatchStatement as tc -> tryCatchDoc cfg tc
-    | :? DeclareVariableStatement as dv -> withTrailingComment dv (declareDoc cfg dv) |> withStatementTerminator dv
-    | :? SetVariableStatement as sv -> withTrailingComment sv (setVarDoc cfg sv) |> withStatementTerminator sv
+    | :? DeclareVariableStatement as dv -> declareDoc cfg dv |> withStatementTerminatorAndComment dv
+    | :? SetVariableStatement as sv -> setVarDoc cfg sv |> withStatementTerminatorAndComment sv
     | :? ReturnStatement as rs ->
         if rs.Expression <> null then
             keyword cfg "RETURN" <++> exprDoc cfg rs.Expression
             |> withStatementTerminator rs
         else
             tokenStreamDoc cfg rs
-    | :? PrintStatement as ps ->
-        withTrailingComment ps (keyword cfg "PRINT" <++> exprDoc cfg ps.Expression)
-        |> withStatementTerminator ps
+    | :? PrintStatement as ps -> keyword cfg "PRINT" <++> exprDoc cfg ps.Expression |> withStatementTerminator ps
     | :? ExecuteStatement as es -> tokenStreamDoc cfg es
     | :? RaiseErrorStatement as re -> tokenStreamDoc cfg re
     | :? ThrowStatement as ts -> tokenStreamDoc cfg ts

@@ -1,0 +1,5 @@
+CREATE FUNCTION dbo.TestReturnComment()
+RETURNS TABLE
+AS
+RETURN --Comment
+SELECT 1 AS value;
