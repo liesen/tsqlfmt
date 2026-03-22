@@ -48,6 +48,21 @@ To enable the checked-in pre-commit hook that formats staged `.fs` files and sto
 git config core.hooksPath .githooks
 ----
 
+== Benchmarking
+
+To compare `tsqlfmt` and SQL Prompt on the regression fixture corpus, first build both formatters and set the same environment variables used by the parity tests. Keep their values local and do not paste them into logs or shared output.
+
+[source,shell]
+----
+python benchmarks/regression_suite_benchmark.py \
+  --iterations 15 \
+  --warmups 3 \
+  --json-out artifact/regression-benchmark.json
+----
+
+The script benchmarks the `tests/tsqlfmt.Tests/TestData/*.actual.sql` fixtures through each formatter's SQL Prompt-compatible CLI path, prints the slowest files per formatter, and writes aggregate plus per-fixture timings to JSON.
+The benchmark output redacts the SQL Prompt executable and auth token values.
+
 == Resources
 
 * SQL ScriptDOM documentation: https://learn.microsoft.com/en-us/dotnet/api/microsoft.sqlserver.transactsql.scriptdom?view=sql-transactsql-161
