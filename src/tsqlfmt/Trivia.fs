@@ -8,7 +8,7 @@ type Comment =
     | SingleLineComment of string
     | MultilineComment of string
 
-let interComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : string list =
+let interComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : Comment list =
     if prevFrag = null || nextFrag = null then
         []
     else
@@ -23,8 +23,8 @@ let interComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : string lis
                   let tok = stream.[i]
 
                   match tok.TokenType with
-                  | TSqlTokenType.SingleLineComment
-                  | TSqlTokenType.MultilineComment -> yield tok.Text.TrimEnd()
+                  | TSqlTokenType.SingleLineComment -> yield SingleLineComment(tok.Text.TrimEnd())
+                  | TSqlTokenType.MultilineComment -> yield MultilineComment(tok.Text.TrimEnd())
                   | _ -> () ]
 
 let tokensInRange (stream: IList<TSqlParserToken>) (startIdx: int) (endIdx: int) : TSqlParserToken list =
@@ -33,20 +33,22 @@ let tokensInRange (stream: IList<TSqlParserToken>) (startIdx: int) (endIdx: int)
     else
         [ for i in startIdx..endIdx -> stream.[i] ]
 
-let ownLineComments (tokens: TSqlParserToken list) : string list =
+let ownLineComments (tokens: TSqlParserToken list) : Comment list =
     tokens
     |> List.fold
         (fun (seenNewLine, comments) tok ->
             match tok.TokenType with
             | TSqlTokenType.WhiteSpace when tok.Text.Contains('\n') || tok.Text.Contains('\r') -> true, comments
-            | TSqlTokenType.SingleLineComment
-            | TSqlTokenType.MultilineComment when seenNewLine -> seenNewLine, tok.Text.TrimEnd() :: comments
+            | TSqlTokenType.SingleLineComment when seenNewLine ->
+                seenNewLine, SingleLineComment(tok.Text.TrimEnd()) :: comments
+            | TSqlTokenType.MultilineComment when seenNewLine ->
+                seenNewLine, MultilineComment(tok.Text.TrimEnd()) :: comments
             | _ -> seenNewLine, comments)
         (false, [])
     |> snd
     |> List.rev
 
-let leadingInterComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : string list =
+let leadingInterComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : Comment list =
     if prevFrag = null || nextFrag = null then
         []
     else
@@ -60,10 +62,10 @@ let leadingInterComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : str
             tokensInRange stream (prevFrag.LastTokenIndex + 1) (nextFrag.FirstTokenIndex - 1)
             |> ownLineComments
 
-let ownLineCommentsInRange (stream: IList<TSqlParserToken>) (startIdx: int) (endIdx: int) : string list =
+let ownLineCommentsInRange (stream: IList<TSqlParserToken>) (startIdx: int) (endIdx: int) : Comment list =
     tokensInRange stream startIdx endIdx |> ownLineComments
 
-let splitBooleanInterComments (bb: BooleanBinaryExpression) : string list * string list =
+let splitBooleanInterComments (bb: BooleanBinaryExpression) : Comment list * Comment list =
     let stream = bb.ScriptTokenStream
 
     if stream = null || bb.FirstExpression = null || bb.SecondExpression = null then
@@ -75,39 +77,19 @@ let splitBooleanInterComments (bb: BooleanBinaryExpression) : string list * stri
                 match tok.TokenType with
                 | TSqlTokenType.And
                 | TSqlTokenType.Or -> true, beforeOp, afterOp
-                | TSqlTokenType.SingleLineComment
+                | TSqlTokenType.SingleLineComment ->
+                    if seenOperator then
+                        true, beforeOp, SingleLineComment(tok.Text.TrimEnd()) :: afterOp
+                    else
+                        false, SingleLineComment(tok.Text.TrimEnd()) :: beforeOp, afterOp
                 | TSqlTokenType.MultilineComment ->
                     if seenOperator then
-                        true, beforeOp, tok.Text.TrimEnd() :: afterOp
+                        true, beforeOp, MultilineComment(tok.Text.TrimEnd()) :: afterOp
                     else
-                        false, tok.Text.TrimEnd() :: beforeOp, afterOp
+                        false, MultilineComment(tok.Text.TrimEnd()) :: beforeOp, afterOp
                 | _ -> seenOperator, beforeOp, afterOp)
             (false, [], [])
         |> fun (_, beforeOp, afterOp) -> List.rev beforeOp, List.rev afterOp
-
-let attachOwnLineComments (comments: string list) (doc: Doc) : Doc =
-    match comments with
-    | [] -> doc
-    | _ -> join line (comments |> List.map text) <+> line <+> doc
-
-let attachInlineLeadingComments (comments: string list) (doc: Doc) : Doc =
-    match comments with
-    | [] -> doc
-    | _ -> join (text " ") (comments |> List.map text) <++> doc
-
-let renderItemsWithLeadingComments<'T when 'T :> TSqlFragment>
-    (render: 'T -> Doc)
-    (leadingComments: 'T option -> 'T -> string list)
-    (attachComments: string list -> Doc -> Doc)
-    (items: 'T list)
-    : Doc list =
-    items
-    |> List.mapFold
-        (fun prev item ->
-            let doc = render item |> attachComments (leadingComments prev item)
-            doc, Some item)
-        None
-    |> fst
 
 let hasTrailingSemicolon (frag: TSqlFragment) =
     let stream = frag.ScriptTokenStream

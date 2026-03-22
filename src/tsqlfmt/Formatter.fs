@@ -327,16 +327,45 @@ let private withStatementTerminatorAndComment (stmt: TSqlStatement) (doc: Doc) :
 
     withSemicolon <+> trailingComment stmt
 
+let private commentDoc (comment: Comment) : Doc =
+    match comment with
+    | SingleLineComment commentText -> text commentText
+    | MultilineComment commentText -> text commentText
+
 type private TrailingFragmentDoc = { Comment: Comment option; Doc: Doc }
 
 let private trailingFragmentDoc (frag: TSqlFragment) (doc: Doc) : TrailingFragmentDoc =
     { Comment = trailingTriviaAfterFragment frag
       Doc = doc <+> trailingCommentAfterFragment frag }
 
-let private appendInlineComments (doc: Doc) (comments: string list) : Doc =
+let private appendInlineComments (doc: Doc) (comments: Comment list) : Doc =
     match comments with
     | [] -> doc
-    | _ -> doc <+> text " " <+> join (text " ") (comments |> List.map text)
+    | _ -> doc <+> text " " <+> join (text " ") (comments |> List.map commentDoc)
+
+let private attachOwnLineComments (comments: Comment list) (doc: Doc) : Doc =
+    match comments with
+    | [] -> doc
+    | _ -> join line (comments |> List.map commentDoc) <+> line <+> doc
+
+let private attachInlineLeadingComments (comments: Comment list) (doc: Doc) : Doc =
+    match comments with
+    | [] -> doc
+    | _ -> join (text " ") (comments |> List.map commentDoc) <++> doc
+
+let private renderItemsWithLeadingComments<'T when 'T :> TSqlFragment>
+    (render: 'T -> Doc)
+    (leadingComments: 'T option -> 'T -> Comment list)
+    (attachComments: Comment list -> Doc -> Doc)
+    (items: 'T list)
+    : Doc list =
+    items
+    |> List.mapFold
+        (fun prev item ->
+            let doc = render item |> attachComments (leadingComments prev item)
+            doc, Some item)
+        None
+    |> fst
 
 // ─── Expression formatting ───
 
@@ -1135,7 +1164,7 @@ and private booleanSequenceItems (cfg: FormattingStyle) (bb: BooleanBinaryExpres
         | [] -> keyword cfg opText <++> rightExpr
         | comments ->
             keyword cfg opText
-            <++> join (text " ") (comments |> List.map text)
+            <++> join (text " ") (comments |> List.map commentDoc)
             <++> rightExpr
 
     leftPartsWithComments @ [ rightPart ]

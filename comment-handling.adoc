@@ -1,0 +1,26 @@
+= Comment Handling
+
+This branch treats comments as discovered trivia that the formatter later attaches.
+
+== Model
+
+- `Comment = SingleLineComment | MultilineComment`
+- Trivia discovery returns `Comment option` or `Comment list`
+- The formatter decides attachment:
+  - leading
+  - trailing
+
+`Between` is a discovery detail, not a final attachment category. Comments found between sibling fragments are eventually attached either to the previous fragment as trailing trivia or to the next fragment as leading trivia.
+
+`Inline` and `own-line` are rendering concerns, not core comment identity. In practice, single-line comments often force a break after the attachment point, while multiline comments may remain inline.
+
+== Module split
+
+- `Trivia.fs` discovers comments from token streams and fragment boundaries.
+- `Formatter.fs` decides how discovered comments affect layout and where they attach.
+
+== Incremental direction
+
+- Keep moving raw `string` comment flows toward `Comment`.
+- Keep token scanning in `Trivia.fs`.
+- Keep comment rendering and attachment in `Formatter.fs`.
