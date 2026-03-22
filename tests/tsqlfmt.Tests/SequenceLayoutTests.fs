@@ -79,3 +79,18 @@ WHERE a = 1
 """
 
     assertRenderedDoc 120 expected (headedSequenceDoc policy (text "WHERE") items)
+
+[<Fact>]
+let ``render trims indentation on blank lines in nested docs`` () =
+    let doc =
+        text "BEGIN" <+> nest 4 (line <+> line <+> text "x = 1") <+> line <+> text "END"
+
+    let expected =
+        """
+BEGIN
+
+    x = 1
+END
+"""
+
+    assertRenderedDoc 120 expected doc

@@ -114,18 +114,21 @@ let private best (width: int) (doc: Doc) : SDoc =
 let render (maxWidth: int) (doc: Doc) : string =
     let sb = System.Text.StringBuilder()
 
-    let rec go =
+    let rec go pendingIndent =
         function
         | SNil -> ()
         | SText(s, d) ->
+            match pendingIndent with
+            | Some indent when indent > 0 -> sb.Append(System.String(' ', indent)) |> ignore
+            | _ -> ()
+
             sb.Append(s) |> ignore
-            go d
+            go None d
         | SLine(indent, d) ->
             sb.AppendLine() |> ignore
-            sb.Append(System.String(' ', indent)) |> ignore
-            go d
+            go (Some indent) d
 
-    go (best maxWidth doc)
+    go None (best maxWidth doc)
     sb.ToString().TrimEnd()
 
 // ─── Utility combinators ───

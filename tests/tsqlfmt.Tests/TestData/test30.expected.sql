@@ -4,9 +4,9 @@ CREATE PROCEDURE dbo.test30
 AS
 BEGIN
     DECLARE @AttemptCount INT = 0 -- initialize retries
-    
+
     SET @AttemptCount = @AttemptCount + 1 -- increment retries
-    
+
     SELECT @CustomerId,
         @Status -- emit current values
 END
