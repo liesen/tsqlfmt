@@ -32,6 +32,22 @@ dotnet publish src/tsqlfmt/tsqlfmt.fsproj \
 
 The Windows publish produces a standalone `tsqlfmt.exe` that runs without a separate .NET installation.
 
+== Development
+
+Format F# code with Fantomas:
+
+[source,shell]
+----
+dotnet tool run fantomas .
+----
+
+To enable the checked-in pre-commit hook that formats staged `.fs` files and stops the commit when it rewrites them:
+
+[source,shell]
+----
+git config core.hooksPath .githooks
+----
+
 == Resources
 
 * SQL ScriptDOM documentation: https://learn.microsoft.com/en-us/dotnet/api/microsoft.sqlserver.transactsql.scriptdom?view=sql-transactsql-161

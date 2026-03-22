@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.fs(i|x)?$' || true)
+
+if [ -z "$staged_files" ]; then
+    exit 0
+fi
+
+printf '%s\n' "$staged_files" | while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    dotnet tool run fantomas -- "$file"
+done
+
+if ! git diff --quiet -- $staged_files; then
+    echo "Fantomas reformatted staged F# files. Re-stage them and commit again." >&2
+    git diff -- $staged_files >&2 || true
+    exit 1
+fi
