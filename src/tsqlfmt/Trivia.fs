@@ -8,8 +8,6 @@ type Comment =
     | SingleLineComment of string
     | MultilineComment of string
 
-type TrailingTrivia = Comment option
-
 let interComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : string list =
     if prevFrag = null || nextFrag = null then
         []
@@ -118,7 +116,7 @@ let hasTrailingSemicolon (frag: TSqlFragment) =
     && frag.LastTokenIndex >= frag.FirstTokenIndex
     && stream.[frag.LastTokenIndex].TokenType = TSqlTokenType.Semicolon
 
-let trailingTriviaAfterTokenIndex (stream: IList<TSqlParserToken>) (lastTokenIndex: int) : TrailingTrivia =
+let trailingTriviaAfterTokenIndex (stream: IList<TSqlParserToken>) (lastTokenIndex: int) : Comment option =
     if stream = null then
         None
     else
@@ -145,6 +143,15 @@ let trailingCommentAfterTokenIndex (stream: IList<TSqlParserToken>) (lastTokenIn
     | None -> empty
     | Some(SingleLineComment comment) -> text " " <+> text comment
     | Some(MultilineComment comment) -> text " " <+> text comment
+
+let trailingTriviaAfterFragment (frag: TSqlFragment) : Comment option =
+    if frag = null then
+        None
+    else
+        trailingTriviaAfterTokenIndex frag.ScriptTokenStream frag.LastTokenIndex
+
+let trailingCommentAfterFragment (frag: TSqlFragment) : Doc =
+    trailingCommentAfterTokenIndex frag.ScriptTokenStream frag.LastTokenIndex
 
 let tokenIndexOfType (frag: TSqlFragment) (tokenType: TSqlTokenType) : int option =
     let stream = frag.ScriptTokenStream

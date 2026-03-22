@@ -298,37 +298,40 @@ let private keywordWithTrailingCommentDoc
         | Some idx -> keyword cfg keywordText <+> trailingCommentAfterTokenIndex stream idx
         | None -> keyword cfg keywordText
 
-let private tokenHasTrailingComment (tokenIndex: int option) (stmt: TSqlStatement) : bool =
-    let stream = stmt.ScriptTokenStream
-
-    if stream = null then
-        false
-    else
-        match tokenIndex with
-        | Some idx -> trailingTriviaAfterTokenIndex stream idx <> None
-        | None -> false
+let private trailingCommentForToken (tokenIndex: int option) (stmt: TSqlStatement) : Comment option =
+    tokenIndex |> Option.bind (trailingTriviaAfterTokenIndex stmt.ScriptTokenStream)
 
 let private returnsKeywordTokenIndex (stmt: TSqlStatement) = tokenIndexOfIdentifier stmt "RETURNS"
 
-let private returnsKeywordDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
-    keywordWithTrailingCommentDoc cfg "RETURNS" (returnsKeywordTokenIndex stmt) stmt
+let private returnsKeyword (cfg: FormattingStyle) (stmt: TSqlStatement) : Comment option * Doc =
+    let comment = trailingCommentForToken (returnsKeywordTokenIndex stmt) stmt
 
-let private returnsKeywordHasTrailingComment (stmt: TSqlStatement) : bool =
-    tokenHasTrailingComment (returnsKeywordTokenIndex stmt) stmt
+    let doc =
+        keywordWithTrailingCommentDoc cfg "RETURNS" (returnsKeywordTokenIndex stmt) stmt
+
+    comment, doc
 
 let private returnKeywordTokenIndex (stmt: TSqlStatement) =
     tokenIndexOfType stmt TSqlTokenType.Return
 
-let private returnKeywordDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
-    keywordWithTrailingCommentDoc cfg "RETURN" (returnKeywordTokenIndex stmt) stmt
+let private returnKeyword (cfg: FormattingStyle) (stmt: TSqlStatement) : Comment option * Doc =
+    let comment = trailingCommentForToken (returnKeywordTokenIndex stmt) stmt
 
-let private returnKeywordHasTrailingComment (stmt: TSqlStatement) : bool =
-    tokenHasTrailingComment (returnKeywordTokenIndex stmt) stmt
+    let doc =
+        keywordWithTrailingCommentDoc cfg "RETURN" (returnKeywordTokenIndex stmt) stmt
+
+    comment, doc
 
 let private withStatementTerminatorAndComment (stmt: TSqlStatement) (doc: Doc) : Doc =
     let withSemicolon = if hasTrailingSemicolon stmt then doc <+> text ";" else doc
 
     withSemicolon <+> trailingComment stmt
+
+type private TrailingFragmentDoc = { Comment: Comment option; Doc: Doc }
+
+let private trailingFragmentDoc (frag: TSqlFragment) (doc: Doc) : TrailingFragmentDoc =
+    { Comment = trailingTriviaAfterFragment frag
+      Doc = doc <+> trailingCommentAfterFragment frag }
 
 let private appendInlineComments (doc: Doc) (comments: string list) : Doc =
     match comments with
@@ -990,7 +993,7 @@ and private queryExprDoc (cfg: FormattingStyle) (qe: QueryExpression) : Doc = qu
 and private querySpecOrExprDoc
     (cfg: FormattingStyle)
     (qe: QueryExpression)
-    (intoTarget: (TSqlFragment * Doc) option)
+    (intoTarget: TrailingFragmentDoc option)
     : Doc =
     match qe with
     | :? QuerySpecification as qs -> querySpecDoc cfg qs intoTarget
@@ -1002,7 +1005,7 @@ and private querySpecOrExprDoc
 and private querySpecDoc
     (cfg: FormattingStyle)
     (qs: QuerySpecification)
-    (intoTarget: (TSqlFragment * Doc) option)
+    (intoTarget: TrailingFragmentDoc option)
     : Doc =
     // SELECT clause
     let selectKw =
@@ -1039,17 +1042,12 @@ and private querySpecDoc
 
     let canKeepIntoWithSelect, selectClause =
         match selectItems, intoTarget with
-        | [ single ], Some(intoFrag, t) ->
-            true,
-            (selectKwWithTop
-             <++> single
-             <++> keyword cfg "INTO"
-             <++> withTrailingComment intoFrag t)
+        | [ single ], Some intoTarget -> true, (selectKwWithTop <++> single <++> keyword cfg "INTO" <++> intoTarget.Doc)
         | _ -> false, formatList cfg selectKwWithTop selectItems
 
     let intoClause =
         match intoTarget with
-        | Some(intoFrag, t) when not canKeepIntoWithSelect -> keyword cfg "INTO" <++> withTrailingComment intoFrag t
+        | Some intoTarget when not canKeepIntoWithSelect -> keyword cfg "INTO" <++> intoTarget.Doc
         | None -> empty
         | _ -> empty
 
@@ -1336,7 +1334,7 @@ and private binaryQueryDoc (cfg: FormattingStyle) (bqe: BinaryQueryExpression) :
 and private selectStatementDoc (cfg: FormattingStyle) (ss: SelectStatement) : Doc =
     let intoTarget =
         if ss.Into <> null then
-            Some(ss.Into :> TSqlFragment, schemaObjectNameDoc cfg ss.Into)
+            Some(trailingFragmentDoc (ss.Into :> TSqlFragment) (schemaObjectNameDoc cfg ss.Into))
         else
             None
 
@@ -1562,15 +1560,17 @@ and private selectFunctionBodyDoc
     (stmt: TSqlStatement)
     (selectStatement: SelectStatement)
     : bool * Doc =
+    let returnComment, returnDoc = returnKeyword cfg stmt
+
     match inlineTvfReturnSql stmt with
     | Some selectSql ->
         if selectSql.StartsWith("(") then
-            true, returnKeywordDoc cfg stmt <++> parenthesizedInlineTvfDoc cfg selectSql
-        elif returnKeywordHasTrailingComment stmt then
-            false, returnKeywordDoc cfg stmt <+> line <+> inlineTvfSelectDoc cfg selectSql
+            true, returnDoc <++> parenthesizedInlineTvfDoc cfg selectSql
+        elif returnComment |> Option.isSome then
+            false, returnDoc <+> line <+> inlineTvfSelectDoc cfg selectSql
         else
-            false, returnKeywordDoc cfg stmt <++> inlineTvfSelectDoc cfg selectSql
-    | None -> false, returnKeywordDoc cfg stmt <++> selectStatementDoc cfg selectStatement
+            false, returnDoc <++> inlineTvfSelectDoc cfg selectSql
+    | None -> false, returnDoc <++> selectStatementDoc cfg selectStatement
 
 and private procedureParamsHaveParens
     (stmt: TSqlStatement)
@@ -1641,11 +1641,13 @@ and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement)
     let bodyDoc =
         match af.ReturnType with
         | :? SelectFunctionReturnType as sfrt ->
+            let returnsComment, returnsKeywordDoc = returnsKeyword cfg af
+
             let returnsDoc =
-                if returnsKeywordHasTrailingComment af then
-                    returnsKeywordDoc cfg af <+> line <+> keyword cfg "TABLE"
+                if returnsComment |> Option.isSome then
+                    returnsKeywordDoc <+> line <+> keyword cfg "TABLE"
                 else
-                    returnsKeywordDoc cfg af <++> keyword cfg "TABLE"
+                    returnsKeywordDoc <++> keyword cfg "TABLE"
 
             let sameLineAs, returnDoc = selectFunctionBodyDoc cfg af sfrt.SelectStatement
 
@@ -1673,11 +1675,13 @@ and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatemen
 
     match cf.ReturnType with
     | :? SelectFunctionReturnType as sfrt ->
+        let returnsComment, returnsKeywordDoc = returnsKeyword cfg cf
+
         let returnsDoc =
-            if returnsKeywordHasTrailingComment cf then
-                returnsKeywordDoc cfg cf <+> line <+> keyword cfg "TABLE"
+            if returnsComment |> Option.isSome then
+                returnsKeywordDoc <+> line <+> keyword cfg "TABLE"
             else
-                returnsKeywordDoc cfg cf <++> keyword cfg "TABLE"
+                returnsKeywordDoc <++> keyword cfg "TABLE"
 
         let sameLineAs, bodyDoc = selectFunctionBodyDoc cfg cf sfrt.SelectStatement
         inlineRoutineDoc cfg sameLineAs header paramsDoc returnsDoc bodyDoc
