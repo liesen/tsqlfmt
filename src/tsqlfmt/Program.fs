@@ -27,18 +27,30 @@ let resolveConfigPath (currentDirectory: string) (args: ResolvedArgs) : Result<s
                 |> Array.choose (fun path ->
                     let fileName = Path.GetFileName(path)
                     let baseName = Path.GetFileNameWithoutExtension(path)
+
                     let rank =
-                        if String.Equals(baseName, styleName, StringComparison.OrdinalIgnoreCase) then Some 0
-                        elif String.Equals(styleName, "Default", StringComparison.OrdinalIgnoreCase) && String.Equals(fileName, "formattingstyle.json", StringComparison.OrdinalIgnoreCase) then Some 1
-                        elif String.Equals(styleName, "Default", StringComparison.OrdinalIgnoreCase) && String.Equals(fileName, "default-style.json", StringComparison.OrdinalIgnoreCase) then Some 2
-                        else None
+                        if String.Equals(baseName, styleName, StringComparison.OrdinalIgnoreCase) then
+                            Some 0
+                        elif
+                            String.Equals(styleName, "Default", StringComparison.OrdinalIgnoreCase)
+                            && String.Equals(fileName, "formattingstyle.json", StringComparison.OrdinalIgnoreCase)
+                        then
+                            Some 1
+                        elif
+                            String.Equals(styleName, "Default", StringComparison.OrdinalIgnoreCase)
+                            && String.Equals(fileName, "default-style.json", StringComparison.OrdinalIgnoreCase)
+                        then
+                            Some 2
+                        else
+                            None
+
                     rank |> Option.map (fun r -> r, path))
                 |> Array.toList)
 
         match matches |> List.sortBy fst |> List.tryHead with
-        | Some (_, path) -> Ok (Some path)
+        | Some(_, path) -> Ok(Some path)
         | None when String.Equals(styleName, "Default", StringComparison.OrdinalIgnoreCase) -> Ok None
-        | None -> Error (sprintf "Style '%s' could not be found" styleName)
+        | None -> Error(sprintf "Style '%s' could not be found" styleName)
 
     let searchDirectories =
         let executableDirectory =
@@ -46,21 +58,17 @@ let resolveConfigPath (currentDirectory: string) (args: ResolvedArgs) : Result<s
             | null -> None
             | processPath -> Path.GetDirectoryName(processPath) |> Option.ofObj
 
-        [ args.stylesPath
-          executableDirectory ]
-        |> List.choose id
+        [ args.stylesPath; executableDirectory ] |> List.choose id
 
     match args.stylesPath with
-    | _ when args.styleNameSpecified || args.stylesPath.IsSome ->
-        tryFindNamedStyle searchDirectories args.styleName
-    | None ->
-        Ok None
-    | Some _ ->
-        Ok None
+    | _ when args.styleNameSpecified || args.stylesPath.IsSome -> tryFindNamedStyle searchDirectories args.styleName
+    | None -> Ok None
+    | Some _ -> Ok None
 
 [<EntryPoint>]
 let main argv =
     let parsed = parseArgs argv
+
     match parsed with
     | Error msg ->
         eprintfn "Error: %s" msg
@@ -73,14 +81,14 @@ let main argv =
                 eprintfn "Error: %s" msg
                 exit 2
                 defaultStyle
-            | Ok (Some configPath) ->
-                try loadConfig configPath |> validateConfig
+            | Ok(Some configPath) ->
+                try
+                    loadConfig configPath |> validateConfig
                 with ex ->
                     eprintfn "Error loading config '%s': %s" configPath ex.Message
                     exit 2
                     defaultStyle
-            | Ok None ->
-                defaultStyle |> validateConfig
+            | Ok None -> defaultStyle |> validateConfig
             |> withOptionalCasing args.applyCasing
 
         let inputSql = Console.In.ReadToEnd()
@@ -89,6 +97,7 @@ let main argv =
         | Error errors ->
             for e in errors do
                 eprintfn "Parse error: %s" e
+
             1
         | Ok formatted ->
             printf "%s" formatted

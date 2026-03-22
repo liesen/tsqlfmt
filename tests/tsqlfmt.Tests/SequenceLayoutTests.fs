@@ -4,8 +4,7 @@ open Xunit
 open TSqlFormatter.Doc
 open TSqlFormatter.Formatter
 
-let private renderDoc (doc: Doc) =
-    render 120 doc
+let private renderDoc (doc: Doc) = render 120 doc
 
 [<Fact>]
 let ``sequenceDoc indents the first item when configured`` () =
@@ -13,8 +12,13 @@ let ``sequenceDoc indents the first item when configured`` () =
         { placeFirstItemOnNewLine = false
           firstItemIndent = Some 4
           subsequentItemsIndent = Some 4 }
-    let items = [ text "a IN (" <+> line <+> text "SELECT 1" <+> line <+> text ")"; text "AND b = 2" ]
+
+    let items =
+        [ text "a IN (" <+> line <+> text "SELECT 1" <+> line <+> text ")"
+          text "AND b = 2" ]
+
     let actual = renderDoc (sequenceDoc policy items)
+
     let expected =
         """
     a IN (
@@ -31,8 +35,10 @@ let ``sequenceDoc leaves subsequent items flush when policy has no subsequent in
         { placeFirstItemOnNewLine = false
           firstItemIndent = None
           subsequentItemsIndent = None }
+
     let items = [ text "a = 1"; text "AND b = 2"; text "AND c = 3" ]
     let actual = renderDoc (sequenceDoc policy items)
+
     let expected =
         """
 a = 1
@@ -48,8 +54,10 @@ let ``headedSequenceDoc places the first item on a new line when policy requests
         { placeFirstItemOnNewLine = true
           firstItemIndent = None
           subsequentItemsIndent = Some 4 }
+
     let items = [ text "a,"; text "b,"; text "c" ]
     let actual = renderDoc (headedSequenceDoc policy (text "SELECT") items)
+
     let expected =
         """
 SELECT
@@ -66,8 +74,10 @@ let ``headedSequenceDoc keeps the first item after the head when policy allows i
         { placeFirstItemOnNewLine = false
           firstItemIndent = None
           subsequentItemsIndent = Some 4 }
+
     let items = [ text "a = 1"; text "AND b = 2" ]
     let actual = renderDoc (headedSequenceDoc policy (text "WHERE") items)
+
     let expected =
         """
 WHERE a = 1

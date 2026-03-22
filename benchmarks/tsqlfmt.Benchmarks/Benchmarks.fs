@@ -21,7 +21,7 @@ type FormatterBenchmarks() =
     let style = loadConfig defaultStylePath
 
     [<DefaultValue>]
-    val mutable public sql : string
+    val mutable public sql: string
 
     [<ParamsSource("InputFiles")>]
     member val InputFile = "" with get, set

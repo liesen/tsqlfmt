@@ -105,393 +105,367 @@ type WhiteSpaceBeforeSemiColon =
 
 // ─── Config Records ───
 
-type NewLinesConfig = {
-    [<JsonPropertyName("preserveExistingEmptyLinesBetweenStatements")>]
-    preserveExistingEmptyLinesBetweenStatements: bool
-    [<JsonPropertyName("preserveExistingEmptyLinesAfterBatchSeparator")>]
-    preserveExistingEmptyLinesAfterBatchSeparator: bool
-    [<JsonPropertyName("emptyLinesBetweenStatements")>]
-    emptyLinesBetweenStatements: int
-    [<JsonPropertyName("emptyLinesAfterBatchSeparator")>]
-    emptyLinesAfterBatchSeparator: int
-}
+type NewLinesConfig =
+    { [<JsonPropertyName("preserveExistingEmptyLinesBetweenStatements")>]
+      preserveExistingEmptyLinesBetweenStatements: bool
+      [<JsonPropertyName("preserveExistingEmptyLinesAfterBatchSeparator")>]
+      preserveExistingEmptyLinesAfterBatchSeparator: bool
+      [<JsonPropertyName("emptyLinesBetweenStatements")>]
+      emptyLinesBetweenStatements: int
+      [<JsonPropertyName("emptyLinesAfterBatchSeparator")>]
+      emptyLinesAfterBatchSeparator: int }
 
-type WhitespaceConfig = {
-    [<JsonPropertyName("spacesOrTabs")>]
-    spacesOrTabs: SpacesOrTabs
-    [<JsonPropertyName("numberOfSpacesInTabs")>]
-    numberOfSpacesInTabs: int
-    [<JsonPropertyName("wrapLongLines")>]
-    wrapLongLines: bool
-    [<JsonPropertyName("wrapLinesLongerThan")>]
-    wrapLinesLongerThan: int
-    [<JsonPropertyName("whiteSpaceBeforeSemiColon")>]
-    whiteSpaceBeforeSemiColon: WhiteSpaceBeforeSemiColon
-    [<JsonPropertyName("newLines")>]
-    newLines: NewLinesConfig
-}
+type WhitespaceConfig =
+    { [<JsonPropertyName("spacesOrTabs")>]
+      spacesOrTabs: SpacesOrTabs
+      [<JsonPropertyName("numberOfSpacesInTabs")>]
+      numberOfSpacesInTabs: int
+      [<JsonPropertyName("wrapLongLines")>]
+      wrapLongLines: bool
+      [<JsonPropertyName("wrapLinesLongerThan")>]
+      wrapLinesLongerThan: int
+      [<JsonPropertyName("whiteSpaceBeforeSemiColon")>]
+      whiteSpaceBeforeSemiColon: WhiteSpaceBeforeSemiColon
+      [<JsonPropertyName("newLines")>]
+      newLines: NewLinesConfig }
 
-type ListsConfig = {
-    [<JsonPropertyName("placeFirstItemOnNewLine")>]
-    placeFirstItemOnNewLine: PlaceOnNewLine
-    [<JsonPropertyName("placeSubsequentItemsOnNewLines")>]
-    placeSubsequentItemsOnNewLines: PlaceOnNewLine
-    [<JsonPropertyName("alignSubsequentItemsWithFirstItem")>]
-    alignSubsequentItemsWithFirstItem: bool
-    [<JsonPropertyName("alignItemsAcrossClauses")>]
-    alignItemsAcrossClauses: bool
-    [<JsonPropertyName("indentListItems")>]
-    indentListItems: bool
-    [<JsonPropertyName("alignItemsToTabStops")>]
-    alignItemsToTabStops: bool
-    [<JsonPropertyName("alignAliases")>]
-    alignAliases: bool
-    [<JsonPropertyName("alignComments")>]
-    alignComments: bool
-    [<JsonPropertyName("placeCommasBeforeItems")>]
-    placeCommasBeforeItems: bool
-    [<JsonPropertyName("addSpaceBeforeComma")>]
-    addSpaceBeforeComma: bool
-    [<JsonPropertyName("addSpaceAfterComma")>]
-    addSpaceAfterComma: bool
-    [<JsonPropertyName("commaAlignment")>]
-    commaAlignment: CommaAlignment
-}
+type ListsConfig =
+    { [<JsonPropertyName("placeFirstItemOnNewLine")>]
+      placeFirstItemOnNewLine: PlaceOnNewLine
+      [<JsonPropertyName("placeSubsequentItemsOnNewLines")>]
+      placeSubsequentItemsOnNewLines: PlaceOnNewLine
+      [<JsonPropertyName("alignSubsequentItemsWithFirstItem")>]
+      alignSubsequentItemsWithFirstItem: bool
+      [<JsonPropertyName("alignItemsAcrossClauses")>]
+      alignItemsAcrossClauses: bool
+      [<JsonPropertyName("indentListItems")>]
+      indentListItems: bool
+      [<JsonPropertyName("alignItemsToTabStops")>]
+      alignItemsToTabStops: bool
+      [<JsonPropertyName("alignAliases")>]
+      alignAliases: bool
+      [<JsonPropertyName("alignComments")>]
+      alignComments: bool
+      [<JsonPropertyName("placeCommasBeforeItems")>]
+      placeCommasBeforeItems: bool
+      [<JsonPropertyName("addSpaceBeforeComma")>]
+      addSpaceBeforeComma: bool
+      [<JsonPropertyName("addSpaceAfterComma")>]
+      addSpaceAfterComma: bool
+      [<JsonPropertyName("commaAlignment")>]
+      commaAlignment: CommaAlignment }
 
-type ParenthesesConfig = {
-    [<JsonPropertyName("parenthesisStyle")>]
-    parenthesisStyle: ParenthesisStyle
-    [<JsonPropertyName("indentParenthesesContents")>]
-    indentParenthesesContents: bool
-    [<JsonPropertyName("collapseShortParenthesisContents")>]
-    collapseShortParenthesisContents: bool
-    [<JsonPropertyName("collapseParenthesesShorterThan")>]
-    collapseParenthesesShorterThan: int
-    [<JsonPropertyName("addSpacesAroundParentheses")>]
-    addSpacesAroundParentheses: bool
-    [<JsonPropertyName("addSpacesInsideParentheses")>]
-    addSpacesInsideParentheses: bool
-}
+type ParenthesesConfig =
+    { [<JsonPropertyName("parenthesisStyle")>]
+      parenthesisStyle: ParenthesisStyle
+      [<JsonPropertyName("indentParenthesesContents")>]
+      indentParenthesesContents: bool
+      [<JsonPropertyName("collapseShortParenthesisContents")>]
+      collapseShortParenthesisContents: bool
+      [<JsonPropertyName("collapseParenthesesShorterThan")>]
+      collapseParenthesesShorterThan: int
+      [<JsonPropertyName("addSpacesAroundParentheses")>]
+      addSpacesAroundParentheses: bool
+      [<JsonPropertyName("addSpacesInsideParentheses")>]
+      addSpacesInsideParentheses: bool }
 
-type CasingConfig = {
-    [<JsonPropertyName("reservedKeywords")>]
-    reservedKeywords: CasingStyle
-    [<JsonPropertyName("builtInFunctions")>]
-    builtInFunctions: CasingStyle
-    [<JsonPropertyName("builtInDataTypes")>]
-    builtInDataTypes: CasingStyle
-    [<JsonPropertyName("globalVariables")>]
-    globalVariables: CasingStyle
-    [<JsonPropertyName("useObjectDefinitionCase")>]
-    useObjectDefinitionCase: bool
-}
+type CasingConfig =
+    { [<JsonPropertyName("reservedKeywords")>]
+      reservedKeywords: CasingStyle
+      [<JsonPropertyName("builtInFunctions")>]
+      builtInFunctions: CasingStyle
+      [<JsonPropertyName("builtInDataTypes")>]
+      builtInDataTypes: CasingStyle
+      [<JsonPropertyName("globalVariables")>]
+      globalVariables: CasingStyle
+      [<JsonPropertyName("useObjectDefinitionCase")>]
+      useObjectDefinitionCase: bool }
 
-type DmlClausesConfig = {
-    [<JsonPropertyName("clauseAlignment")>]
-    clauseAlignment: ClauseAlignment
-    [<JsonPropertyName("clauseIndentation")>]
-    clauseIndentation: int
-}
+type DmlClausesConfig =
+    { [<JsonPropertyName("clauseAlignment")>]
+      clauseAlignment: ClauseAlignment
+      [<JsonPropertyName("clauseIndentation")>]
+      clauseIndentation: int }
 
-type DmlListItemsConfig = {
-    [<JsonPropertyName("placeFromTableOnNewLine")>]
-    placeFromTableOnNewLine: PlaceOnNewLine
-    [<JsonPropertyName("placeWhereConditionOnNewLine")>]
-    placeWhereConditionOnNewLine: PlaceOnNewLine
-    [<JsonPropertyName("placeGroupByAndOrderByOnNewLine")>]
-    placeGroupByAndOrderByOnNewLine: PlaceOnNewLine
-}
+type DmlListItemsConfig =
+    { [<JsonPropertyName("placeFromTableOnNewLine")>]
+      placeFromTableOnNewLine: PlaceOnNewLine
+      [<JsonPropertyName("placeWhereConditionOnNewLine")>]
+      placeWhereConditionOnNewLine: PlaceOnNewLine
+      [<JsonPropertyName("placeGroupByAndOrderByOnNewLine")>]
+      placeGroupByAndOrderByOnNewLine: PlaceOnNewLine }
 
-type DmlConfig = {
-    [<JsonPropertyName("placeInsertTableOnNewLine")>]
-    placeInsertTableOnNewLine: bool
-    [<JsonPropertyName("placeDistinctAndTopClausesOnNewLine")>]
-    placeDistinctAndTopClausesOnNewLine: bool
-    [<JsonPropertyName("addNewLineAfterDistinctAndTopClauses")>]
-    addNewLineAfterDistinctAndTopClauses: bool
-    [<JsonPropertyName("collapseShortStatements")>]
-    collapseShortStatements: bool
-    [<JsonPropertyName("collapseStatementsShorterThan")>]
-    collapseStatementsShorterThan: int
-    [<JsonPropertyName("collapseShortSubqueries")>]
-    collapseShortSubqueries: bool
-    [<JsonPropertyName("collapseSubqueriesShorterThan")>]
-    collapseSubqueriesShorterThan: int
-    [<JsonPropertyName("clauses")>]
-    clauses: DmlClausesConfig
-    [<JsonPropertyName("listItems")>]
-    listItems: DmlListItemsConfig
-}
+type DmlConfig =
+    { [<JsonPropertyName("placeInsertTableOnNewLine")>]
+      placeInsertTableOnNewLine: bool
+      [<JsonPropertyName("placeDistinctAndTopClausesOnNewLine")>]
+      placeDistinctAndTopClausesOnNewLine: bool
+      [<JsonPropertyName("addNewLineAfterDistinctAndTopClauses")>]
+      addNewLineAfterDistinctAndTopClauses: bool
+      [<JsonPropertyName("collapseShortStatements")>]
+      collapseShortStatements: bool
+      [<JsonPropertyName("collapseStatementsShorterThan")>]
+      collapseStatementsShorterThan: int
+      [<JsonPropertyName("collapseShortSubqueries")>]
+      collapseShortSubqueries: bool
+      [<JsonPropertyName("collapseSubqueriesShorterThan")>]
+      collapseSubqueriesShorterThan: int
+      [<JsonPropertyName("clauses")>]
+      clauses: DmlClausesConfig
+      [<JsonPropertyName("listItems")>]
+      listItems: DmlListItemsConfig }
 
-type DdlConfig = {
-    [<JsonPropertyName("parenthesisStyle")>]
-    parenthesisStyle: ParenthesisStyle
-    [<JsonPropertyName("indentParenthesesContents")>]
-    indentParenthesesContents: bool
-    [<JsonPropertyName("alignDataTypesAndConstraints")>]
-    alignDataTypesAndConstraints: bool
-    [<JsonPropertyName("placeConstraintsOnNewLines")>]
-    placeConstraintsOnNewLines: bool
-    [<JsonPropertyName("placeConstraintColumnsOnNewLines")>]
-    placeConstraintColumnsOnNewLines: PlaceOnNewLine
-    [<JsonPropertyName("indentClauses")>]
-    indentClauses: bool
-    [<JsonPropertyName("placeFirstProcedureParameterOnNewLine")>]
-    placeFirstProcedureParameterOnNewLine: PlaceOnNewLine
-    [<JsonPropertyName("collapseShortStatements")>]
-    collapseShortStatements: bool
-    [<JsonPropertyName("collapseStatementsShorterThan")>]
-    collapseStatementsShorterThan: int
-}
+type DdlConfig =
+    { [<JsonPropertyName("parenthesisStyle")>]
+      parenthesisStyle: ParenthesisStyle
+      [<JsonPropertyName("indentParenthesesContents")>]
+      indentParenthesesContents: bool
+      [<JsonPropertyName("alignDataTypesAndConstraints")>]
+      alignDataTypesAndConstraints: bool
+      [<JsonPropertyName("placeConstraintsOnNewLines")>]
+      placeConstraintsOnNewLines: bool
+      [<JsonPropertyName("placeConstraintColumnsOnNewLines")>]
+      placeConstraintColumnsOnNewLines: PlaceOnNewLine
+      [<JsonPropertyName("indentClauses")>]
+      indentClauses: bool
+      [<JsonPropertyName("placeFirstProcedureParameterOnNewLine")>]
+      placeFirstProcedureParameterOnNewLine: PlaceOnNewLine
+      [<JsonPropertyName("collapseShortStatements")>]
+      collapseShortStatements: bool
+      [<JsonPropertyName("collapseStatementsShorterThan")>]
+      collapseStatementsShorterThan: int }
 
-type ControlFlowConfig = {
-    [<JsonPropertyName("placeBeginAndEndOnNewLine")>]
-    placeBeginAndEndOnNewLine: bool
-    [<JsonPropertyName("indentBeginAndEndKeywords")>]
-    indentBeginAndEndKeywords: bool
-    [<JsonPropertyName("indentContentsOfStatements")>]
-    indentContentsOfStatements: bool
-    [<JsonPropertyName("collapseShortStatements")>]
-    collapseShortStatements: bool
-    [<JsonPropertyName("collapseStatementsShorterThan")>]
-    collapseStatementsShorterThan: int
-}
+type ControlFlowConfig =
+    { [<JsonPropertyName("placeBeginAndEndOnNewLine")>]
+      placeBeginAndEndOnNewLine: bool
+      [<JsonPropertyName("indentBeginAndEndKeywords")>]
+      indentBeginAndEndKeywords: bool
+      [<JsonPropertyName("indentContentsOfStatements")>]
+      indentContentsOfStatements: bool
+      [<JsonPropertyName("collapseShortStatements")>]
+      collapseShortStatements: bool
+      [<JsonPropertyName("collapseStatementsShorterThan")>]
+      collapseStatementsShorterThan: int }
 
-type CteConfig = {
-    [<JsonPropertyName("parenthesisStyle")>]
-    parenthesisStyle: ParenthesisStyle
-    [<JsonPropertyName("indentContents")>]
-    indentContents: bool
-    [<JsonPropertyName("placeNameOnNewLine")>]
-    placeNameOnNewLine: bool
-    [<JsonPropertyName("indentName")>]
-    indentName: bool
-    [<JsonPropertyName("placeColumnsOnNewLine")>]
-    placeColumnsOnNewLine: bool
-    [<JsonPropertyName("columnAlignment")>]
-    columnAlignment: Alignment
-    [<JsonPropertyName("placeAsOnNewLine")>]
-    placeAsOnNewLine: bool
-    [<JsonPropertyName("asAlignment")>]
-    asAlignment: Alignment
-}
+type CteConfig =
+    { [<JsonPropertyName("parenthesisStyle")>]
+      parenthesisStyle: ParenthesisStyle
+      [<JsonPropertyName("indentContents")>]
+      indentContents: bool
+      [<JsonPropertyName("placeNameOnNewLine")>]
+      placeNameOnNewLine: bool
+      [<JsonPropertyName("indentName")>]
+      indentName: bool
+      [<JsonPropertyName("placeColumnsOnNewLine")>]
+      placeColumnsOnNewLine: bool
+      [<JsonPropertyName("columnAlignment")>]
+      columnAlignment: Alignment
+      [<JsonPropertyName("placeAsOnNewLine")>]
+      placeAsOnNewLine: bool
+      [<JsonPropertyName("asAlignment")>]
+      asAlignment: Alignment }
 
-type VariablesConfig = {
-    [<JsonPropertyName("alignDataTypesAndValues")>]
-    alignDataTypesAndValues: bool
-    [<JsonPropertyName("addSpaceBetweenDataTypeAndPrecision")>]
-    addSpaceBetweenDataTypeAndPrecision: bool
-    [<JsonPropertyName("placeAssignedValueOnNewLineIfLongerThanMaxLineLength")>]
-    placeAssignedValueOnNewLineIfLongerThanMaxLineLength: bool
-    [<JsonPropertyName("placeEqualsSignOnNewLine")>]
-    placeEqualsSignOnNewLine: bool
-}
+type VariablesConfig =
+    { [<JsonPropertyName("alignDataTypesAndValues")>]
+      alignDataTypesAndValues: bool
+      [<JsonPropertyName("addSpaceBetweenDataTypeAndPrecision")>]
+      addSpaceBetweenDataTypeAndPrecision: bool
+      [<JsonPropertyName("placeAssignedValueOnNewLineIfLongerThanMaxLineLength")>]
+      placeAssignedValueOnNewLineIfLongerThanMaxLineLength: bool
+      [<JsonPropertyName("placeEqualsSignOnNewLine")>]
+      placeEqualsSignOnNewLine: bool }
 
-type JoinConfig = {
-    [<JsonPropertyName("placeOnNewLine")>]
-    placeOnNewLine: bool
-    [<JsonPropertyName("keywordAlignment")>]
-    keywordAlignment: JoinKeywordAlignment
-    [<JsonPropertyName("insertEmptyLineBetweenJoinClauses")>]
-    insertEmptyLineBetweenJoinClauses: bool
-    [<JsonPropertyName("placeJoinTableOnNewLine")>]
-    placeJoinTableOnNewLine: bool
-    [<JsonPropertyName("indentJoinTable")>]
-    indentJoinTable: bool
-}
+type JoinConfig =
+    { [<JsonPropertyName("placeOnNewLine")>]
+      placeOnNewLine: bool
+      [<JsonPropertyName("keywordAlignment")>]
+      keywordAlignment: JoinKeywordAlignment
+      [<JsonPropertyName("insertEmptyLineBetweenJoinClauses")>]
+      insertEmptyLineBetweenJoinClauses: bool
+      [<JsonPropertyName("placeJoinTableOnNewLine")>]
+      placeJoinTableOnNewLine: bool
+      [<JsonPropertyName("indentJoinTable")>]
+      indentJoinTable: bool }
 
-type OnConfig = {
-    [<JsonPropertyName("placeOnNewLine")>]
-    placeOnNewLine: bool
-    [<JsonPropertyName("keywordAlignment")>]
-    keywordAlignment: OnKeywordAlignment
-    [<JsonPropertyName("placeConditionOnNewLine")>]
-    placeConditionOnNewLine: bool
-    [<JsonPropertyName("conditionAlignment")>]
-    conditionAlignment: Alignment
-}
+type OnConfig =
+    { [<JsonPropertyName("placeOnNewLine")>]
+      placeOnNewLine: bool
+      [<JsonPropertyName("keywordAlignment")>]
+      keywordAlignment: OnKeywordAlignment
+      [<JsonPropertyName("placeConditionOnNewLine")>]
+      placeConditionOnNewLine: bool
+      [<JsonPropertyName("conditionAlignment")>]
+      conditionAlignment: Alignment }
 
-type JoinStatementsConfig = {
-    [<JsonPropertyName("join")>]
-    join: JoinConfig
-    [<JsonPropertyName("on")>]
-    on: OnConfig
-}
+type JoinStatementsConfig =
+    { [<JsonPropertyName("join")>]
+      join: JoinConfig
+      [<JsonPropertyName("on")>]
+      on: OnConfig }
 
-type InsertColumnsConfig = {
-    [<JsonPropertyName("parenthesisStyle")>]
-    parenthesisStyle: ParenthesisStyle
-    [<JsonPropertyName("indentContents")>]
-    indentContents: bool
-    [<JsonPropertyName("placeSubsequentColumnsOnNewLines")>]
-    placeSubsequentColumnsOnNewLines: PlaceOnNewLine
-}
+type InsertColumnsConfig =
+    { [<JsonPropertyName("parenthesisStyle")>]
+      parenthesisStyle: ParenthesisStyle
+      [<JsonPropertyName("indentContents")>]
+      indentContents: bool
+      [<JsonPropertyName("placeSubsequentColumnsOnNewLines")>]
+      placeSubsequentColumnsOnNewLines: PlaceOnNewLine }
 
-type InsertValuesConfig = {
-    [<JsonPropertyName("parenthesisStyle")>]
-    parenthesisStyle: ParenthesisStyle
-    [<JsonPropertyName("indentContents")>]
-    indentContents: bool
-    [<JsonPropertyName("placeSubsequentValuesOnNewLines")>]
-    placeSubsequentValuesOnNewLines: PlaceOnNewLine
-}
+type InsertValuesConfig =
+    { [<JsonPropertyName("parenthesisStyle")>]
+      parenthesisStyle: ParenthesisStyle
+      [<JsonPropertyName("indentContents")>]
+      indentContents: bool
+      [<JsonPropertyName("placeSubsequentValuesOnNewLines")>]
+      placeSubsequentValuesOnNewLines: PlaceOnNewLine }
 
-type InsertStatementsConfig = {
-    [<JsonPropertyName("columns")>]
-    columns: InsertColumnsConfig
-    [<JsonPropertyName("values")>]
-    values: InsertValuesConfig
-}
+type InsertStatementsConfig =
+    { [<JsonPropertyName("columns")>]
+      columns: InsertColumnsConfig
+      [<JsonPropertyName("values")>]
+      values: InsertValuesConfig }
 
-type FunctionCallsConfig = {
-    [<JsonPropertyName("placeArgumentsOnNewLines")>]
-    placeArgumentsOnNewLines: PlaceOnNewLine
-    [<JsonPropertyName("addSpacesAroundParentheses")>]
-    addSpacesAroundParentheses: bool
-    [<JsonPropertyName("addSpacesAroundArgumentList")>]
-    addSpacesAroundArgumentList: bool
-    [<JsonPropertyName("addSpaceBetweenEmptyParentheses")>]
-    addSpaceBetweenEmptyParentheses: bool
-}
+type FunctionCallsConfig =
+    { [<JsonPropertyName("placeArgumentsOnNewLines")>]
+      placeArgumentsOnNewLines: PlaceOnNewLine
+      [<JsonPropertyName("addSpacesAroundParentheses")>]
+      addSpacesAroundParentheses: bool
+      [<JsonPropertyName("addSpacesAroundArgumentList")>]
+      addSpacesAroundArgumentList: bool
+      [<JsonPropertyName("addSpaceBetweenEmptyParentheses")>]
+      addSpaceBetweenEmptyParentheses: bool }
 
-type CaseExpressionsConfig = {
-    [<JsonPropertyName("placeExpressionOnNewLine")>]
-    placeExpressionOnNewLine: bool
-    [<JsonPropertyName("placeFirstWhenOnNewLine")>]
-    placeFirstWhenOnNewLine: PlaceOnNewLine
-    [<JsonPropertyName("whenAlignment")>]
-    whenAlignment: WhenAlignment
-    [<JsonPropertyName("placeThenOnNewLine")>]
-    placeThenOnNewLine: bool
-    [<JsonPropertyName("thenAlignment")>]
-    thenAlignment: Alignment
-    [<JsonPropertyName("placeElseOnNewLine")>]
-    placeElseOnNewLine: bool
-    [<JsonPropertyName("alignElseToWhen")>]
-    alignElseToWhen: bool
-    [<JsonPropertyName("placeEndOnNewLine")>]
-    placeEndOnNewLine: bool
-    [<JsonPropertyName("endAlignment")>]
-    endAlignment: EndAlignment
-    [<JsonPropertyName("collapseShortCaseExpressions")>]
-    collapseShortCaseExpressions: bool
-    [<JsonPropertyName("collapseCaseExpressionsShorterThan")>]
-    collapseCaseExpressionsShorterThan: int
-}
+type CaseExpressionsConfig =
+    { [<JsonPropertyName("placeExpressionOnNewLine")>]
+      placeExpressionOnNewLine: bool
+      [<JsonPropertyName("placeFirstWhenOnNewLine")>]
+      placeFirstWhenOnNewLine: PlaceOnNewLine
+      [<JsonPropertyName("whenAlignment")>]
+      whenAlignment: WhenAlignment
+      [<JsonPropertyName("placeThenOnNewLine")>]
+      placeThenOnNewLine: bool
+      [<JsonPropertyName("thenAlignment")>]
+      thenAlignment: Alignment
+      [<JsonPropertyName("placeElseOnNewLine")>]
+      placeElseOnNewLine: bool
+      [<JsonPropertyName("alignElseToWhen")>]
+      alignElseToWhen: bool
+      [<JsonPropertyName("placeEndOnNewLine")>]
+      placeEndOnNewLine: bool
+      [<JsonPropertyName("endAlignment")>]
+      endAlignment: EndAlignment
+      [<JsonPropertyName("collapseShortCaseExpressions")>]
+      collapseShortCaseExpressions: bool
+      [<JsonPropertyName("collapseCaseExpressionsShorterThan")>]
+      collapseCaseExpressionsShorterThan: int }
 
-type ComparisonConfig = {
-    [<JsonPropertyName("align")>]
-    align: bool
-    [<JsonPropertyName("addSpacesAround")>]
-    addSpacesAround: bool
-}
+type ComparisonConfig =
+    { [<JsonPropertyName("align")>]
+      align: bool
+      [<JsonPropertyName("addSpacesAround")>]
+      addSpacesAround: bool }
 
-type ArithmeticConfig = {
-    [<JsonPropertyName("addSpacesAround")>]
-    addSpacesAround: bool
-}
+type ArithmeticConfig =
+    { [<JsonPropertyName("addSpacesAround")>]
+      addSpacesAround: bool }
 
-type AndOrConfig = {
-    [<JsonPropertyName("placeOnNewLine")>]
-    placeOnNewLine: PlaceOnNewLine
-    [<JsonPropertyName("alignment")>]
-    alignment: Alignment
-    [<JsonPropertyName("placeKeywordBeforeCondition")>]
-    placeKeywordBeforeCondition: bool
-}
+type AndOrConfig =
+    { [<JsonPropertyName("placeOnNewLine")>]
+      placeOnNewLine: PlaceOnNewLine
+      [<JsonPropertyName("alignment")>]
+      alignment: Alignment
+      [<JsonPropertyName("placeKeywordBeforeCondition")>]
+      placeKeywordBeforeCondition: bool }
 
-type BetweenConfig = {
-    [<JsonPropertyName("placeOnNewLine")>]
-    placeOnNewLine: bool
-    [<JsonPropertyName("placeAndKeywordOnNewLine")>]
-    placeAndKeywordOnNewLine: bool
-    [<JsonPropertyName("andAlignment")>]
-    andAlignment: Alignment
-}
+type BetweenConfig =
+    { [<JsonPropertyName("placeOnNewLine")>]
+      placeOnNewLine: bool
+      [<JsonPropertyName("placeAndKeywordOnNewLine")>]
+      placeAndKeywordOnNewLine: bool
+      [<JsonPropertyName("andAlignment")>]
+      andAlignment: Alignment }
 
-type InConfig = {
-    [<JsonPropertyName("placeOpeningParenthesisOnNewLine")>]
-    placeOpeningParenthesisOnNewLine: bool
-    [<JsonPropertyName("alignment")>]
-    alignment: InAlignment
-    [<JsonPropertyName("placeFirstValueOnNewLine")>]
-    placeFirstValueOnNewLine: PlaceOnNewLine
-    [<JsonPropertyName("placeSubsequentValuesOnNewLines")>]
-    placeSubsequentValuesOnNewLines: PlaceOnNewLine
-    [<JsonPropertyName("addSpaceAroundInContents")>]
-    addSpaceAroundInContents: bool
-}
+type InConfig =
+    { [<JsonPropertyName("placeOpeningParenthesisOnNewLine")>]
+      placeOpeningParenthesisOnNewLine: bool
+      [<JsonPropertyName("alignment")>]
+      alignment: InAlignment
+      [<JsonPropertyName("placeFirstValueOnNewLine")>]
+      placeFirstValueOnNewLine: PlaceOnNewLine
+      [<JsonPropertyName("placeSubsequentValuesOnNewLines")>]
+      placeSubsequentValuesOnNewLines: PlaceOnNewLine
+      [<JsonPropertyName("addSpaceAroundInContents")>]
+      addSpaceAroundInContents: bool }
 
-type OperatorsConfig = {
-    [<JsonPropertyName("comparison")>]
-    comparison: ComparisonConfig
-    [<JsonPropertyName("arithmetic")>]
-    arithmetic: ArithmeticConfig
-    [<JsonPropertyName("andOr")>]
-    andOr: AndOrConfig
-    [<JsonPropertyName("between")>]
-    between: BetweenConfig
-    [<JsonPropertyName("in")>]
-    ``in``: InConfig
-}
+type OperatorsConfig =
+    { [<JsonPropertyName("comparison")>]
+      comparison: ComparisonConfig
+      [<JsonPropertyName("arithmetic")>]
+      arithmetic: ArithmeticConfig
+      [<JsonPropertyName("andOr")>]
+      andOr: AndOrConfig
+      [<JsonPropertyName("between")>]
+      between: BetweenConfig
+      [<JsonPropertyName("in")>]
+      ``in``: InConfig }
 
 /// Custom formatter-specific options that are not part of SQL Prompt schema.
-type SetOperationsExtensionsConfig = {
-    [<JsonPropertyName("blankLinesAroundOperators")>]
-    blankLinesAroundOperators: bool
-}
+type SetOperationsExtensionsConfig =
+    { [<JsonPropertyName("blankLinesAroundOperators")>]
+      blankLinesAroundOperators: bool }
 
-type CteExtensionsConfig = {
-    [<JsonPropertyName("omitLeadingSemicolon")>]
-    omitLeadingSemicolon: bool
-}
+type CteExtensionsConfig =
+    { [<JsonPropertyName("omitLeadingSemicolon")>]
+      omitLeadingSemicolon: bool }
 
 /// Namespace for custom formatter-specific options.
-type FormatterExtensionsConfig = {
-    [<JsonPropertyName("cte")>]
-    cte: CteExtensionsConfig
-    [<JsonPropertyName("setOperations")>]
-    setOperations: SetOperationsExtensionsConfig
-}
+type FormatterExtensionsConfig =
+    { [<JsonPropertyName("cte")>]
+      cte: CteExtensionsConfig
+      [<JsonPropertyName("setOperations")>]
+      setOperations: SetOperationsExtensionsConfig }
 
-type FormattingStyle = {
-    [<JsonPropertyName("whitespace")>]
-    whitespace: WhitespaceConfig
-    [<JsonPropertyName("lists")>]
-    lists: ListsConfig
-    [<JsonPropertyName("parentheses")>]
-    parentheses: ParenthesesConfig
-    [<JsonPropertyName("casing")>]
-    casing: CasingConfig
-    [<JsonPropertyName("dml")>]
-    dml: DmlConfig
-    [<JsonPropertyName("ddl")>]
-    ddl: DdlConfig
-    [<JsonPropertyName("controlFlow")>]
-    controlFlow: ControlFlowConfig
-    [<JsonPropertyName("cte")>]
-    cte: CteConfig
-    [<JsonPropertyName("variables")>]
-    variables: VariablesConfig
-    [<JsonPropertyName("joinStatements")>]
-    joinStatements: JoinStatementsConfig
-    [<JsonPropertyName("insertStatements")>]
-    insertStatements: InsertStatementsConfig
-    [<JsonPropertyName("functionCalls")>]
-    functionCalls: FunctionCallsConfig
-    [<JsonPropertyName("caseExpressions")>]
-    caseExpressions: CaseExpressionsConfig
-    [<JsonPropertyName("operators")>]
-    operators: OperatorsConfig
-    [<JsonPropertyName("formatterExtensions")>]
-    formatterExtensions: FormatterExtensionsConfig
-}
+type FormattingStyle =
+    { [<JsonPropertyName("whitespace")>]
+      whitespace: WhitespaceConfig
+      [<JsonPropertyName("lists")>]
+      lists: ListsConfig
+      [<JsonPropertyName("parentheses")>]
+      parentheses: ParenthesesConfig
+      [<JsonPropertyName("casing")>]
+      casing: CasingConfig
+      [<JsonPropertyName("dml")>]
+      dml: DmlConfig
+      [<JsonPropertyName("ddl")>]
+      ddl: DdlConfig
+      [<JsonPropertyName("controlFlow")>]
+      controlFlow: ControlFlowConfig
+      [<JsonPropertyName("cte")>]
+      cte: CteConfig
+      [<JsonPropertyName("variables")>]
+      variables: VariablesConfig
+      [<JsonPropertyName("joinStatements")>]
+      joinStatements: JoinStatementsConfig
+      [<JsonPropertyName("insertStatements")>]
+      insertStatements: InsertStatementsConfig
+      [<JsonPropertyName("functionCalls")>]
+      functionCalls: FunctionCallsConfig
+      [<JsonPropertyName("caseExpressions")>]
+      caseExpressions: CaseExpressionsConfig
+      [<JsonPropertyName("operators")>]
+      operators: OperatorsConfig
+      [<JsonPropertyName("formatterExtensions")>]
+      formatterExtensions: FormatterExtensionsConfig }
 
 let private unsupportedRightAlignmentMessage settingName valueName =
-    sprintf "%s = %s is not supported. tsqlfmt supports structural indentation, but not right-aligned layouts." settingName valueName
+    sprintf
+        "%s = %s is not supported. tsqlfmt supports structural indentation, but not right-aligned layouts."
+        settingName
+        valueName
 
 let validateConfig (style: FormattingStyle) : FormattingStyle =
-    let fail settingName valueName = invalidArg settingName (unsupportedRightAlignmentMessage settingName valueName)
+    let fail settingName valueName =
+        invalidArg settingName (unsupportedRightAlignmentMessage settingName valueName)
 
     match style.dml.clauses.clauseAlignment with
     | ClauseAlignment.RightAligned -> fail "dml.clauses.clauseAlignment" "rightAligned"
@@ -530,224 +504,190 @@ let validateConfig (style: FormattingStyle) : FormattingStyle =
 
 // ─── Defaults ───
 
-let defaultNewLines = {
-    preserveExistingEmptyLinesBetweenStatements = true
-    preserveExistingEmptyLinesAfterBatchSeparator = true
-    emptyLinesBetweenStatements = 1
-    emptyLinesAfterBatchSeparator = 1
-}
+let defaultNewLines =
+    { preserveExistingEmptyLinesBetweenStatements = true
+      preserveExistingEmptyLinesAfterBatchSeparator = true
+      emptyLinesBetweenStatements = 1
+      emptyLinesAfterBatchSeparator = 1 }
 
-let defaultWhitespace = {
-    spacesOrTabs = SpacesOrTabs.Spaces
-    numberOfSpacesInTabs = 4
-    wrapLongLines = true
-    wrapLinesLongerThan = 120
-    whiteSpaceBeforeSemiColon = WhiteSpaceBeforeSemiColon.None
-    newLines = defaultNewLines
-}
+let defaultWhitespace =
+    { spacesOrTabs = SpacesOrTabs.Spaces
+      numberOfSpacesInTabs = 4
+      wrapLongLines = true
+      wrapLinesLongerThan = 120
+      whiteSpaceBeforeSemiColon = WhiteSpaceBeforeSemiColon.None
+      newLines = defaultNewLines }
 
-let defaultLists = {
-    placeFirstItemOnNewLine = PlaceOnNewLine.Never
-    placeSubsequentItemsOnNewLines = PlaceOnNewLine.Always
-    alignSubsequentItemsWithFirstItem = true
-    alignItemsAcrossClauses = true
-    indentListItems = true
-    alignItemsToTabStops = false
-    alignAliases = false
-    alignComments = false
-    placeCommasBeforeItems = false
-    addSpaceBeforeComma = false
-    addSpaceAfterComma = true
-    commaAlignment = CommaAlignment.ToList
-}
+let defaultLists =
+    { placeFirstItemOnNewLine = PlaceOnNewLine.Never
+      placeSubsequentItemsOnNewLines = PlaceOnNewLine.Always
+      alignSubsequentItemsWithFirstItem = true
+      alignItemsAcrossClauses = true
+      indentListItems = true
+      alignItemsToTabStops = false
+      alignAliases = false
+      alignComments = false
+      placeCommasBeforeItems = false
+      addSpaceBeforeComma = false
+      addSpaceAfterComma = true
+      commaAlignment = CommaAlignment.ToList }
 
-let defaultParentheses = {
-    parenthesisStyle = ParenthesisStyle.CompactSimple
-    indentParenthesesContents = false
-    collapseShortParenthesisContents = false
-    collapseParenthesesShorterThan = 80
-    addSpacesAroundParentheses = true
-    addSpacesInsideParentheses = false
-}
+let defaultParentheses =
+    { parenthesisStyle = ParenthesisStyle.CompactSimple
+      indentParenthesesContents = false
+      collapseShortParenthesisContents = false
+      collapseParenthesesShorterThan = 80
+      addSpacesAroundParentheses = true
+      addSpacesInsideParentheses = false }
 
-let defaultCasing = {
-    reservedKeywords = CasingStyle.LeaveAsIs
-    builtInFunctions = CasingStyle.LeaveAsIs
-    builtInDataTypes = CasingStyle.LeaveAsIs
-    globalVariables = CasingStyle.LeaveAsIs
-    useObjectDefinitionCase = false
-}
+let defaultCasing =
+    { reservedKeywords = CasingStyle.LeaveAsIs
+      builtInFunctions = CasingStyle.LeaveAsIs
+      builtInDataTypes = CasingStyle.LeaveAsIs
+      globalVariables = CasingStyle.LeaveAsIs
+      useObjectDefinitionCase = false }
 
-let defaultDmlClauses = {
-    clauseAlignment = ClauseAlignment.LeftAligned
-    clauseIndentation = 0
-}
+let defaultDmlClauses =
+    { clauseAlignment = ClauseAlignment.LeftAligned
+      clauseIndentation = 0 }
 
-let defaultDmlListItems = {
-    placeFromTableOnNewLine = PlaceOnNewLine.Never
-    placeWhereConditionOnNewLine = PlaceOnNewLine.Never
-    placeGroupByAndOrderByOnNewLine = PlaceOnNewLine.Never
-}
+let defaultDmlListItems =
+    { placeFromTableOnNewLine = PlaceOnNewLine.Never
+      placeWhereConditionOnNewLine = PlaceOnNewLine.Never
+      placeGroupByAndOrderByOnNewLine = PlaceOnNewLine.Never }
 
-let defaultDml = {
-    placeInsertTableOnNewLine = false
-    placeDistinctAndTopClausesOnNewLine = false
-    addNewLineAfterDistinctAndTopClauses = false
-    collapseShortStatements = false
-    collapseStatementsShorterThan = 80
-    collapseShortSubqueries = false
-    collapseSubqueriesShorterThan = 80
-    clauses = defaultDmlClauses
-    listItems = defaultDmlListItems
-}
+let defaultDml =
+    { placeInsertTableOnNewLine = false
+      placeDistinctAndTopClausesOnNewLine = false
+      addNewLineAfterDistinctAndTopClauses = false
+      collapseShortStatements = false
+      collapseStatementsShorterThan = 80
+      collapseShortSubqueries = false
+      collapseSubqueriesShorterThan = 80
+      clauses = defaultDmlClauses
+      listItems = defaultDmlListItems }
 
-let defaultDdl = {
-    parenthesisStyle = ParenthesisStyle.CompactSimple
-    indentParenthesesContents = false
-    alignDataTypesAndConstraints = true
-    placeConstraintsOnNewLines = false
-    placeConstraintColumnsOnNewLines = PlaceOnNewLine.IfLongerThanMaxLineLength
-    indentClauses = false
-    placeFirstProcedureParameterOnNewLine = PlaceOnNewLine.IfMultipleItems
-    collapseShortStatements = false
-    collapseStatementsShorterThan = 80
-}
+let defaultDdl =
+    { parenthesisStyle = ParenthesisStyle.CompactSimple
+      indentParenthesesContents = false
+      alignDataTypesAndConstraints = true
+      placeConstraintsOnNewLines = false
+      placeConstraintColumnsOnNewLines = PlaceOnNewLine.IfLongerThanMaxLineLength
+      indentClauses = false
+      placeFirstProcedureParameterOnNewLine = PlaceOnNewLine.IfMultipleItems
+      collapseShortStatements = false
+      collapseStatementsShorterThan = 80 }
 
-let defaultControlFlow = {
-    placeBeginAndEndOnNewLine = true
-    indentBeginAndEndKeywords = false
-    indentContentsOfStatements = true
-    collapseShortStatements = false
-    collapseStatementsShorterThan = 80
-}
+let defaultControlFlow =
+    { placeBeginAndEndOnNewLine = true
+      indentBeginAndEndKeywords = false
+      indentContentsOfStatements = true
+      collapseShortStatements = false
+      collapseStatementsShorterThan = 80 }
 
-let defaultCte = {
-    parenthesisStyle = ParenthesisStyle.CompactSimple
-    indentContents = false
-    placeNameOnNewLine = false
-    indentName = false
-    placeColumnsOnNewLine = false
-    columnAlignment = Alignment.LeftAligned
-    placeAsOnNewLine = true
-    asAlignment = Alignment.LeftAligned
-}
+let defaultCte =
+    { parenthesisStyle = ParenthesisStyle.CompactSimple
+      indentContents = false
+      placeNameOnNewLine = false
+      indentName = false
+      placeColumnsOnNewLine = false
+      columnAlignment = Alignment.LeftAligned
+      placeAsOnNewLine = true
+      asAlignment = Alignment.LeftAligned }
 
-let defaultVariables = {
-    alignDataTypesAndValues = true
-    addSpaceBetweenDataTypeAndPrecision = false
-    placeAssignedValueOnNewLineIfLongerThanMaxLineLength = true
-    placeEqualsSignOnNewLine = false
-}
+let defaultVariables =
+    { alignDataTypesAndValues = true
+      addSpaceBetweenDataTypeAndPrecision = false
+      placeAssignedValueOnNewLineIfLongerThanMaxLineLength = true
+      placeEqualsSignOnNewLine = false }
 
-let defaultJoin = {
-    placeOnNewLine = true
-    keywordAlignment = JoinKeywordAlignment.ToFrom
-    insertEmptyLineBetweenJoinClauses = false
-    placeJoinTableOnNewLine = false
-    indentJoinTable = true
-}
+let defaultJoin =
+    { placeOnNewLine = true
+      keywordAlignment = JoinKeywordAlignment.ToFrom
+      insertEmptyLineBetweenJoinClauses = false
+      placeJoinTableOnNewLine = false
+      indentJoinTable = true }
 
-let defaultOn = {
-    placeOnNewLine = true
-    keywordAlignment = OnKeywordAlignment.ToJoin
-    placeConditionOnNewLine = false
-    conditionAlignment = Alignment.LeftAligned
-}
+let defaultOn =
+    { placeOnNewLine = true
+      keywordAlignment = OnKeywordAlignment.ToJoin
+      placeConditionOnNewLine = false
+      conditionAlignment = Alignment.LeftAligned }
 
-let defaultJoinStatements = {
-    join = defaultJoin
-    on = defaultOn
-}
+let defaultJoinStatements = { join = defaultJoin; on = defaultOn }
 
-let defaultInsertColumns = {
-    parenthesisStyle = ParenthesisStyle.ExpandedToStatement
-    indentContents = true
-    placeSubsequentColumnsOnNewLines = PlaceOnNewLine.Always
-}
+let defaultInsertColumns =
+    { parenthesisStyle = ParenthesisStyle.ExpandedToStatement
+      indentContents = true
+      placeSubsequentColumnsOnNewLines = PlaceOnNewLine.Always }
 
-let defaultInsertValues = {
-    parenthesisStyle = ParenthesisStyle.CompactToStatement
-    indentContents = false
-    placeSubsequentValuesOnNewLines = PlaceOnNewLine.Never
-}
+let defaultInsertValues =
+    { parenthesisStyle = ParenthesisStyle.CompactToStatement
+      indentContents = false
+      placeSubsequentValuesOnNewLines = PlaceOnNewLine.Never }
 
-let defaultInsertStatements = {
-    columns = defaultInsertColumns
-    values = defaultInsertValues
-}
+let defaultInsertStatements =
+    { columns = defaultInsertColumns
+      values = defaultInsertValues }
 
-let defaultFunctionCalls = {
-    placeArgumentsOnNewLines = PlaceOnNewLine.IfLongerThanMaxLineLength
-    addSpacesAroundParentheses = false
-    addSpacesAroundArgumentList = false
-    addSpaceBetweenEmptyParentheses = false
-}
+let defaultFunctionCalls =
+    { placeArgumentsOnNewLines = PlaceOnNewLine.IfLongerThanMaxLineLength
+      addSpacesAroundParentheses = false
+      addSpacesAroundArgumentList = false
+      addSpaceBetweenEmptyParentheses = false }
 
-let defaultCaseExpressions = {
-    placeExpressionOnNewLine = true
-    placeFirstWhenOnNewLine = PlaceOnNewLine.Always
-    whenAlignment = WhenAlignment.IndentedFromCase
-    placeThenOnNewLine = false
-    thenAlignment = Alignment.Indented
-    placeElseOnNewLine = true
-    alignElseToWhen = true
-    placeEndOnNewLine = true
-    endAlignment = EndAlignment.ToCase
-    collapseShortCaseExpressions = false
-    collapseCaseExpressionsShorterThan = 80
-}
+let defaultCaseExpressions =
+    { placeExpressionOnNewLine = true
+      placeFirstWhenOnNewLine = PlaceOnNewLine.Always
+      whenAlignment = WhenAlignment.IndentedFromCase
+      placeThenOnNewLine = false
+      thenAlignment = Alignment.Indented
+      placeElseOnNewLine = true
+      alignElseToWhen = true
+      placeEndOnNewLine = true
+      endAlignment = EndAlignment.ToCase
+      collapseShortCaseExpressions = false
+      collapseCaseExpressionsShorterThan = 80 }
 
-let defaultComparison = {
-    align = false
-    addSpacesAround = true
-}
+let defaultComparison =
+    { align = false
+      addSpacesAround = true }
 
-let defaultArithmetic = {
-    addSpacesAround = true
-}
+let defaultArithmetic = { addSpacesAround = true }
 
-let defaultAndOr = {
-    placeOnNewLine = PlaceOnNewLine.Always
-    alignment = Alignment.LeftAligned
-    placeKeywordBeforeCondition = true
-}
+let defaultAndOr =
+    { placeOnNewLine = PlaceOnNewLine.Always
+      alignment = Alignment.LeftAligned
+      placeKeywordBeforeCondition = true }
 
-let defaultBetween = {
-    placeOnNewLine = true
-    placeAndKeywordOnNewLine = false
-    andAlignment = Alignment.LeftAligned
-}
+let defaultBetween =
+    { placeOnNewLine = true
+      placeAndKeywordOnNewLine = false
+      andAlignment = Alignment.LeftAligned }
 
-let defaultIn = {
-    placeOpeningParenthesisOnNewLine = false
-    alignment = InAlignment.LeftAligned
-    placeFirstValueOnNewLine = PlaceOnNewLine.IfLongerThanMaxLineLength
-    placeSubsequentValuesOnNewLines = PlaceOnNewLine.IfLongerThanMaxLineLength
-    addSpaceAroundInContents = false
-}
+let defaultIn =
+    { placeOpeningParenthesisOnNewLine = false
+      alignment = InAlignment.LeftAligned
+      placeFirstValueOnNewLine = PlaceOnNewLine.IfLongerThanMaxLineLength
+      placeSubsequentValuesOnNewLines = PlaceOnNewLine.IfLongerThanMaxLineLength
+      addSpaceAroundInContents = false }
 
-let defaultOperators = {
-    comparison = defaultComparison
-    arithmetic = defaultArithmetic
-    andOr = defaultAndOr
-    between = defaultBetween
-    ``in`` = defaultIn
-}
+let defaultOperators =
+    { comparison = defaultComparison
+      arithmetic = defaultArithmetic
+      andOr = defaultAndOr
+      between = defaultBetween
+      ``in`` = defaultIn }
 
-let defaultSetOperationsExtensions = {
-    blankLinesAroundOperators = true
-}
+let defaultSetOperationsExtensions = { blankLinesAroundOperators = true }
 
-let defaultCteExtensions = {
-    omitLeadingSemicolon = false
-}
+let defaultCteExtensions = { omitLeadingSemicolon = false }
 
-let defaultFormatterExtensions = {
-    cte = defaultCteExtensions
-    setOperations = defaultSetOperationsExtensions
-}
+let defaultFormatterExtensions =
+    { cte = defaultCteExtensions
+      setOperations = defaultSetOperationsExtensions }
 
-let defaultStyle : FormattingStyle =
+let defaultStyle: FormattingStyle =
     { whitespace = defaultWhitespace
       lists = defaultLists
       parentheses = defaultParentheses
@@ -781,7 +721,7 @@ let private getJsonInt (el: JsonElement) (name: string) (def: int) =
     | Some v -> v.GetInt32()
     | None -> def
 
-let private getJsonEnum<'T when 'T :> System.Enum and 'T : struct> (el: JsonElement) (name: string) (def: 'T) : 'T =
+let private getJsonEnum<'T when 'T :> System.Enum and 'T: struct> (el: JsonElement) (name: string) (def: 'T) : 'T =
     match getJsonOpt el name with
     | Some v ->
         let s = v.GetString()
@@ -812,16 +752,28 @@ let loadConfig (path: string) : FormattingStyle =
             let nl =
                 match getOpt ws "newLines" with
                 | Some n ->
-                    { preserveExistingEmptyLinesBetweenStatements = getBool n "preserveExistingEmptyLinesBetweenStatements" defaultNewLines.preserveExistingEmptyLinesBetweenStatements
-                      preserveExistingEmptyLinesAfterBatchSeparator = getBool n "preserveExistingEmptyLinesAfterBatchSeparator" defaultNewLines.preserveExistingEmptyLinesAfterBatchSeparator
-                      emptyLinesBetweenStatements = getInt n "emptyLinesBetweenStatements" defaultNewLines.emptyLinesBetweenStatements
-                      emptyLinesAfterBatchSeparator = getInt n "emptyLinesAfterBatchSeparator" defaultNewLines.emptyLinesAfterBatchSeparator }
+                    { preserveExistingEmptyLinesBetweenStatements =
+                        getBool
+                            n
+                            "preserveExistingEmptyLinesBetweenStatements"
+                            defaultNewLines.preserveExistingEmptyLinesBetweenStatements
+                      preserveExistingEmptyLinesAfterBatchSeparator =
+                        getBool
+                            n
+                            "preserveExistingEmptyLinesAfterBatchSeparator"
+                            defaultNewLines.preserveExistingEmptyLinesAfterBatchSeparator
+                      emptyLinesBetweenStatements =
+                        getInt n "emptyLinesBetweenStatements" defaultNewLines.emptyLinesBetweenStatements
+                      emptyLinesAfterBatchSeparator =
+                        getInt n "emptyLinesAfterBatchSeparator" defaultNewLines.emptyLinesAfterBatchSeparator }
                 | None -> defaultNewLines
+
             { spacesOrTabs = getEnum ws "spacesOrTabs" defaultWhitespace.spacesOrTabs
               numberOfSpacesInTabs = getInt ws "numberOfSpacesInTabs" defaultWhitespace.numberOfSpacesInTabs
               wrapLongLines = getBool ws "wrapLongLines" defaultWhitespace.wrapLongLines
               wrapLinesLongerThan = getInt ws "wrapLinesLongerThan" defaultWhitespace.wrapLinesLongerThan
-              whiteSpaceBeforeSemiColon = getEnum ws "whiteSpaceBeforeSemiColon" defaultWhitespace.whiteSpaceBeforeSemiColon
+              whiteSpaceBeforeSemiColon =
+                getEnum ws "whiteSpaceBeforeSemiColon" defaultWhitespace.whiteSpaceBeforeSemiColon
               newLines = nl }
         | None -> defaultWhitespace
 
@@ -829,8 +781,10 @@ let loadConfig (path: string) : FormattingStyle =
         match getOpt root "lists" with
         | Some ls ->
             { placeFirstItemOnNewLine = getEnum ls "placeFirstItemOnNewLine" defaultLists.placeFirstItemOnNewLine
-              placeSubsequentItemsOnNewLines = getEnum ls "placeSubsequentItemsOnNewLines" defaultLists.placeSubsequentItemsOnNewLines
-              alignSubsequentItemsWithFirstItem = getBool ls "alignSubsequentItemsWithFirstItem" defaultLists.alignSubsequentItemsWithFirstItem
+              placeSubsequentItemsOnNewLines =
+                getEnum ls "placeSubsequentItemsOnNewLines" defaultLists.placeSubsequentItemsOnNewLines
+              alignSubsequentItemsWithFirstItem =
+                getBool ls "alignSubsequentItemsWithFirstItem" defaultLists.alignSubsequentItemsWithFirstItem
               alignItemsAcrossClauses = getBool ls "alignItemsAcrossClauses" defaultLists.alignItemsAcrossClauses
               indentListItems = getBool ls "indentListItems" defaultLists.indentListItems
               alignItemsToTabStops = getBool ls "alignItemsToTabStops" defaultLists.alignItemsToTabStops
@@ -846,11 +800,16 @@ let loadConfig (path: string) : FormattingStyle =
         match getOpt root "parentheses" with
         | Some p ->
             { parenthesisStyle = getEnum p "parenthesisStyle" defaultParentheses.parenthesisStyle
-              indentParenthesesContents = getBool p "indentParenthesesContents" defaultParentheses.indentParenthesesContents
-              collapseShortParenthesisContents = getBool p "collapseShortParenthesisContents" defaultParentheses.collapseShortParenthesisContents
-              collapseParenthesesShorterThan = getInt p "collapseParenthesesShorterThan" defaultParentheses.collapseParenthesesShorterThan
-              addSpacesAroundParentheses = getBool p "addSpacesAroundParentheses" defaultParentheses.addSpacesAroundParentheses
-              addSpacesInsideParentheses = getBool p "addSpacesInsideParentheses" defaultParentheses.addSpacesInsideParentheses }
+              indentParenthesesContents =
+                getBool p "indentParenthesesContents" defaultParentheses.indentParenthesesContents
+              collapseShortParenthesisContents =
+                getBool p "collapseShortParenthesisContents" defaultParentheses.collapseShortParenthesisContents
+              collapseParenthesesShorterThan =
+                getInt p "collapseParenthesesShorterThan" defaultParentheses.collapseParenthesesShorterThan
+              addSpacesAroundParentheses =
+                getBool p "addSpacesAroundParentheses" defaultParentheses.addSpacesAroundParentheses
+              addSpacesInsideParentheses =
+                getBool p "addSpacesInsideParentheses" defaultParentheses.addSpacesInsideParentheses }
         | None -> defaultParentheses
 
     let casing =
@@ -872,20 +831,29 @@ let loadConfig (path: string) : FormattingStyle =
                     { clauseAlignment = getEnum c "clauseAlignment" defaultDmlClauses.clauseAlignment
                       clauseIndentation = getInt c "clauseIndentation" defaultDmlClauses.clauseIndentation }
                 | None -> defaultDmlClauses
+
             let listItems =
                 match getOpt d "listItems" with
                 | Some li ->
-                    { placeFromTableOnNewLine = getEnum li "placeFromTableOnNewLine" defaultDmlListItems.placeFromTableOnNewLine
-                      placeWhereConditionOnNewLine = getEnum li "placeWhereConditionOnNewLine" defaultDmlListItems.placeWhereConditionOnNewLine
-                      placeGroupByAndOrderByOnNewLine = getEnum li "placeGroupByAndOrderByOnNewLine" defaultDmlListItems.placeGroupByAndOrderByOnNewLine }
+                    { placeFromTableOnNewLine =
+                        getEnum li "placeFromTableOnNewLine" defaultDmlListItems.placeFromTableOnNewLine
+                      placeWhereConditionOnNewLine =
+                        getEnum li "placeWhereConditionOnNewLine" defaultDmlListItems.placeWhereConditionOnNewLine
+                      placeGroupByAndOrderByOnNewLine =
+                        getEnum li "placeGroupByAndOrderByOnNewLine" defaultDmlListItems.placeGroupByAndOrderByOnNewLine }
                 | None -> defaultDmlListItems
+
             { placeInsertTableOnNewLine = getBool d "placeInsertTableOnNewLine" defaultDml.placeInsertTableOnNewLine
-              placeDistinctAndTopClausesOnNewLine = getBool d "placeDistinctAndTopClausesOnNewLine" defaultDml.placeDistinctAndTopClausesOnNewLine
-              addNewLineAfterDistinctAndTopClauses = getBool d "addNewLineAfterDistinctAndTopClauses" defaultDml.addNewLineAfterDistinctAndTopClauses
+              placeDistinctAndTopClausesOnNewLine =
+                getBool d "placeDistinctAndTopClausesOnNewLine" defaultDml.placeDistinctAndTopClausesOnNewLine
+              addNewLineAfterDistinctAndTopClauses =
+                getBool d "addNewLineAfterDistinctAndTopClauses" defaultDml.addNewLineAfterDistinctAndTopClauses
               collapseShortStatements = getBool d "collapseShortStatements" defaultDml.collapseShortStatements
-              collapseStatementsShorterThan = getInt d "collapseStatementsShorterThan" defaultDml.collapseStatementsShorterThan
+              collapseStatementsShorterThan =
+                getInt d "collapseStatementsShorterThan" defaultDml.collapseStatementsShorterThan
               collapseShortSubqueries = getBool d "collapseShortSubqueries" defaultDml.collapseShortSubqueries
-              collapseSubqueriesShorterThan = getInt d "collapseSubqueriesShorterThan" defaultDml.collapseSubqueriesShorterThan
+              collapseSubqueriesShorterThan =
+                getInt d "collapseSubqueriesShorterThan" defaultDml.collapseSubqueriesShorterThan
               clauses = clauses
               listItems = listItems }
         | None -> defaultDml
@@ -895,23 +863,31 @@ let loadConfig (path: string) : FormattingStyle =
         | Some d ->
             { parenthesisStyle = getEnum d "parenthesisStyle" defaultDdl.parenthesisStyle
               indentParenthesesContents = getBool d "indentParenthesesContents" defaultDdl.indentParenthesesContents
-              alignDataTypesAndConstraints = getBool d "alignDataTypesAndConstraints" defaultDdl.alignDataTypesAndConstraints
+              alignDataTypesAndConstraints =
+                getBool d "alignDataTypesAndConstraints" defaultDdl.alignDataTypesAndConstraints
               placeConstraintsOnNewLines = getBool d "placeConstraintsOnNewLines" defaultDdl.placeConstraintsOnNewLines
-              placeConstraintColumnsOnNewLines = getEnum d "placeConstraintColumnsOnNewLines" defaultDdl.placeConstraintColumnsOnNewLines
+              placeConstraintColumnsOnNewLines =
+                getEnum d "placeConstraintColumnsOnNewLines" defaultDdl.placeConstraintColumnsOnNewLines
               indentClauses = getBool d "indentClauses" defaultDdl.indentClauses
-              placeFirstProcedureParameterOnNewLine = getEnum d "placeFirstProcedureParameterOnNewLine" defaultDdl.placeFirstProcedureParameterOnNewLine
+              placeFirstProcedureParameterOnNewLine =
+                getEnum d "placeFirstProcedureParameterOnNewLine" defaultDdl.placeFirstProcedureParameterOnNewLine
               collapseShortStatements = getBool d "collapseShortStatements" defaultDdl.collapseShortStatements
-              collapseStatementsShorterThan = getInt d "collapseStatementsShorterThan" defaultDdl.collapseStatementsShorterThan }
+              collapseStatementsShorterThan =
+                getInt d "collapseStatementsShorterThan" defaultDdl.collapseStatementsShorterThan }
         | None -> defaultDdl
 
     let controlFlow =
         match getOpt root "controlFlow" with
         | Some cf ->
-            { placeBeginAndEndOnNewLine = getBool cf "placeBeginAndEndOnNewLine" defaultControlFlow.placeBeginAndEndOnNewLine
-              indentBeginAndEndKeywords = getBool cf "indentBeginAndEndKeywords" defaultControlFlow.indentBeginAndEndKeywords
-              indentContentsOfStatements = getBool cf "indentContentsOfStatements" defaultControlFlow.indentContentsOfStatements
+            { placeBeginAndEndOnNewLine =
+                getBool cf "placeBeginAndEndOnNewLine" defaultControlFlow.placeBeginAndEndOnNewLine
+              indentBeginAndEndKeywords =
+                getBool cf "indentBeginAndEndKeywords" defaultControlFlow.indentBeginAndEndKeywords
+              indentContentsOfStatements =
+                getBool cf "indentContentsOfStatements" defaultControlFlow.indentContentsOfStatements
               collapseShortStatements = getBool cf "collapseShortStatements" defaultControlFlow.collapseShortStatements
-              collapseStatementsShorterThan = getInt cf "collapseStatementsShorterThan" defaultControlFlow.collapseStatementsShorterThan }
+              collapseStatementsShorterThan =
+                getInt cf "collapseStatementsShorterThan" defaultControlFlow.collapseStatementsShorterThan }
         | None -> defaultControlFlow
 
     let cte =
@@ -931,8 +907,13 @@ let loadConfig (path: string) : FormattingStyle =
         match getOpt root "variables" with
         | Some v ->
             { alignDataTypesAndValues = getBool v "alignDataTypesAndValues" defaultVariables.alignDataTypesAndValues
-              addSpaceBetweenDataTypeAndPrecision = getBool v "addSpaceBetweenDataTypeAndPrecision" defaultVariables.addSpaceBetweenDataTypeAndPrecision
-              placeAssignedValueOnNewLineIfLongerThanMaxLineLength = getBool v "placeAssignedValueOnNewLineIfLongerThanMaxLineLength" defaultVariables.placeAssignedValueOnNewLineIfLongerThanMaxLineLength
+              addSpaceBetweenDataTypeAndPrecision =
+                getBool v "addSpaceBetweenDataTypeAndPrecision" defaultVariables.addSpaceBetweenDataTypeAndPrecision
+              placeAssignedValueOnNewLineIfLongerThanMaxLineLength =
+                getBool
+                    v
+                    "placeAssignedValueOnNewLineIfLongerThanMaxLineLength"
+                    defaultVariables.placeAssignedValueOnNewLineIfLongerThanMaxLineLength
               placeEqualsSignOnNewLine = getBool v "placeEqualsSignOnNewLine" defaultVariables.placeEqualsSignOnNewLine }
         | None -> defaultVariables
 
@@ -944,10 +925,12 @@ let loadConfig (path: string) : FormattingStyle =
                 | Some j ->
                     { placeOnNewLine = getBool j "placeOnNewLine" defaultJoin.placeOnNewLine
                       keywordAlignment = getEnum j "keywordAlignment" defaultJoin.keywordAlignment
-                      insertEmptyLineBetweenJoinClauses = getBool j "insertEmptyLineBetweenJoinClauses" defaultJoin.insertEmptyLineBetweenJoinClauses
+                      insertEmptyLineBetweenJoinClauses =
+                        getBool j "insertEmptyLineBetweenJoinClauses" defaultJoin.insertEmptyLineBetweenJoinClauses
                       placeJoinTableOnNewLine = getBool j "placeJoinTableOnNewLine" defaultJoin.placeJoinTableOnNewLine
                       indentJoinTable = getBool j "indentJoinTable" defaultJoin.indentJoinTable }
                 | None -> defaultJoin
+
             let on =
                 match getOpt js "on" with
                 | Some o ->
@@ -956,6 +939,7 @@ let loadConfig (path: string) : FormattingStyle =
                       placeConditionOnNewLine = getBool o "placeConditionOnNewLine" defaultOn.placeConditionOnNewLine
                       conditionAlignment = getEnum o "conditionAlignment" defaultOn.conditionAlignment }
                 | None -> defaultOn
+
             { join = join; on = on }
         | None -> defaultJoinStatements
 
@@ -967,32 +951,45 @@ let loadConfig (path: string) : FormattingStyle =
                 | Some c ->
                     { parenthesisStyle = getEnum c "parenthesisStyle" defaultInsertColumns.parenthesisStyle
                       indentContents = getBool c "indentContents" defaultInsertColumns.indentContents
-                      placeSubsequentColumnsOnNewLines = getEnum c "placeSubsequentColumnsOnNewLines" defaultInsertColumns.placeSubsequentColumnsOnNewLines }
+                      placeSubsequentColumnsOnNewLines =
+                        getEnum
+                            c
+                            "placeSubsequentColumnsOnNewLines"
+                            defaultInsertColumns.placeSubsequentColumnsOnNewLines }
                 | None -> defaultInsertColumns
+
             let values =
                 match getOpt is "values" with
                 | Some v ->
                     { parenthesisStyle = getEnum v "parenthesisStyle" defaultInsertValues.parenthesisStyle
                       indentContents = getBool v "indentContents" defaultInsertValues.indentContents
-                      placeSubsequentValuesOnNewLines = getEnum v "placeSubsequentValuesOnNewLines" defaultInsertValues.placeSubsequentValuesOnNewLines }
+                      placeSubsequentValuesOnNewLines =
+                        getEnum v "placeSubsequentValuesOnNewLines" defaultInsertValues.placeSubsequentValuesOnNewLines }
                 | None -> defaultInsertValues
+
             { columns = columns; values = values }
         | None -> defaultInsertStatements
 
     let functionCalls =
         match getOpt root "functionCalls" with
         | Some fc ->
-            { placeArgumentsOnNewLines = getEnum fc "placeArgumentsOnNewLines" defaultFunctionCalls.placeArgumentsOnNewLines
-              addSpacesAroundParentheses = getBool fc "addSpacesAroundParentheses" defaultFunctionCalls.addSpacesAroundParentheses
-              addSpacesAroundArgumentList = getBool fc "addSpacesAroundArgumentList" defaultFunctionCalls.addSpacesAroundArgumentList
-              addSpaceBetweenEmptyParentheses = getBool fc "addSpaceBetweenEmptyParentheses" defaultFunctionCalls.addSpaceBetweenEmptyParentheses }
+            { placeArgumentsOnNewLines =
+                getEnum fc "placeArgumentsOnNewLines" defaultFunctionCalls.placeArgumentsOnNewLines
+              addSpacesAroundParentheses =
+                getBool fc "addSpacesAroundParentheses" defaultFunctionCalls.addSpacesAroundParentheses
+              addSpacesAroundArgumentList =
+                getBool fc "addSpacesAroundArgumentList" defaultFunctionCalls.addSpacesAroundArgumentList
+              addSpaceBetweenEmptyParentheses =
+                getBool fc "addSpaceBetweenEmptyParentheses" defaultFunctionCalls.addSpaceBetweenEmptyParentheses }
         | None -> defaultFunctionCalls
 
     let caseExpressions =
         match getOpt root "caseExpressions" with
         | Some ce ->
-            { placeExpressionOnNewLine = getBool ce "placeExpressionOnNewLine" defaultCaseExpressions.placeExpressionOnNewLine
-              placeFirstWhenOnNewLine = getEnum ce "placeFirstWhenOnNewLine" defaultCaseExpressions.placeFirstWhenOnNewLine
+            { placeExpressionOnNewLine =
+                getBool ce "placeExpressionOnNewLine" defaultCaseExpressions.placeExpressionOnNewLine
+              placeFirstWhenOnNewLine =
+                getEnum ce "placeFirstWhenOnNewLine" defaultCaseExpressions.placeFirstWhenOnNewLine
               whenAlignment = getEnum ce "whenAlignment" defaultCaseExpressions.whenAlignment
               placeThenOnNewLine = getBool ce "placeThenOnNewLine" defaultCaseExpressions.placeThenOnNewLine
               thenAlignment = getEnum ce "thenAlignment" defaultCaseExpressions.thenAlignment
@@ -1000,8 +997,10 @@ let loadConfig (path: string) : FormattingStyle =
               alignElseToWhen = getBool ce "alignElseToWhen" defaultCaseExpressions.alignElseToWhen
               placeEndOnNewLine = getBool ce "placeEndOnNewLine" defaultCaseExpressions.placeEndOnNewLine
               endAlignment = getEnum ce "endAlignment" defaultCaseExpressions.endAlignment
-              collapseShortCaseExpressions = getBool ce "collapseShortCaseExpressions" defaultCaseExpressions.collapseShortCaseExpressions
-              collapseCaseExpressionsShorterThan = getInt ce "collapseCaseExpressionsShorterThan" defaultCaseExpressions.collapseCaseExpressionsShorterThan }
+              collapseShortCaseExpressions =
+                getBool ce "collapseShortCaseExpressions" defaultCaseExpressions.collapseShortCaseExpressions
+              collapseCaseExpressionsShorterThan =
+                getInt ce "collapseCaseExpressionsShorterThan" defaultCaseExpressions.collapseCaseExpressionsShorterThan }
         | None -> defaultCaseExpressions
 
     let operators =
@@ -1009,36 +1008,51 @@ let loadConfig (path: string) : FormattingStyle =
         | Some ops ->
             let comparison =
                 match getOpt ops "comparison" with
-                | Some c -> { align = getBool c "align" defaultComparison.align; addSpacesAround = getBool c "addSpacesAround" defaultComparison.addSpacesAround }
+                | Some c ->
+                    { align = getBool c "align" defaultComparison.align
+                      addSpacesAround = getBool c "addSpacesAround" defaultComparison.addSpacesAround }
                 | None -> defaultComparison
+
             let arithmetic =
                 match getOpt ops "arithmetic" with
                 | Some a -> { addSpacesAround = getBool a "addSpacesAround" defaultArithmetic.addSpacesAround }
                 | None -> defaultArithmetic
+
             let andOr =
                 match getOpt ops "andOr" with
                 | Some ao ->
                     { placeOnNewLine = getEnum ao "placeOnNewLine" defaultAndOr.placeOnNewLine
                       alignment = getEnum ao "alignment" defaultAndOr.alignment
-                      placeKeywordBeforeCondition = getBool ao "placeKeywordBeforeCondition" defaultAndOr.placeKeywordBeforeCondition }
+                      placeKeywordBeforeCondition =
+                        getBool ao "placeKeywordBeforeCondition" defaultAndOr.placeKeywordBeforeCondition }
                 | None -> defaultAndOr
+
             let between =
                 match getOpt ops "between" with
                 | Some b ->
                     { placeOnNewLine = getBool b "placeOnNewLine" defaultBetween.placeOnNewLine
-                      placeAndKeywordOnNewLine = getBool b "placeAndKeywordOnNewLine" defaultBetween.placeAndKeywordOnNewLine
+                      placeAndKeywordOnNewLine =
+                        getBool b "placeAndKeywordOnNewLine" defaultBetween.placeAndKeywordOnNewLine
                       andAlignment = getEnum b "andAlignment" defaultBetween.andAlignment }
                 | None -> defaultBetween
+
             let inOp =
                 match getOpt ops "in" with
                 | Some i ->
-                    { placeOpeningParenthesisOnNewLine = getBool i "placeOpeningParenthesisOnNewLine" defaultIn.placeOpeningParenthesisOnNewLine
+                    { placeOpeningParenthesisOnNewLine =
+                        getBool i "placeOpeningParenthesisOnNewLine" defaultIn.placeOpeningParenthesisOnNewLine
                       alignment = getEnum i "alignment" defaultIn.alignment
                       placeFirstValueOnNewLine = getEnum i "placeFirstValueOnNewLine" defaultIn.placeFirstValueOnNewLine
-                      placeSubsequentValuesOnNewLines = getEnum i "placeSubsequentValuesOnNewLines" defaultIn.placeSubsequentValuesOnNewLines
+                      placeSubsequentValuesOnNewLines =
+                        getEnum i "placeSubsequentValuesOnNewLines" defaultIn.placeSubsequentValuesOnNewLines
                       addSpaceAroundInContents = getBool i "addSpaceAroundInContents" defaultIn.addSpaceAroundInContents }
                 | None -> defaultIn
-            { comparison = comparison; arithmetic = arithmetic; andOr = andOr; between = between; ``in`` = inOp }
+
+            { comparison = comparison
+              arithmetic = arithmetic
+              andOr = andOr
+              between = between
+              ``in`` = inOp }
         | None -> defaultOperators
 
     let formatterExtensions =
@@ -1049,13 +1063,15 @@ let loadConfig (path: string) : FormattingStyle =
                 | Some c ->
                     { omitLeadingSemicolon = getBool c "omitLeadingSemicolon" defaultCteExtensions.omitLeadingSemicolon }
                 | None -> defaultCteExtensions
+
             let setOps =
                 match getOpt ext "setOperations" with
                 | Some so ->
-                    { blankLinesAroundOperators = getBool so "blankLinesAroundOperators" defaultSetOperationsExtensions.blankLinesAroundOperators }
+                    { blankLinesAroundOperators =
+                        getBool so "blankLinesAroundOperators" defaultSetOperationsExtensions.blankLinesAroundOperators }
                 | None -> defaultSetOperationsExtensions
-            { cte = cte
-              setOperations = setOps }
+
+            { cte = cte; setOperations = setOps }
         | None -> defaultFormatterExtensions
 
     { whitespace = whitespace

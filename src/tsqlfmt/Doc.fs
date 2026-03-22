@@ -7,10 +7,10 @@ module TSqlFormatter.Doc
 type Doc =
     | Nil
     | Text of string
-    | Line                    // Line break, renders at current indent
-    | Cat of Doc * Doc        // Concatenation
-    | Nest of int * Doc       // Add indent to context for doc
-    | Union of Doc * Doc      // Flattened vs normal
+    | Line // Line break, renders at current indent
+    | Cat of Doc * Doc // Concatenation
+    | Nest of int * Doc // Add indent to context for doc
+    | Union of Doc * Doc // Flattened vs normal
 
 /// Simple document for rendering.
 type SDoc =
@@ -23,8 +23,7 @@ type SDoc =
 let empty = Doc.Nil
 
 let text (s: string) =
-    if s.Length = 0 then Doc.Nil
-    else Doc.Text(s)
+    if s.Length = 0 then Doc.Nil else Doc.Text(s)
 
 let line = Doc.Line
 
@@ -65,16 +64,18 @@ let rec flatten (doc: Doc) : Doc =
 
 /// `group` tries to flatten a document onto a single line.
 /// If it fits, use the flattened version; otherwise keep line breaks.
-let group (doc: Doc) : Doc =
-    Doc.Union(flatten doc, doc)
+let group (doc: Doc) : Doc = Doc.Union(flatten doc, doc)
 
 // ─── Rendering ───
 
-type private Mode = Flat | Break
+type private Mode =
+    | Flat
+    | Break
 
 /// Check if the first line of a simple doc fits in `w` columns.
 let rec private fits (w: int) (sdoc: SDoc) : bool =
-    if w < 0 then false
+    if w < 0 then
+        false
     else
         match sdoc with
         | SNil -> true
@@ -88,10 +89,8 @@ let private best (width: int) (doc: Doc) : SDoc =
         match items with
         | [] -> SNil
         | (_, _, Doc.Nil) :: rest -> go col rest
-        | (i, m, Doc.Text(s)) :: rest ->
-            SText(s, go (col + s.Length) rest)
-        | (i, m, Doc.Cat(a, b)) :: rest ->
-            go col ((i, m, a) :: (i, m, b) :: rest)
+        | (i, m, Doc.Text(s)) :: rest -> SText(s, go (col + s.Length) rest)
+        | (i, m, Doc.Cat(a, b)) :: rest -> go col ((i, m, a) :: (i, m, b) :: rest)
         | (i, Flat, Doc.Line) :: rest ->
             // In flat mode, line becomes a space
             SText(" ", go (col + 1) rest)
@@ -103,14 +102,20 @@ let private best (width: int) (doc: Doc) : SDoc =
             go col ((i + j, m, d) :: rest)
         | (i, _, Doc.Union(a, b)) :: rest ->
             let sdocA = go col ((i, Flat, a) :: rest)
-            if fits (width - col) sdocA then sdocA
-            else go col ((i, Break, b) :: rest)
-    go 0 [(0, Break, doc)]
+
+            if fits (width - col) sdocA then
+                sdocA
+            else
+                go col ((i, Break, b) :: rest)
+
+    go 0 [ (0, Break, doc) ]
 
 /// Render a `Doc` to a string with the given max line width.
 let render (maxWidth: int) (doc: Doc) : string =
     let sb = System.Text.StringBuilder()
-    let rec go = function
+
+    let rec go =
+        function
         | SNil -> ()
         | SText(s, d) ->
             sb.Append(s) |> ignore
@@ -119,6 +124,7 @@ let render (maxWidth: int) (doc: Doc) : string =
             sb.AppendLine() |> ignore
             sb.Append(System.String(' ', indent)) |> ignore
             go d
+
     go (best maxWidth doc)
     sb.ToString().TrimEnd()
 
@@ -128,27 +134,25 @@ let render (maxWidth: int) (doc: Doc) : string =
 let join (sep: Doc) (docs: Doc list) : Doc =
     match docs with
     | [] -> empty
-    | [d] -> d
+    | [ d ] -> d
     | d :: rest -> List.fold (fun acc x -> acc <+> sep <+> x) d rest
 
 /// Concatenate documents with hardline between each.
-let vcat (docs: Doc list) : Doc =
-    join line docs
+let vcat (docs: Doc list) : Doc = join line docs
 
 /// Concatenate documents with space between each.
-let hcat (docs: Doc list) : Doc =
-    join (text " ") docs
+let hcat (docs: Doc list) : Doc = join (text " ") docs
 
 /// Separate docs with comma + space, with line breaks.
 let commaSep (docs: Doc list) : Doc =
     match docs with
     | [] -> empty
-    | [d] -> d
+    | [ d ] -> d
     | d :: rest -> List.fold (fun acc x -> acc <+> text "," <+> line <+> x) d rest
 
 /// Like commaSep but uses hardline.
 let commaHardSep (docs: Doc list) : Doc =
     match docs with
     | [] -> empty
-    | [d] -> d
+    | [ d ] -> d
     | d :: rest -> List.fold (fun acc x -> acc <+> text "," <+> Doc.Line <+> x) d rest

@@ -24,7 +24,7 @@ let private tryGetSqlPromptAuthToken () =
 
 let private requireSqlPromptConfig () =
     match tryGetSqlPromptExe (), tryGetSqlPromptAuthToken () with
-    | Some exe, Some authToken -> Ok (exe, authToken)
+    | Some exe, Some authToken -> Ok(exe, authToken)
     | _ -> Error "Set SQLPROMPT_EXE and SQLPROMPT_AUTH_TOKEN to run SQL Prompt parity tests."
 
 let private runSqlPrompt (stylePath: string) (applyCasing: bool) (sql: string) =
@@ -82,7 +82,7 @@ let sqlPromptParityCases () : seq<obj[]> =
         |> Seq.map (fun (arr: obj[]) -> [| arr.[0]; false :> obj |])
 
 type SqlPromptParityData =
-    static member sqlPromptParityCases () = sqlPromptParityCases ()
+    static member sqlPromptParityCases() = sqlPromptParityCases ()
 
 [<Theory>]
 [<MemberData("sqlPromptParityCases", MemberType = typeof<SqlPromptParityData>, DisableDiscoveryEnumeration = true)>]
@@ -97,7 +97,9 @@ let ``existing fixture matches sqlprompt for default style`` (testName: string, 
         let styleJson = File.ReadAllText(configPath)
         let stylePath = writeStyleFile localStyleDir "Default" styleJson
 
-        let ourConfig = loadConfig stylePath |> validateConfig |> withOptionalCasing applyCasing
+        let ourConfig =
+            loadConfig stylePath |> validateConfig |> withOptionalCasing applyCasing
+
         let ourOutput =
             match format ourConfig inputSql with
             | Ok formatted -> formatted.ReplaceLineEndings("\n").TrimEnd()

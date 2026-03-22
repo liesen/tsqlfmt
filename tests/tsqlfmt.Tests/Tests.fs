@@ -8,12 +8,11 @@ open TSqlFormatter.Config
 open TSqlFormatter.Program
 open TestSupport
 
-let private defaultCliArgs = {
-    stylesPath = None
-    styleName = "Default"
-    styleNameSpecified = false
-    applyCasing = false
-}
+let private defaultCliArgs =
+    { stylesPath = None
+      styleName = "Default"
+      styleNameSpecified = false
+      applyCasing = false }
 
 let private writeTempStyle (dir: string) (name: string) (keywordStyle: string) =
     let path = Path.Combine(dir, name)
@@ -31,7 +30,8 @@ let ``parseArgs accepts sqlprompt formatSql command`` () =
 
 [<Fact>]
 let ``parseArgs accepts auth token and ignores it`` () =
-    let parsed = parseArgs [| "formatSql"; "--authToken"; "secret"; "--styleName"; "Default" |]
+    let parsed =
+        parseArgs [| "formatSql"; "--authToken"; "secret"; "--styleName"; "Default" |]
 
     match parsed with
     | Error msg -> Assert.Fail msg
@@ -56,7 +56,13 @@ let ``parseArgs rejects unsupported sqlprompt command`` () =
 [<Fact>]
 let ``resolveConfigPath ignores missing styles directory for default style`` () =
     let missingDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
-    let args = { defaultCliArgs with stylesPath = Some missingDir; styleName = "Default"; styleNameSpecified = true }
+
+    let args =
+        { defaultCliArgs with
+            stylesPath = Some missingDir
+            styleName = "Default"
+            styleNameSpecified = true }
+
     let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
 
     match resolved with
@@ -66,7 +72,13 @@ let ``resolveConfigPath ignores missing styles directory for default style`` () 
 [<Fact>]
 let ``resolveConfigPath rejects missing named style without styles directory`` () =
     let missingDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
-    let args = { defaultCliArgs with stylesPath = Some missingDir; styleName = "MyStyle"; styleNameSpecified = true }
+
+    let args =
+        { defaultCliArgs with
+            stylesPath = Some missingDir
+            styleName = "MyStyle"
+            styleNameSpecified = true }
+
     let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
 
     match resolved with
@@ -79,7 +91,12 @@ let ``resolveConfigPath rejects missing named style`` () =
     Directory.CreateDirectory(stylesDir) |> ignore
 
     try
-        let args = { defaultCliArgs with stylesPath = Some stylesDir; styleName = "Missing"; styleNameSpecified = true }
+        let args =
+            { defaultCliArgs with
+                stylesPath = Some stylesDir
+                styleName = "Missing"
+                styleNameSpecified = true }
+
         let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
 
         match resolved with
@@ -95,13 +112,18 @@ let ``resolveConfigPath uses named style from styles directory`` () =
 
     try
         let stylePath = writeTempStyle stylesDir "MyStyle.json" "lowercase"
-        let args = { defaultCliArgs with stylesPath = Some stylesDir; styleName = "MyStyle" }
+
+        let args =
+            { defaultCliArgs with
+                stylesPath = Some stylesDir
+                styleName = "MyStyle" }
+
         let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
 
         match resolved with
         | Error msg -> Assert.Fail msg
         | Ok None -> Assert.Fail("Expected a style path")
-        | Ok (Some path) -> Assert.Equal(stylePath, path)
+        | Ok(Some path) -> Assert.Equal(stylePath, path)
     finally
         Directory.Delete(stylesDir, true)
 
@@ -112,13 +134,18 @@ let ``resolveConfigPath falls back to formattingstyle json for default style`` (
 
     try
         let stylePath = writeTempStyle stylesDir "formattingstyle.json" "uppercase"
-        let args = { defaultCliArgs with stylesPath = Some stylesDir; styleName = "Default" }
+
+        let args =
+            { defaultCliArgs with
+                stylesPath = Some stylesDir
+                styleName = "Default" }
+
         let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
 
         match resolved with
         | Error msg -> Assert.Fail msg
         | Ok None -> Assert.Fail("Expected a style path")
-        | Ok (Some path) -> Assert.Equal(stylePath, path)
+        | Ok(Some path) -> Assert.Equal(stylePath, path)
     finally
         Directory.Delete(stylesDir, true)
 

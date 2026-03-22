@@ -17,8 +17,7 @@ let ``format test`` (testName: string) =
     let expectedSql = File.ReadAllText(expectedPath).ReplaceLineEndings("\n").TrimEnd()
 
     match format config inputSql with
-    | Error errors ->
-        Assert.Fail(sprintf "Parse errors: %s" (String.Join("; ", errors)))
+    | Error errors -> Assert.Fail(sprintf "Parse errors: %s" (String.Join("; ", errors)))
     | Ok formatted ->
         let formatted = formatted.TrimEnd()
 
@@ -32,15 +31,43 @@ let ``format test`` (testName: string) =
 
             for i in 0 .. maxLines - 1 do
                 if diffLine = -1 then
-                    let eLine = if i < expectedLines.Length then expectedLines.[i].TrimEnd('\r') else "<missing>"
-                    let fLine = if i < formattedLines.Length then formattedLines.[i].TrimEnd('\r') else "<missing>"
+                    let eLine =
+                        if i < expectedLines.Length then
+                            expectedLines.[i].TrimEnd('\r')
+                        else
+                            "<missing>"
+
+                    let fLine =
+                        if i < formattedLines.Length then
+                            formattedLines.[i].TrimEnd('\r')
+                        else
+                            "<missing>"
+
                     if eLine <> fLine then
                         diffLine <- i
 
             let diffInfo =
                 if diffLine >= 0 then
-                    let eLine = if diffLine < expectedLines.Length then expectedLines.[diffLine].TrimEnd('\r') else "<missing>"
-                    let fLine = if diffLine < formattedLines.Length then formattedLines.[diffLine].TrimEnd('\r') else "<missing>"
+                    let eLine =
+                        if diffLine < expectedLines.Length then
+                            expectedLines.[diffLine].TrimEnd('\r')
+                        else
+                            "<missing>"
+
+                    let fLine =
+                        if diffLine < formattedLines.Length then
+                            formattedLines.[diffLine].TrimEnd('\r')
+                        else
+                            "<missing>"
+
                     sprintf "\nFirst difference at line %d:\nExpected: [%s]\nActual:   [%s]" (diffLine + 1) eLine fLine
-                else ""
-            Assert.Fail(sprintf "Output does not match expected for %s. Debug output written to %s.%s" testName debugPath diffInfo)
+                else
+                    ""
+
+            Assert.Fail(
+                sprintf
+                    "Output does not match expected for %s. Debug output written to %s.%s"
+                    testName
+                    debugPath
+                    diffInfo
+            )
