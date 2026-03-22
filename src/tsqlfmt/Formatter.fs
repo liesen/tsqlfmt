@@ -338,13 +338,19 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
 
 and private boolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     match expr with
-    | :? BooleanBinaryExpression as bb -> sequenceDoc (andOrSequencePolicy cfg) (flattenBoolChain cfg bb)
+    | :? BooleanBinaryExpression as bb -> sequenceDoc (andOrSequencePolicy cfg) (booleanSequenceItems cfg bb)
     | _ -> exprDoc cfg expr
+
+and private boolExprWithFirstItemIndentDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
+    match expr with
+    | :? BooleanBinaryExpression as bb ->
+        sequenceDoc (andOrSequencePolicy cfg |> withFirstItemIndent (indentWidth cfg)) (booleanSequenceItems cfg bb)
+    | _ -> nest (indentWidth cfg) (exprDoc cfg expr)
 
 and private standaloneBoolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     match expr with
     | :? BooleanBinaryExpression as bb ->
-        sequenceDoc (andOrSequencePolicy cfg) (flattenBoolChain cfg bb)
+        sequenceDoc (andOrSequencePolicy cfg) (booleanSequenceItems cfg bb)
     | :? ExistsPredicate as ep ->
         keyword cfg "EXISTS" <++> blockParenthesizedQueryDoc cfg true ep.Subquery.QueryExpression (queryExprDoc cfg ep.Subquery.QueryExpression)
     | _ ->
@@ -775,7 +781,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
 
           // WHERE clause
           if qs.WhereClause <> null && qs.WhereClause.SearchCondition <> null then
-              yield keyword cfg "WHERE" <++> whereConditionDoc cfg qs.WhereClause.SearchCondition
+              yield keyword cfg "WHERE" <++> boolExprWithFirstItemIndentDoc cfg qs.WhereClause.SearchCondition
 
           // GROUP BY clause
           if qs.GroupByClause <> null && qs.GroupByClause.GroupingSpecifications <> null && qs.GroupByClause.GroupingSpecifications.Count > 0 then
@@ -790,7 +796,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
 
           // HAVING clause
           if qs.HavingClause <> null && qs.HavingClause.SearchCondition <> null then
-              yield keyword cfg "HAVING" <++> whereConditionDoc cfg qs.HavingClause.SearchCondition
+              yield keyword cfg "HAVING" <++> boolExprWithFirstItemIndentDoc cfg qs.HavingClause.SearchCondition
 
           // ORDER BY clause
           if qs.OrderByClause <> null && qs.OrderByClause.OrderByElements <> null && qs.OrderByClause.OrderByElements.Count > 0 then
@@ -799,14 +805,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
 
     join line parts
 
-and private whereConditionDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
-    // Flatten AND/OR chains with proper indentation
-    match expr with
-    | :? BooleanBinaryExpression as bb ->
-        sequenceDoc (andOrSequencePolicy cfg |> withFirstItemIndent (indentWidth cfg)) (flattenBoolChain cfg bb)
-    | _ -> nest (indentWidth cfg) (exprDoc cfg expr)
-
-and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc list =
+and private booleanSequenceItems (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc list =
     let opText =
         match bb.BinaryExpressionType with
         | BooleanBinaryExpressionType.And -> "AND"
@@ -816,7 +815,7 @@ and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression
     let leftParts =
         match bb.FirstExpression with
         | :? BooleanBinaryExpression as lbb when lbb.BinaryExpressionType = bb.BinaryExpressionType ->
-            flattenBoolChain cfg lbb
+            booleanSequenceItems cfg lbb
         | _ -> [exprDoc cfg bb.FirstExpression]
 
     let beforeOpComments, afterOpComments = splitBooleanInterComments bb
@@ -905,7 +904,7 @@ and private qualifiedJoinDoc (cfg: FormattingStyle) (qj: QualifiedJoin) : Doc =
         | QualifiedJoinType.FullOuter -> keyword cfg "FULL" <++> keyword cfg "JOIN"
         | _ -> keyword cfg "JOIN"
     let secondTable = tableRefDoc cfg qj.SecondTableReference
-    let onCondition = whereConditionDoc cfg qj.SearchCondition
+    let onCondition = boolExprWithFirstItemIndentDoc cfg qj.SearchCondition
     firstTable <+> line <+> joinType <++> secondTable <+> nest (indentWidth cfg) (line <+> keyword cfg "ON" <++> onCondition)
 
 and private unqualifiedJoinDoc (cfg: FormattingStyle) (uj: UnqualifiedJoin) : Doc =
@@ -1507,7 +1506,7 @@ and private updateDoc (cfg: FormattingStyle) (upd: UpdateStatement) : Doc =
               yield keyword cfg "FROM" <++> tableRefDoc cfg spec.FromClause.TableReferences.[0]
 
           if spec.WhereClause <> null && spec.WhereClause.SearchCondition <> null then
-              yield keyword cfg "WHERE" <++> whereConditionDoc cfg spec.WhereClause.SearchCondition ]
+              yield keyword cfg "WHERE" <++> boolExprWithFirstItemIndentDoc cfg spec.WhereClause.SearchCondition ]
 
     join line parts
 
@@ -1524,7 +1523,7 @@ and private deleteDoc (cfg: FormattingStyle) (del: DeleteStatement) : Doc =
               yield keyword cfg "FROM" <++> tableRefDoc cfg spec.FromClause.TableReferences.[0]
 
           if spec.WhereClause <> null && spec.WhereClause.SearchCondition <> null then
-              yield keyword cfg "WHERE" <++> whereConditionDoc cfg spec.WhereClause.SearchCondition ]
+              yield keyword cfg "WHERE" <++> boolExprWithFirstItemIndentDoc cfg spec.WhereClause.SearchCondition ]
 
     join line parts
 
@@ -1538,7 +1537,7 @@ and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
             text " " <+> keyword cfg "AS" <++> identDoc spec.TableAlias
         else empty
     let source = tableRefDoc cfg spec.TableReference
-    let onCondition = whereConditionDoc cfg spec.SearchCondition
+    let onCondition = boolExprWithFirstItemIndentDoc cfg spec.SearchCondition
 
     let mergeHeader =
         keyword cfg "MERGE" <++> keyword cfg "INTO" <++> target <+> targetAlias <+> line <+>
