@@ -11,7 +11,6 @@ let ``headed condition indents multiline first item without overindenting follow
             dml =
                 { config.dml with
                     collapseShortSubqueries = false } }
-
     let sql = "select 1 from dbo.t where a in (select 1 from dbo.u where u.id = t.id) and b = 2"
     let expected =
         """

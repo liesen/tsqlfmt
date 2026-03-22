@@ -24,6 +24,7 @@ let private writeTempStyle (dir: string) (name: string) (keywordStyle: string) =
 [<Fact>]
 let ``parseArgs accepts sqlprompt formatSql command`` () =
     let parsed = parseArgs [| "formatSql"; "--styleName"; "Default" |]
+
     match parsed with
     | Error msg -> Assert.Fail msg
     | Ok args -> Assert.Equal("Default", args.styleName)
@@ -31,6 +32,7 @@ let ``parseArgs accepts sqlprompt formatSql command`` () =
 [<Fact>]
 let ``parseArgs accepts auth token and ignores it`` () =
     let parsed = parseArgs [| "formatSql"; "--authToken"; "secret"; "--styleName"; "Default" |]
+
     match parsed with
     | Error msg -> Assert.Fail msg
     | Ok args -> Assert.Equal("Default", args.styleName)
@@ -38,6 +40,7 @@ let ``parseArgs accepts auth token and ignores it`` () =
 [<Fact>]
 let ``parseArgs rejects direct non-sqlprompt invocation`` () =
     let parsed = parseArgs [| "--styleName"; "Default" |]
+
     match parsed with
     | Ok _ -> Assert.Fail("Expected direct invocation to fail")
     | Error _ -> ()
@@ -45,6 +48,7 @@ let ``parseArgs rejects direct non-sqlprompt invocation`` () =
 [<Fact>]
 let ``parseArgs rejects unsupported sqlprompt command`` () =
     let parsed = parseArgs [| "listAvailableStyles" |]
+
     match parsed with
     | Ok _ -> Assert.Fail("Expected unsupported command to fail")
     | Error msg -> Assert.Contains("Unsupported SQL Prompt command", msg)
@@ -54,6 +58,7 @@ let ``resolveConfigPath ignores missing styles directory for default style`` () 
     let missingDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     let args = { defaultCliArgs with stylesPath = Some missingDir; styleName = "Default"; styleNameSpecified = true }
     let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
+
     match resolved with
     | Error msg -> Assert.Fail msg
     | Ok _ -> ()
@@ -63,6 +68,7 @@ let ``resolveConfigPath rejects missing named style without styles directory`` (
     let missingDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     let args = { defaultCliArgs with stylesPath = Some missingDir; styleName = "MyStyle"; styleNameSpecified = true }
     let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
+
     match resolved with
     | Ok _ -> Assert.Fail("Expected missing style to fail")
     | Error msg -> Assert.Contains("Style 'MyStyle' could not be found", msg)
@@ -71,9 +77,11 @@ let ``resolveConfigPath rejects missing named style without styles directory`` (
 let ``resolveConfigPath rejects missing named style`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
+
     try
         let args = { defaultCliArgs with stylesPath = Some stylesDir; styleName = "Missing"; styleNameSpecified = true }
         let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
+
         match resolved with
         | Ok _ -> Assert.Fail("Expected missing style to fail")
         | Error msg -> Assert.Contains("Style 'Missing' could not be found", msg)
@@ -84,10 +92,12 @@ let ``resolveConfigPath rejects missing named style`` () =
 let ``resolveConfigPath uses named style from styles directory`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
+
     try
         let stylePath = writeTempStyle stylesDir "MyStyle.json" "lowercase"
         let args = { defaultCliArgs with stylesPath = Some stylesDir; styleName = "MyStyle" }
         let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
+
         match resolved with
         | Error msg -> Assert.Fail msg
         | Ok None -> Assert.Fail("Expected a style path")
@@ -99,10 +109,12 @@ let ``resolveConfigPath uses named style from styles directory`` () =
 let ``resolveConfigPath falls back to formattingstyle json for default style`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
+
     try
         let stylePath = writeTempStyle stylesDir "formattingstyle.json" "uppercase"
         let args = { defaultCliArgs with stylesPath = Some stylesDir; styleName = "Default" }
         let resolved = resolveConfigPath (Directory.GetCurrentDirectory()) args
+
         match resolved with
         | Error msg -> Assert.Fail msg
         | Ok None -> Assert.Fail("Expected a style path")
@@ -142,6 +154,7 @@ let ``withOptionalCasing preserves style casing when applyCasing is true`` () =
 let ``loadConfig parses unsupported right aligned boolean alignment`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
+
     try
         let stylePath = Path.Combine(stylesDir, "style.json")
         File.WriteAllText(stylePath, """{"operators":{"andOr":{"alignment":"rightAligned"}}}""")
@@ -156,6 +169,7 @@ let ``loadConfig parses unsupported right aligned boolean alignment`` () =
 let ``validateConfig rejects unsupported right aligned boolean alignment`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
+
     try
         let stylePath = Path.Combine(stylesDir, "style.json")
         File.WriteAllText(stylePath, """{"operators":{"andOr":{"alignment":"rightAligned"}}}""")
@@ -172,6 +186,7 @@ let ``validateConfig rejects unsupported right aligned boolean alignment`` () =
 let ``loadConfig parses unsupported right aligned case end alignment`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
+
     try
         let stylePath = Path.Combine(stylesDir, "style.json")
         File.WriteAllText(stylePath, """{"caseExpressions":{"endAlignment":"rightAlignedToWhen"}}""")
@@ -186,6 +201,7 @@ let ``loadConfig parses unsupported right aligned case end alignment`` () =
 let ``validateConfig rejects unsupported right aligned case end alignment`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
+
     try
         let stylePath = Path.Combine(stylesDir, "style.json")
         File.WriteAllText(stylePath, """{"caseExpressions":{"endAlignment":"rightAlignedToWhen"}}""")

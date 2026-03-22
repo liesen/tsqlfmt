@@ -101,7 +101,7 @@ let private canCollapseList (cfg: FormattingStyle) (items: Doc list) =
 // where the right edge of AND aligns to the right edge of WHERE. The current
 // Doc model handles fixed indentation well via Nest, but it does not express
 // right-edge anchoring cleanly.
-type private SequencePolicy = {
+type SequencePolicy = {
     placeFirstItemOnNewLine: bool
     firstItemIndent: int option
     subsequentItemsIndent: int option
@@ -111,7 +111,7 @@ type private SequencePolicy = {
 //   a = 1
 //   AND b = 2
 //   AND c = 3
-let private sequenceDoc (policy: SequencePolicy) (items: Doc list) : Doc =
+let sequenceDoc (policy: SequencePolicy) (items: Doc list) : Doc =
     let nestIfIndented indent doc =
         match indent with
         | Some spaces -> nest spaces doc
@@ -137,7 +137,7 @@ let private sequenceDoc (policy: SequencePolicy) (items: Doc list) : Doc =
 //       WHEN x = 1 THEN 'a'
 //       ELSE 'b'
 //   END
-let private headedSequenceDoc (policy: SequencePolicy) (headDoc: Doc) (items: Doc list) : Doc =
+let headedSequenceDoc (policy: SequencePolicy) (headDoc: Doc) (items: Doc list) : Doc =
     let subsequentIndent = defaultArg policy.subsequentItemsIndent 0
 
     match items with
@@ -147,7 +147,7 @@ let private headedSequenceDoc (policy: SequencePolicy) (headDoc: Doc) (items: Do
     | _ ->
         headDoc <++> sequenceDoc policy items
 
-let private listSequencePolicy (cfg: FormattingStyle) =
+let listSequencePolicy (cfg: FormattingStyle) =
     let indent = indentWidth cfg
     {
         placeFirstItemOnNewLine = cfg.lists.placeFirstItemOnNewLine = PlaceOnNewLine.Always
@@ -155,7 +155,7 @@ let private listSequencePolicy (cfg: FormattingStyle) =
         subsequentItemsIndent = Some indent
     }
 
-let private andOrSequencePolicy (cfg: FormattingStyle) =
+let andOrSequencePolicy (cfg: FormattingStyle) =
     let indent = indentWidth cfg
     {
         placeFirstItemOnNewLine = false
@@ -166,7 +166,7 @@ let private andOrSequencePolicy (cfg: FormattingStyle) =
             | _ -> None
     }
 
-let private withFirstItemIndent (indent: int) (policy: SequencePolicy) =
+let withFirstItemIndent (indent: int) (policy: SequencePolicy) =
     { policy with
         firstItemIndent = if indent > 0 then Some indent else None }
 

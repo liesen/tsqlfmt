@@ -15,11 +15,13 @@ let ``format test`` (testName: string) =
     Assert.True(File.Exists(expectedPath), sprintf "Expected file not found: %s" expectedPath)
     let inputSql = File.ReadAllText(actualPath)
     let expectedSql = File.ReadAllText(expectedPath).ReplaceLineEndings("\n").TrimEnd()
+
     match format config inputSql with
     | Error errors ->
         Assert.Fail(sprintf "Parse errors: %s" (String.Join("; ", errors)))
     | Ok formatted ->
         let formatted = formatted.TrimEnd()
+
         if formatted <> expectedSql then
             let debugPath = Path.Combine(testDataDir, testName + ".debug.sql")
             File.WriteAllText(debugPath, formatted)
@@ -27,12 +29,14 @@ let ``format test`` (testName: string) =
             let formattedLines = formatted.Split('\n')
             let mutable diffLine = -1
             let maxLines = max expectedLines.Length formattedLines.Length
+
             for i in 0 .. maxLines - 1 do
                 if diffLine = -1 then
                     let eLine = if i < expectedLines.Length then expectedLines.[i].TrimEnd('\r') else "<missing>"
                     let fLine = if i < formattedLines.Length then formattedLines.[i].TrimEnd('\r') else "<missing>"
                     if eLine <> fLine then
                         diffLine <- i
+
             let diffInfo =
                 if diffLine >= 0 then
                     let eLine = if diffLine < expectedLines.Length then expectedLines.[diffLine].TrimEnd('\r') else "<missing>"
