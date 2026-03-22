@@ -168,7 +168,7 @@ let private andOrSequencePolicy (cfg: FormattingStyle) =
 
 let private withFirstItemIndent (indent: int) (policy: SequencePolicy) =
     { policy with
-        firstItemIndent = Some indent }
+        firstItemIndent = if indent > 0 then Some indent else None }
 
 let private expandedListDoc (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
     let decoratedItems =
@@ -338,7 +338,7 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
 
 and private boolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     match expr with
-    | :? BooleanBinaryExpression as bb -> booleanChainDoc cfg false bb
+    | :? BooleanBinaryExpression as bb -> formatBooleanChain cfg (andOrSequencePolicy cfg) bb
     | _ -> exprDoc cfg expr
 
 and private standaloneBoolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
@@ -803,7 +803,7 @@ and private whereConditionDoc (cfg: FormattingStyle) (expr: BooleanExpression) :
     // Flatten AND/OR chains with proper indentation
     match expr with
     | :? BooleanBinaryExpression as bb ->
-        booleanChainDoc cfg true bb
+        formatBooleanChain cfg (andOrSequencePolicy cfg |> withFirstItemIndent (indentWidth cfg)) bb
     | _ -> nest (indentWidth cfg) (exprDoc cfg expr)
 
 and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc list =
@@ -833,15 +833,12 @@ and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression
 
     leftPartsWithComments @ [rightPart]
 
-and private booleanChainDoc (cfg: FormattingStyle) (nestFirst: bool) (bb: BooleanBinaryExpression) : Doc =
+and private formatBooleanChain (cfg: FormattingStyle) (policy: SequencePolicy) (bb: BooleanBinaryExpression) : Doc =
     let parts = flattenBoolChain cfg bb
-    let policy =
-        let basePolicy = andOrSequencePolicy cfg
-        if nestFirst then withFirstItemIndent (indentWidth cfg) basePolicy else basePolicy
     sequenceDoc policy parts
 
 and private standaloneBoolConditionDoc (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc =
-    booleanChainDoc cfg false bb
+    formatBooleanChain cfg (andOrSequencePolicy cfg) bb
 
 and private orderByElemDoc (cfg: FormattingStyle) (o: ExpressionWithSortOrder) : Doc =
     let e = exprDoc cfg o.Expression
