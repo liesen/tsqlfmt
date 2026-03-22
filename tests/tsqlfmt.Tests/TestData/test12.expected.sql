@@ -1,7 +1,7 @@
 -- Leading comment before first statement
 -- Second leading comment line
-SELECT 1 AS a,
-    /* inline comment */ 2 AS b,
+SELECT 1 AS a, /* inline comment */
+    2 AS b,
     3 AS c -- trailing comment on column
 
 SELECT t.Id,

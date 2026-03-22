@@ -91,6 +91,39 @@ let splitBooleanInterComments (bb: BooleanBinaryExpression) : Comment list * Com
             (false, [], [])
         |> fun (_, beforeOp, afterOp) -> List.rev beforeOp, List.rev afterOp
 
+let splitCommaInterComments (leftFrag: TSqlFragment) (rightFrag: TSqlFragment) : Comment list * Comment list * bool =
+    let stream = leftFrag.ScriptTokenStream
+
+    if stream = null || rightFrag = null then
+        [], [], false
+    elif
+        rightFrag.ScriptTokenStream = null
+        || not (System.Object.ReferenceEquals(stream, rightFrag.ScriptTokenStream))
+    then
+        [], [], false
+    else
+        tokensInRange stream (leftFrag.LastTokenIndex + 1) (rightFrag.FirstTokenIndex - 1)
+        |> List.fold
+            (fun (seenComma, sawNewlineAfterComma, beforeComma, afterComma) tok ->
+                match tok.TokenType with
+                | TSqlTokenType.Comma -> true, false, beforeComma, afterComma
+                | TSqlTokenType.WhiteSpace when seenComma && (tok.Text.Contains('\n') || tok.Text.Contains('\r')) ->
+                    true, true, beforeComma, afterComma
+                | TSqlTokenType.SingleLineComment ->
+                    if seenComma then
+                        true, sawNewlineAfterComma, beforeComma, SingleLineComment(tok.Text.TrimEnd()) :: afterComma
+                    else
+                        false, sawNewlineAfterComma, SingleLineComment(tok.Text.TrimEnd()) :: beforeComma, afterComma
+                | TSqlTokenType.MultilineComment ->
+                    if seenComma then
+                        true, sawNewlineAfterComma, beforeComma, MultilineComment(tok.Text.TrimEnd()) :: afterComma
+                    else
+                        false, sawNewlineAfterComma, MultilineComment(tok.Text.TrimEnd()) :: beforeComma, afterComma
+                | _ -> seenComma, sawNewlineAfterComma, beforeComma, afterComma)
+            (false, false, [], [])
+        |> fun (_, sawNewlineAfterComma, beforeComma, afterComma) ->
+            List.rev beforeComma, List.rev afterComma, sawNewlineAfterComma
+
 let hasTrailingSemicolon (frag: TSqlFragment) =
     let stream = frag.ScriptTokenStream
 

@@ -163,26 +163,65 @@ let withFirstItemIndent (indent: int) (policy: SequencePolicy) =
     { policy with
         firstItemIndent = if indent > 0 then Some indent else None }
 
-let private expandedListDoc (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
+let private renderComment (comment: Comment) : Doc =
+    match comment with
+    | SingleLineComment commentText -> text commentText
+    | MultilineComment commentText -> text commentText
+
+type private CommaListItem =
+    { Doc: Doc
+      ForcesExpandedLayout: bool
+      AfterCommaComments: Comment list }
+
+let private afterCommaComments (leftFrag: TSqlFragment) (rightFrag: TSqlFragment) : Comment list =
+    let _, afterCommaComments, _ = splitCommaInterComments leftFrag rightFrag
+
+    afterCommaComments
+
+let private plainCommaListItems (items: Doc list) : CommaListItem list =
+    items
+    |> List.map (fun doc ->
+        { Doc = doc
+          ForcesExpandedLayout = false
+          AfterCommaComments = [] })
+
+let private decoratedCommaItemDoc (isLast: bool) (item: CommaListItem) : Doc =
+    if isLast then
+        item.Doc
+    else
+        match item.AfterCommaComments with
+        | [] -> item.Doc <+> text ","
+        | comments -> item.Doc <+> text ", " <+> join (text " ") (comments |> List.map renderComment)
+
+let private expandedCommaListDoc (cfg: FormattingStyle) (keyword: Doc) (items: CommaListItem list) : Doc =
     let decoratedItems =
         items
-        |> List.mapi (fun i item ->
-            if i < List.length items - 1 then
-                item <+> text ","
-            else
-                item)
+        |> List.mapi (fun i item -> decoratedCommaItemDoc (i = List.length items - 1) item)
 
     headedSequenceDoc (listSequencePolicy cfg) keyword decoratedItems
 
-let private formatList (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
+let private flatCommaListDoc (keyword: Doc) (items: CommaListItem list) : Doc =
+    let decoratedItems =
+        items
+        |> List.mapi (fun i item -> decoratedCommaItemDoc (i = List.length items - 1) item)
+
+    keyword <++> join (text " ") decoratedItems |> flatten
+
+let private formatCommaList (cfg: FormattingStyle) (keyword: Doc) (items: CommaListItem list) : Doc =
     match items with
     | [] -> keyword
-    | [ single ] when not cfg.lists.indentListItems -> keyword <++> single
-    | _ when canCollapseList cfg items ->
-        let flatDoc = keyword <++> join (text ", ") items |> flatten
-        let expandedDoc = expandedListDoc cfg keyword items
+    | [ single ] when not cfg.lists.indentListItems -> keyword <++> single.Doc
+    | _ when
+        not (items |> List.exists _.ForcesExpandedLayout)
+        && canCollapseList cfg (items |> List.map _.Doc)
+        ->
+        let flatDoc = flatCommaListDoc keyword items
+        let expandedDoc = expandedCommaListDoc cfg keyword items
         TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
-    | _ -> expandedListDoc cfg keyword items
+    | _ -> expandedCommaListDoc cfg keyword items
+
+let private formatList (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
+    formatCommaList cfg keyword (plainCommaListItems items)
 
 /// Get the raw SQL text of a fragment from its token stream.
 let private fragmentText (frag: TSqlFragment) : string =
@@ -327,11 +366,6 @@ let private withStatementTerminatorAndComment (stmt: TSqlStatement) (doc: Doc) :
 
     withSemicolon <+> trailingComment stmt
 
-let private commentDoc (comment: Comment) : Doc =
-    match comment with
-    | SingleLineComment commentText -> text commentText
-    | MultilineComment commentText -> text commentText
-
 type private TrailingFragmentDoc = { Comment: Comment option; Doc: Doc }
 
 let private trailingFragmentDoc (frag: TSqlFragment) (doc: Doc) : TrailingFragmentDoc =
@@ -341,17 +375,17 @@ let private trailingFragmentDoc (frag: TSqlFragment) (doc: Doc) : TrailingFragme
 let private appendInlineComments (doc: Doc) (comments: Comment list) : Doc =
     match comments with
     | [] -> doc
-    | _ -> doc <+> text " " <+> join (text " ") (comments |> List.map commentDoc)
+    | _ -> doc <+> text " " <+> join (text " ") (comments |> List.map renderComment)
 
 let private attachOwnLineComments (comments: Comment list) (doc: Doc) : Doc =
     match comments with
     | [] -> doc
-    | _ -> join line (comments |> List.map commentDoc) <+> line <+> doc
+    | _ -> join line (comments |> List.map renderComment) <+> line <+> doc
 
 let private attachInlineLeadingComments (comments: Comment list) (doc: Doc) : Doc =
     match comments with
     | [] -> doc
-    | _ -> join (text " ") (comments |> List.map commentDoc) <++> doc
+    | _ -> join (text " ") (comments |> List.map renderComment) <++> doc
 
 let private renderItemsWithLeadingComments<'T when 'T :> TSqlFragment>
     (render: 'T -> Doc)
@@ -1057,22 +1091,46 @@ and private querySpecDoc
 
     let selectItems =
         selectElements
-        |> renderItemsWithLeadingComments
-            (fun e ->
+        |> List.mapi (fun i e ->
+            let itemDoc =
                 if fragmentHasComments e then
                     exprDoc cfg e
                 else
-                    exprDoc cfg e |> withTrailingComment e)
-            (fun prev e ->
-                match prev with
-                | None -> []
-                | Some prevItem -> leadingInterComments prevItem e)
-            attachInlineLeadingComments
+                    exprDoc cfg e |> withTrailingComment e
+
+            let leadingComments =
+                match i with
+                | 0 -> []
+                | _ ->
+                    let leadingComments = leadingInterComments selectElements.[i - 1] selectElements.[i]
+
+                    let _, afterCommaComments, _ =
+                        splitCommaInterComments selectElements.[i - 1] selectElements.[i]
+
+                    leadingComments
+                    |> List.filter (fun comment -> not (List.contains comment afterCommaComments))
+
+            // SQL Prompt-compatible rule for comma-separated lists:
+            // comments before the comma belong to the item on the left, comments after
+            // the comma stay with that comma on the previous line, and only own-line
+            // comments in the gap lead the next item. Any preserved after-comma
+            // comment forces expanded list layout.
+            let trailingCommentsAfterComma =
+                match i with
+                | _ when i = List.length selectElements - 1 -> []
+                | _ -> afterCommaComments selectElements.[i] selectElements.[i + 1]
+
+            let forcesExpandedLayout = not (List.isEmpty trailingCommentsAfterComma)
+
+            { Doc = attachInlineLeadingComments leadingComments itemDoc
+              ForcesExpandedLayout = forcesExpandedLayout
+              AfterCommaComments = trailingCommentsAfterComma })
 
     let canKeepIntoWithSelect, selectClause =
         match selectItems, intoTarget with
-        | [ single ], Some intoTarget -> true, (selectKwWithTop <++> single <++> keyword cfg "INTO" <++> intoTarget.Doc)
-        | _ -> false, formatList cfg selectKwWithTop selectItems
+        | [ single ], Some intoTarget ->
+            true, (selectKwWithTop <++> single.Doc <++> keyword cfg "INTO" <++> intoTarget.Doc)
+        | _ -> false, formatCommaList cfg selectKwWithTop selectItems
 
     let intoClause =
         match intoTarget with
@@ -1164,7 +1222,7 @@ and private booleanSequenceItems (cfg: FormattingStyle) (bb: BooleanBinaryExpres
         | [] -> keyword cfg opText <++> rightExpr
         | comments ->
             keyword cfg opText
-            <++> join (text " ") (comments |> List.map commentDoc)
+            <++> join (text " ") (comments |> List.map renderComment)
             <++> rightExpr
 
     leftPartsWithComments @ [ rightPart ]
