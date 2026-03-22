@@ -111,3 +111,45 @@ let hasTrailingSemicolon (frag: TSqlFragment) =
     stream <> null
     && frag.LastTokenIndex >= frag.FirstTokenIndex
     && stream.[frag.LastTokenIndex].TokenType = TSqlTokenType.Semicolon
+
+let trailingCommentAfterTokenIndex (stream: IList<TSqlParserToken>) (lastTokenIndex: int) : Doc =
+    if stream = null then
+        empty
+    else
+        let rec scan idx =
+            if idx >= stream.Count then
+                empty
+            else
+                let tok = stream.[idx]
+
+                match tok.TokenType with
+                | TSqlTokenType.WhiteSpace ->
+                    if tok.Text.Contains('\n') || tok.Text.Contains('\r') then
+                        empty
+                    else
+                        scan (idx + 1)
+                | TSqlTokenType.SingleLineComment -> text " " <+> text (tok.Text.TrimEnd())
+                | TSqlTokenType.MultilineComment -> text " " <+> text tok.Text
+                | _ -> empty
+
+        scan (lastTokenIndex + 1)
+
+let tokenIndexOfType (frag: TSqlFragment) (tokenType: TSqlTokenType) : int option =
+    let stream = frag.ScriptTokenStream
+
+    if stream = null then
+        None
+    else
+        seq { frag.FirstTokenIndex .. frag.LastTokenIndex }
+        |> Seq.tryFind (fun i -> stream.[i].TokenType = tokenType)
+
+let tokenIndexOfIdentifier (frag: TSqlFragment) (value: string) : int option =
+    let stream = frag.ScriptTokenStream
+
+    if stream = null then
+        None
+    else
+        seq { frag.FirstTokenIndex .. frag.LastTokenIndex }
+        |> Seq.tryFind (fun i ->
+            stream.[i].TokenType = TSqlTokenType.Identifier
+            && System.String.Equals(stream.[i].Text, value, System.StringComparison.OrdinalIgnoreCase))

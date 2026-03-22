@@ -283,87 +283,47 @@ let private withTrailingComment (frag: TSqlFragment) (doc: Doc) : Doc = doc <+> 
 let private withStatementTerminator (stmt: TSqlStatement) (doc: Doc) : Doc =
     if hasTrailingSemicolon stmt then doc <+> text ";" else doc
 
-let private trailingCommentAfterTokenIndex (stream: IList<TSqlParserToken>) (lastTokenIndex: int) : Doc =
-    if stream = null then
-        empty
-    else
-        let rec scan idx =
-            if idx >= stream.Count then
-                empty
-            else
-                let tok = stream.[idx]
-
-                match tok.TokenType with
-                | TSqlTokenType.WhiteSpace ->
-                    if tok.Text.Contains('\n') || tok.Text.Contains('\r') then
-                        empty
-                    else
-                        scan (idx + 1)
-                | TSqlTokenType.SingleLineComment -> text " " <+> text (tok.Text.TrimEnd())
-                | TSqlTokenType.MultilineComment -> text " " <+> text tok.Text
-                | _ -> empty
-
-        scan (lastTokenIndex + 1)
-
-let private tokenIndexOfType (frag: TSqlFragment) (tokenType: TSqlTokenType) : int option =
-    let stream = frag.ScriptTokenStream
+let private keywordWithTrailingCommentDoc
+    (cfg: FormattingStyle)
+    (keywordText: string)
+    (tokenIndex: int option)
+    (stmt: TSqlStatement)
+    : Doc =
+    let stream = stmt.ScriptTokenStream
 
     if stream = null then
-        None
+        keyword cfg keywordText
     else
-        seq { frag.FirstTokenIndex .. frag.LastTokenIndex }
-        |> Seq.tryFind (fun i -> stream.[i].TokenType = tokenType)
+        match tokenIndex with
+        | Some idx -> keyword cfg keywordText <+> trailingCommentAfterTokenIndex stream idx
+        | None -> keyword cfg keywordText
 
-let private tokenIndexOfIdentifier (frag: TSqlFragment) (value: string) : int option =
-    let stream = frag.ScriptTokenStream
+let private tokenHasTrailingComment (tokenIndex: int option) (stmt: TSqlStatement) : bool =
+    let stream = stmt.ScriptTokenStream
 
     if stream = null then
-        None
+        false
     else
-        seq { frag.FirstTokenIndex .. frag.LastTokenIndex }
-        |> Seq.tryFind (fun i ->
-            stream.[i].TokenType = TSqlTokenType.Identifier
-            && String.Equals(stream.[i].Text, value, StringComparison.OrdinalIgnoreCase))
+        match tokenIndex with
+        | Some idx -> trailingCommentAfterTokenIndex stream idx <> empty
+        | None -> false
+
+let private returnsKeywordTokenIndex (stmt: TSqlStatement) = tokenIndexOfIdentifier stmt "RETURNS"
 
 let private returnsKeywordDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
-    let stream = stmt.ScriptTokenStream
-
-    if stream = null then
-        keyword cfg "RETURNS"
-    else
-        match tokenIndexOfIdentifier stmt "RETURNS" with
-        | Some idx -> keyword cfg "RETURNS" <+> trailingCommentAfterTokenIndex stream idx
-        | None -> keyword cfg "RETURNS"
+    keywordWithTrailingCommentDoc cfg "RETURNS" (returnsKeywordTokenIndex stmt) stmt
 
 let private returnsKeywordHasTrailingComment (stmt: TSqlStatement) : bool =
-    let stream = stmt.ScriptTokenStream
+    tokenHasTrailingComment (returnsKeywordTokenIndex stmt) stmt
 
-    if stream = null then
-        false
-    else
-        match tokenIndexOfIdentifier stmt "RETURNS" with
-        | Some idx -> trailingCommentAfterTokenIndex stream idx <> empty
-        | None -> false
+let private returnKeywordTokenIndex (stmt: TSqlStatement) =
+    tokenIndexOfType stmt TSqlTokenType.Return
 
 let private returnKeywordDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
-    let stream = stmt.ScriptTokenStream
-
-    if stream = null then
-        keyword cfg "RETURN"
-    else
-        match tokenIndexOfType stmt TSqlTokenType.Return with
-        | Some idx -> keyword cfg "RETURN" <+> trailingCommentAfterTokenIndex stream idx
-        | None -> keyword cfg "RETURN"
+    keywordWithTrailingCommentDoc cfg "RETURN" (returnKeywordTokenIndex stmt) stmt
 
 let private returnKeywordHasTrailingComment (stmt: TSqlStatement) : bool =
-    let stream = stmt.ScriptTokenStream
-
-    if stream = null then
-        false
-    else
-        match tokenIndexOfType stmt TSqlTokenType.Return with
-        | Some idx -> trailingCommentAfterTokenIndex stream idx <> empty
-        | None -> false
+    tokenHasTrailingComment (returnKeywordTokenIndex stmt) stmt
 
 let private withStatementTerminatorAndComment (stmt: TSqlStatement) (doc: Doc) : Doc =
     let withSemicolon = if hasTrailingSemicolon stmt then doc <+> text ";" else doc
