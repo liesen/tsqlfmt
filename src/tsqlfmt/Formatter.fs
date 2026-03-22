@@ -2336,3 +2336,5 @@ let format (config: FormattingStyle) (sql: string) : Result<string, string list>
 
             Ok(render config.whitespace.wrapLinesLongerThan result)
         | _ -> Ok(render config.whitespace.wrapLinesLongerThan (tokenStreamDoc config fragment))
+
+let formatBooleanExpressionDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc = boolExprDoc cfg expr

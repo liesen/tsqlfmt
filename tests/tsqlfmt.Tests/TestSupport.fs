@@ -3,6 +3,8 @@ module TestSupport
 open System
 open System.IO
 open Xunit
+open Microsoft.SqlServer.TransactSql.ScriptDom
+open TSqlFormatter.Doc
 open TSqlFormatter.Config
 open TSqlFormatter.Formatter
 
@@ -56,6 +58,46 @@ let assertFormatsToWithConfig (testConfig: FormattingStyle) (expected: string) (
 
 let assertFormatsTo (expected: string) (sql: string) =
     assertFormatsToWithConfig config expected sql
+
+let parseBooleanExpression (sql: string) =
+    let parser = TSql160Parser(initialQuotedIdentifiers = true)
+    use reader = new StringReader("SELECT 1 WHERE " + sql)
+    let mutable errors = null: System.Collections.Generic.IList<ParseError>
+    let fragment = parser.Parse(reader, &errors)
+
+    if errors <> null && errors.Count > 0 then
+        Assert.Fail(sprintf "Parse errors: %s" (String.Join("; ", errors |> Seq.map (fun e -> e.Message))))
+
+    match fragment with
+    | :? TSqlScript as script when script.Batches.Count > 0 && script.Batches.[0].Statements.Count > 0 ->
+        match script.Batches.[0].Statements.[0] with
+        | :? SelectStatement as stmt ->
+            match stmt.QueryExpression with
+            | :? QuerySpecification as spec ->
+                if isNull spec.WhereClause || isNull spec.WhereClause.SearchCondition then
+                    Assert.Fail("Expected WHERE clause search condition")
+
+                spec.WhereClause.SearchCondition
+            | _ ->
+                Assert.Fail("Expected SELECT statement with query specification")
+                failwith "unreachable"
+        | _ ->
+            Assert.Fail("Expected SELECT statement with query specification")
+            failwith "unreachable"
+    | _ ->
+        Assert.Fail("Expected T-SQL script")
+        failwith "unreachable"
+
+let assertBooleanExpressionDoc (expected: string) (sql: string) =
+    let expectedSql = expected.ReplaceLineEndings("\n").Trim().TrimEnd()
+    let expr = parseBooleanExpression sql
+
+    let actual =
+        expr
+        |> formatBooleanExpressionDoc config
+        |> render config.whitespace.wrapLinesLongerThan
+
+    Assert.Equal(expectedSql, actual.TrimEnd())
 
 let testCases () : seq<obj[]> =
     Directory.GetFiles(testDataDir, "*.actual.sql")

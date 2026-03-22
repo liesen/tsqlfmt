@@ -59,3 +59,43 @@ WHERE x = 1
 """
 
     assertFormatsTo expected sql
+
+[<Fact>]
+let ``IIF keeps a plain boolean expression inline`` () =
+    let sql = "select iif(a = 1 and b = 2, 'yes', 'no') as result"
+
+    let expected =
+        """
+SELECT IIF(a = 1
+        AND b = 2, 'yes', 'no') AS result
+"""
+
+    assertFormatsTo expected sql
+
+[<Fact>]
+let ``NOT over a parenthesized boolean expression keeps generic boolean formatting`` () =
+    let sql = "select 1 where not (a = 1 and b = 2 or c = 3)"
+
+    let expected =
+        """
+SELECT 1
+WHERE NOT (a = 1 AND b = 2 OR c = 3)
+"""
+
+    assertFormatsTo expected sql
+
+[<Fact>]
+let ``plain boolean expression formats with normal AND indentation`` () =
+    let expected =
+        """
+a = 1
+    AND b = 2
+    AND c = 3
+"""
+
+    assertBooleanExpressionDoc expected "a = 1 and b = 2 and c = 3"
+
+[<Fact>]
+let ``plain parenthesized boolean expression stays inline when it fits`` () =
+    let expected = "NOT (a = 1 AND b = 2 OR c = 3)"
+    assertBooleanExpressionDoc expected "not (a = 1 and b = 2 or c = 3)"
