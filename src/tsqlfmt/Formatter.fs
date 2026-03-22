@@ -338,13 +338,13 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
 
 and private boolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     match expr with
-    | :? BooleanBinaryExpression as bb -> formatBooleanChain cfg (andOrSequencePolicy cfg) bb
+    | :? BooleanBinaryExpression as bb -> sequenceDoc (andOrSequencePolicy cfg) (flattenBoolChain cfg bb)
     | _ -> exprDoc cfg expr
 
 and private standaloneBoolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     match expr with
     | :? BooleanBinaryExpression as bb ->
-        standaloneBoolConditionDoc cfg bb
+        sequenceDoc (andOrSequencePolicy cfg) (flattenBoolChain cfg bb)
     | :? ExistsPredicate as ep ->
         keyword cfg "EXISTS" <++> blockParenthesizedQueryDoc cfg true ep.Subquery.QueryExpression (queryExprDoc cfg ep.Subquery.QueryExpression)
     | _ ->
@@ -803,7 +803,7 @@ and private whereConditionDoc (cfg: FormattingStyle) (expr: BooleanExpression) :
     // Flatten AND/OR chains with proper indentation
     match expr with
     | :? BooleanBinaryExpression as bb ->
-        formatBooleanChain cfg (andOrSequencePolicy cfg |> withFirstItemIndent (indentWidth cfg)) bb
+        sequenceDoc (andOrSequencePolicy cfg |> withFirstItemIndent (indentWidth cfg)) (flattenBoolChain cfg bb)
     | _ -> nest (indentWidth cfg) (exprDoc cfg expr)
 
 and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc list =
@@ -832,13 +832,6 @@ and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression
         | comments -> keyword cfg opText <++> join (text " ") (comments |> List.map text) <++> rightExpr
 
     leftPartsWithComments @ [rightPart]
-
-and private formatBooleanChain (cfg: FormattingStyle) (policy: SequencePolicy) (bb: BooleanBinaryExpression) : Doc =
-    let parts = flattenBoolChain cfg bb
-    sequenceDoc policy parts
-
-and private standaloneBoolConditionDoc (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc =
-    formatBooleanChain cfg (andOrSequencePolicy cfg) bb
 
 and private orderByElemDoc (cfg: FormattingStyle) (o: ExpressionWithSortOrder) : Doc =
     let e = exprDoc cfg o.Expression
