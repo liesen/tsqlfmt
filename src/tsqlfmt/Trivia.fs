@@ -4,6 +4,12 @@ open System.Collections.Generic
 open Microsoft.SqlServer.TransactSql.ScriptDom
 open TSqlFormatter.Doc
 
+type Comment =
+    | SingleLineComment of string
+    | MultilineComment of string
+
+type TrailingTrivia = Comment option
+
 let interComments (prevFrag: TSqlFragment) (nextFrag: TSqlFragment) : string list =
     if prevFrag = null || nextFrag = null then
         []
@@ -112,27 +118,33 @@ let hasTrailingSemicolon (frag: TSqlFragment) =
     && frag.LastTokenIndex >= frag.FirstTokenIndex
     && stream.[frag.LastTokenIndex].TokenType = TSqlTokenType.Semicolon
 
-let trailingCommentAfterTokenIndex (stream: IList<TSqlParserToken>) (lastTokenIndex: int) : Doc =
+let trailingTriviaAfterTokenIndex (stream: IList<TSqlParserToken>) (lastTokenIndex: int) : TrailingTrivia =
     if stream = null then
-        empty
+        None
     else
         let rec scan idx =
             if idx >= stream.Count then
-                empty
+                None
             else
                 let tok = stream.[idx]
 
                 match tok.TokenType with
                 | TSqlTokenType.WhiteSpace ->
                     if tok.Text.Contains('\n') || tok.Text.Contains('\r') then
-                        empty
+                        None
                     else
                         scan (idx + 1)
-                | TSqlTokenType.SingleLineComment -> text " " <+> text (tok.Text.TrimEnd())
-                | TSqlTokenType.MultilineComment -> text " " <+> text tok.Text
-                | _ -> empty
+                | TSqlTokenType.SingleLineComment -> Some(SingleLineComment(tok.Text.TrimEnd()))
+                | TSqlTokenType.MultilineComment -> Some(MultilineComment tok.Text)
+                | _ -> None
 
         scan (lastTokenIndex + 1)
+
+let trailingCommentAfterTokenIndex (stream: IList<TSqlParserToken>) (lastTokenIndex: int) : Doc =
+    match trailingTriviaAfterTokenIndex stream lastTokenIndex with
+    | None -> empty
+    | Some(SingleLineComment comment) -> text " " <+> text comment
+    | Some(MultilineComment comment) -> text " " <+> text comment
 
 let tokenIndexOfType (frag: TSqlFragment) (tokenType: TSqlTokenType) : int option =
     let stream = frag.ScriptTokenStream

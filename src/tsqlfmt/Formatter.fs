@@ -305,7 +305,7 @@ let private tokenHasTrailingComment (tokenIndex: int option) (stmt: TSqlStatemen
         false
     else
         match tokenIndex with
-        | Some idx -> trailingCommentAfterTokenIndex stream idx <> empty
+        | Some idx -> trailingTriviaAfterTokenIndex stream idx <> None
         | None -> false
 
 let private returnsKeywordTokenIndex (stmt: TSqlStatement) = tokenIndexOfIdentifier stmt "RETURNS"
