@@ -315,7 +315,7 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
     | :? InPredicate as inp -> inPredicateDoc cfg inp
     | :? LikePredicate as lk -> likePredicateDoc cfg lk
     | :? ExistsPredicate as ep ->
-        keyword cfg "EXISTS" <++> inlineParenthesizedQueryDoc cfg true ep.Subquery.QueryExpression (queryExprDoc cfg ep.Subquery.QueryExpression)
+        keyword cfg "EXISTS" <++> blockParenthesizedQueryDoc cfg true ep.Subquery.QueryExpression (queryExprDoc cfg ep.Subquery.QueryExpression)
     | :? BooleanTernaryExpression as be -> betweenDoc cfg be
     | :? BinaryExpression as binex -> binaryExprDoc cfg binex
     | :? UnaryExpression as unex ->
@@ -338,26 +338,25 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
 
 and private boolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     match expr with
-    | :? BooleanBinaryExpression as bb -> sequenceDoc (andOrSequencePolicy cfg) (booleanSequenceItems cfg bb)
+    | :? BooleanBinaryExpression as bb -> boolBinaryExprDoc cfg false bb
     | _ -> exprDoc cfg expr
 
-and private clauseConditionDoc (cfg: FormattingStyle) (head: Doc) (expr: BooleanExpression) : Doc =
+and private boolBinaryExprDoc (cfg: FormattingStyle) (afterHead: bool) (bb: BooleanBinaryExpression) : Doc =
+    let policy =
+        if afterHead then
+            andOrSequencePolicy cfg |> withFirstItemIndent (indentWidth cfg)
+        else
+            andOrSequencePolicy cfg
+
+    sequenceDoc policy (booleanSequenceItems cfg bb)
+
+and private headedConditionDoc (cfg: FormattingStyle) (head: Doc) (expr: BooleanExpression) : Doc =
     let body =
         match expr with
-        | :? BooleanBinaryExpression as bb ->
-            sequenceDoc (andOrSequencePolicy cfg |> withFirstItemIndent (indentWidth cfg)) (booleanSequenceItems cfg bb)
-        | _ -> nest (indentWidth cfg) (exprDoc cfg expr)
+        | :? BooleanBinaryExpression as bb -> boolBinaryExprDoc cfg true bb
+        | _ -> boolExprDoc cfg expr
 
     head <++> body
-
-and private standaloneBoolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
-    match expr with
-    | :? BooleanBinaryExpression as bb ->
-        sequenceDoc (andOrSequencePolicy cfg) (booleanSequenceItems cfg bb)
-    | :? ExistsPredicate as ep ->
-        keyword cfg "EXISTS" <++> blockParenthesizedQueryDoc cfg true ep.Subquery.QueryExpression (queryExprDoc cfg ep.Subquery.QueryExpression)
-    | _ ->
-        boolExprDoc cfg expr
 
 and private columnRefDoc (_cfg: FormattingStyle) (col: ColumnReferenceExpression) : Doc =
     if col.MultiPartIdentifier <> null then
@@ -784,7 +783,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
 
           // WHERE clause
           if qs.WhereClause <> null && qs.WhereClause.SearchCondition <> null then
-              yield clauseConditionDoc cfg (keyword cfg "WHERE") qs.WhereClause.SearchCondition
+              yield headedConditionDoc cfg (keyword cfg "WHERE") qs.WhereClause.SearchCondition
 
           // GROUP BY clause
           if qs.GroupByClause <> null && qs.GroupByClause.GroupingSpecifications <> null && qs.GroupByClause.GroupingSpecifications.Count > 0 then
@@ -799,7 +798,7 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
 
           // HAVING clause
           if qs.HavingClause <> null && qs.HavingClause.SearchCondition <> null then
-              yield clauseConditionDoc cfg (keyword cfg "HAVING") qs.HavingClause.SearchCondition
+              yield headedConditionDoc cfg (keyword cfg "HAVING") qs.HavingClause.SearchCondition
 
           // ORDER BY clause
           if qs.OrderByClause <> null && qs.OrderByClause.OrderByElements <> null && qs.OrderByClause.OrderByElements.Count > 0 then
@@ -907,7 +906,7 @@ and private qualifiedJoinDoc (cfg: FormattingStyle) (qj: QualifiedJoin) : Doc =
         | QualifiedJoinType.FullOuter -> keyword cfg "FULL" <++> keyword cfg "JOIN"
         | _ -> keyword cfg "JOIN"
     let secondTable = tableRefDoc cfg qj.SecondTableReference
-    let onCondition = clauseConditionDoc cfg (keyword cfg "ON") qj.SearchCondition
+    let onCondition = headedConditionDoc cfg (keyword cfg "ON") qj.SearchCondition
     firstTable <+> line <+> joinType <++> secondTable <+> nest (indentWidth cfg) (line <+> onCondition)
 
 and private unqualifiedJoinDoc (cfg: FormattingStyle) (uj: UnqualifiedJoin) : Doc =
@@ -1396,7 +1395,7 @@ and private beginEndDoc (cfg: FormattingStyle) (be: BeginEndBlockStatement) : Do
     keyword cfg "BEGIN" <+> nest (indentWidth cfg) (line <+> join (line <+> line) stmts) <+> line <+> keyword cfg "END"
 
 and private ifDoc (cfg: FormattingStyle) (ifs: IfStatement) : Doc =
-    let cond = standaloneBoolExprDoc cfg ifs.Predicate
+    let ifCondition = headedConditionDoc cfg (keyword cfg "IF") ifs.Predicate
     let thenDoc =
         let doc = statementDoc cfg ifs.ThenStatement
         match ifs.ThenStatement with
@@ -1409,12 +1408,12 @@ and private ifDoc (cfg: FormattingStyle) (ifs: IfStatement) : Doc =
             | :? BeginEndBlockStatement -> line <+> keyword cfg "ELSE" <+> line <+> elseStmtDoc
             | _ -> line <+> keyword cfg "ELSE" <+> nest (indentWidth cfg) (line <+> elseStmtDoc)
         else empty
-    keyword cfg "IF" <++> cond <+> thenDoc <+> elseDoc
+    ifCondition <+> thenDoc <+> elseDoc
 
 and private whileDoc (cfg: FormattingStyle) (ws: WhileStatement) : Doc =
-    let cond = standaloneBoolExprDoc cfg ws.Predicate
+    let whileCondition = headedConditionDoc cfg (keyword cfg "WHILE") ws.Predicate
     let bodyDoc = statementDoc cfg ws.Statement
-    keyword cfg "WHILE" <++> cond <+> line <+> bodyDoc
+    whileCondition <+> line <+> bodyDoc
 
 and private tryCatchDoc (cfg: FormattingStyle) (tc: TryCatchStatement) : Doc =
     let tryStmts =
@@ -1509,7 +1508,7 @@ and private updateDoc (cfg: FormattingStyle) (upd: UpdateStatement) : Doc =
               yield keyword cfg "FROM" <++> tableRefDoc cfg spec.FromClause.TableReferences.[0]
 
           if spec.WhereClause <> null && spec.WhereClause.SearchCondition <> null then
-              yield clauseConditionDoc cfg (keyword cfg "WHERE") spec.WhereClause.SearchCondition ]
+              yield headedConditionDoc cfg (keyword cfg "WHERE") spec.WhereClause.SearchCondition ]
 
     join line parts
 
@@ -1526,7 +1525,7 @@ and private deleteDoc (cfg: FormattingStyle) (del: DeleteStatement) : Doc =
               yield keyword cfg "FROM" <++> tableRefDoc cfg spec.FromClause.TableReferences.[0]
 
           if spec.WhereClause <> null && spec.WhereClause.SearchCondition <> null then
-              yield clauseConditionDoc cfg (keyword cfg "WHERE") spec.WhereClause.SearchCondition ]
+              yield headedConditionDoc cfg (keyword cfg "WHERE") spec.WhereClause.SearchCondition ]
 
     join line parts
 
@@ -1540,7 +1539,7 @@ and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
             text " " <+> keyword cfg "AS" <++> identDoc spec.TableAlias
         else empty
     let source = tableRefDoc cfg spec.TableReference
-    let onCondition = clauseConditionDoc cfg (keyword cfg "ON") spec.SearchCondition
+    let onCondition = headedConditionDoc cfg (keyword cfg "ON") spec.SearchCondition
 
     let mergeHeader =
         keyword cfg "MERGE" <++> keyword cfg "INTO" <++> target <+> targetAlias <+> line <+>
