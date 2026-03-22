@@ -987,7 +987,11 @@ and private scalarSubqueryDoc (cfg: FormattingStyle) (sq: ScalarSubquery) : Doc 
 
 and private queryExprDoc (cfg: FormattingStyle) (qe: QueryExpression) : Doc = querySpecOrExprDoc cfg qe None
 
-and private querySpecOrExprDoc (cfg: FormattingStyle) (qe: QueryExpression) (intoTarget: Doc option) : Doc =
+and private querySpecOrExprDoc
+    (cfg: FormattingStyle)
+    (qe: QueryExpression)
+    (intoTarget: (TSqlFragment * Doc) option)
+    : Doc =
     match qe with
     | :? QuerySpecification as qs -> querySpecDoc cfg qs intoTarget
     | :? BinaryQueryExpression as bqe -> binaryQueryDoc cfg bqe
@@ -995,7 +999,11 @@ and private querySpecOrExprDoc (cfg: FormattingStyle) (qe: QueryExpression) (int
         blockParenthesizedQueryDoc cfg false qpe.QueryExpression (queryExprDoc cfg qpe.QueryExpression)
     | _ -> tokenStreamDoc cfg qe
 
-and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTarget: Doc option) : Doc =
+and private querySpecDoc
+    (cfg: FormattingStyle)
+    (qs: QuerySpecification)
+    (intoTarget: (TSqlFragment * Doc) option)
+    : Doc =
     // SELECT clause
     let selectKw =
         let s = keyword cfg "SELECT"
@@ -1029,15 +1037,28 @@ and private querySpecDoc (cfg: FormattingStyle) (qs: QuerySpecification) (intoTa
                 | Some prevItem -> leadingInterComments prevItem e)
             attachInlineLeadingComments
 
-    let selectClause = formatList cfg selectKwWithTop selectItems
+    let canKeepIntoWithSelect, selectClause =
+        match selectItems, intoTarget with
+        | [ single ], Some(intoFrag, t) ->
+            true,
+            (selectKwWithTop
+             <++> single
+             <++> keyword cfg "INTO"
+             <++> withTrailingComment intoFrag t)
+        | _ -> false, formatList cfg selectKwWithTop selectItems
+
+    let intoClause =
+        match intoTarget with
+        | Some(intoFrag, t) when not canKeepIntoWithSelect -> keyword cfg "INTO" <++> withTrailingComment intoFrag t
+        | None -> empty
+        | _ -> empty
 
     let parts =
         [ yield selectClause
 
           // INTO clause (SELECT ... INTO #temp ...)
-          match intoTarget with
-          | Some t -> yield keyword cfg "INTO" <++> t
-          | None -> ()
+          if intoTarget.IsSome && not canKeepIntoWithSelect then
+              yield intoClause
 
           // FROM clause
           if
@@ -1315,7 +1336,7 @@ and private binaryQueryDoc (cfg: FormattingStyle) (bqe: BinaryQueryExpression) :
 and private selectStatementDoc (cfg: FormattingStyle) (ss: SelectStatement) : Doc =
     let intoTarget =
         if ss.Into <> null then
-            Some(schemaObjectNameDoc cfg ss.Into)
+            Some(ss.Into :> TSqlFragment, schemaObjectNameDoc cfg ss.Into)
         else
             None
 
