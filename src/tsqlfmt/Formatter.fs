@@ -101,19 +101,87 @@ let private canCollapseList (cfg: FormattingStyle) (items: Doc list) =
 // where the right edge of AND aligns to the right edge of WHERE. The current
 // Doc model handles fixed indentation well via Nest, but it does not express
 // right-edge anchoring cleanly.
-let private expandedListDoc (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
+type private SequenceAlignment =
+    | ToConstruct
+    | Indented
+
+type private SequencePolicy = {
+    placeFirstItemOnNewLine: bool
+    indentFirstItem: bool
+    itemIndent: int
+    continuationIndent: int
+    continuationAlignment: SequenceAlignment
+}
+
+// sequenceDoc:
+//   a = 1
+//   AND b = 2
+//   AND c = 3
+let private sequenceDoc (policy: SequencePolicy) (items: Doc list) : Doc =
     match items with
-    | [] -> keyword
-    | [single] ->
-        if cfg.lists.indentListItems then
-            keyword <++> nest (indentWidth cfg) single
-        else
-            keyword <++> single
-    | first :: rest ->
-        let restDoc = join (text "," <+> line) rest
-        let firstDoc =
-            if cfg.lists.indentListItems then nest (indentWidth cfg) first else first
-        keyword <++> firstDoc <+> text "," <+> nest (indentWidth cfg) (line <+> restDoc)
+    | [] -> empty
+    | [singleItem] ->
+        if policy.indentFirstItem then nest policy.itemIndent singleItem else singleItem
+    | firstItem :: remainingItems ->
+        let firstItemDoc = if policy.indentFirstItem then nest policy.itemIndent firstItem else firstItem
+        let remainingItemsDoc = join line remainingItems
+        firstItemDoc <+> nest policy.continuationIndent (line <+> remainingItemsDoc)
+
+// headedSequenceDoc:
+//   SELECT a,
+//       b,
+//       c
+//
+//   CASE
+//       WHEN x = 1 THEN 'a'
+//       ELSE 'b'
+//   END
+let private headedSequenceDoc (policy: SequencePolicy) (headDoc: Doc) (items: Doc list) : Doc =
+    match items with
+    | [] -> headDoc
+    | _ when policy.placeFirstItemOnNewLine ->
+        headDoc <+> nest policy.continuationIndent (line <+> join line items)
+    | _ ->
+        headDoc <++> sequenceDoc policy items
+
+let private listSequencePolicy (cfg: FormattingStyle) =
+    let indent = indentWidth cfg
+    {
+        placeFirstItemOnNewLine = cfg.lists.placeFirstItemOnNewLine = PlaceOnNewLine.Always
+        indentFirstItem = cfg.lists.indentListItems
+        itemIndent = indent
+        continuationIndent = indent
+        continuationAlignment = Indented
+    }
+
+let private andOrSequencePolicy (cfg: FormattingStyle) =
+    let indent = indentWidth cfg
+    {
+        placeFirstItemOnNewLine = false
+        indentFirstItem = false
+        itemIndent = indent
+        continuationIndent =
+            match cfg.operators.andOr.alignment with
+            | Alignment.Indented -> indent
+            | _ -> 0
+        continuationAlignment =
+            match cfg.operators.andOr.alignment with
+            | Alignment.Indented -> Indented
+            | _ -> ToConstruct
+    }
+
+let private withFirstItemIndent (indent: int) (policy: SequencePolicy) =
+    { policy with
+        indentFirstItem = true
+        itemIndent = indent }
+
+let private expandedListDoc (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
+    let decoratedItems =
+        items
+        |> List.mapi (fun i item ->
+            if i < List.length items - 1 then item <+> text "," else item)
+
+    headedSequenceDoc (listSequencePolicy cfg) keyword decoratedItems
 
 let private formatList (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
     match items with
@@ -364,8 +432,26 @@ and private caseBodyLines (elseDoc: Doc option) (whenDocs: Doc list) =
       | None -> () ]
 
 and private expandedCaseFromParts (cfg: FormattingStyle) (caseHead: Doc) (whenDocs: Doc list) (elseDoc: Doc option) : Doc =
-    let body = caseBodyLines elseDoc whenDocs |> join line |> fun docs -> nest (indentWidth cfg) (line <+> docs)
-    caseHead <+> body <+> line <+> keyword cfg "END"
+    let bodyItems =
+        caseBodyLines elseDoc whenDocs
+
+    let whenPolicy =
+        let indent = indentWidth cfg
+        {
+            placeFirstItemOnNewLine = cfg.caseExpressions.placeFirstWhenOnNewLine = PlaceOnNewLine.Always
+            indentFirstItem = false
+            itemIndent = indent
+            continuationIndent =
+                match cfg.caseExpressions.whenAlignment with
+                | WhenAlignment.IndentedFromCase -> indent
+                | _ -> 0
+            continuationAlignment =
+                match cfg.caseExpressions.whenAlignment with
+                | WhenAlignment.IndentedFromCase -> Indented
+                | _ -> ToConstruct
+        }
+
+    headedSequenceDoc whenPolicy caseHead bodyItems <+> line <+> keyword cfg "END"
 
 and private searchedCaseDoc (cfg: FormattingStyle) (c: SearchedCaseExpression) : Doc =
     let whenDocs =
@@ -759,18 +845,10 @@ and private flattenBoolChain (cfg: FormattingStyle) (bb: BooleanBinaryExpression
 
 and private booleanChainDoc (cfg: FormattingStyle) (nestFirst: bool) (bb: BooleanBinaryExpression) : Doc =
     let parts = flattenBoolChain cfg bb
-    match parts with
-    | [] -> empty
-    | [single] -> if nestFirst then nest (indentWidth cfg) single else single
-    | first :: rest ->
-        let firstDoc = if nestFirst then nest (indentWidth cfg) first else first
-        let continuationIndent =
-            match cfg.operators.andOr.alignment with
-            | Alignment.Indented -> indentWidth cfg
-            | _ -> 0
-
-        let restDoc = join line rest
-        firstDoc <+> nest continuationIndent (line <+> restDoc)
+    let policy =
+        let basePolicy = andOrSequencePolicy cfg
+        if nestFirst then withFirstItemIndent (indentWidth cfg) basePolicy else basePolicy
+    sequenceDoc policy parts
 
 and private standaloneBoolConditionDoc (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc =
     booleanChainDoc cfg false bb
