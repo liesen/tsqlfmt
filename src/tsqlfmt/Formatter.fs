@@ -101,15 +101,10 @@ let private canCollapseList (cfg: FormattingStyle) (items: Doc list) =
 // where the right edge of AND aligns to the right edge of WHERE. The current
 // Doc model handles fixed indentation well via Nest, but it does not express
 // right-edge anchoring cleanly.
-type private SequenceAlignment =
-    | ToConstruct
-    | Indented
-
 type private SequencePolicy = {
     placeFirstItemOnNewLine: bool
     firstItemIndent: int option
     subsequentItemsIndent: int option
-    subsequentItemsAlignment: SequenceAlignment
 }
 
 // sequenceDoc:
@@ -158,7 +153,6 @@ let private listSequencePolicy (cfg: FormattingStyle) =
         placeFirstItemOnNewLine = cfg.lists.placeFirstItemOnNewLine = PlaceOnNewLine.Always
         firstItemIndent = if cfg.lists.indentListItems then Some indent else None
         subsequentItemsIndent = Some indent
-        subsequentItemsAlignment = Indented
     }
 
 let private andOrSequencePolicy (cfg: FormattingStyle) =
@@ -170,10 +164,6 @@ let private andOrSequencePolicy (cfg: FormattingStyle) =
             match cfg.operators.andOr.alignment with
             | Alignment.Indented -> Some indent
             | _ -> None
-        subsequentItemsAlignment =
-            match cfg.operators.andOr.alignment with
-            | Alignment.Indented -> Indented
-            | _ -> ToConstruct
     }
 
 let private withFirstItemIndent (indent: int) (policy: SequencePolicy) =
@@ -449,10 +439,6 @@ and private expandedCaseFromParts (cfg: FormattingStyle) (caseHead: Doc) (whenDo
                 match cfg.caseExpressions.whenAlignment with
                 | WhenAlignment.IndentedFromCase -> Some indent
                 | _ -> None
-            subsequentItemsAlignment =
-                match cfg.caseExpressions.whenAlignment with
-                | WhenAlignment.IndentedFromCase -> Indented
-                | _ -> ToConstruct
         }
 
     headedSequenceDoc whenPolicy caseHead bodyItems <+> line <+> keyword cfg "END"
