@@ -6,3 +6,4 @@ BenchmarkDotNet.Artifacts/
 *.sqlfluff.sql
 .sqlfluff
 test_sqlfluff.py
+.env

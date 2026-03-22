@@ -2,7 +2,9 @@ module TestSupport
 
 open System
 open System.IO
+open Xunit
 open TSqlFormatter.Config
+open TSqlFormatter.Formatter
 
 let testDataDir =
     let assemblyDir = System.Reflection.Assembly.GetExecutingAssembly().Location |> Path.GetDirectoryName
@@ -26,6 +28,18 @@ let config = loadConfig configPath
 
 let withOptionalCasing applyCasing config =
     if applyCasing then config else { config with casing = defaultCasing }
+
+let assertFormatsToWithConfig (testConfig: FormattingStyle) (expected: string) (sql: string) =
+    let expectedSql = expected.ReplaceLineEndings("\n").Trim().TrimEnd()
+
+    match format testConfig sql with
+    | Error errors ->
+        Assert.Fail(sprintf "Parse errors: %s" (String.Join("; ", errors)))
+    | Ok formatted ->
+        Assert.Equal(expectedSql, formatted.TrimEnd())
+
+let assertFormatsTo (expected: string) (sql: string) =
+    assertFormatsToWithConfig config expected sql
 
 let testCases () : seq<obj[]> =
     Directory.GetFiles(testDataDir, "*.actual.sql")

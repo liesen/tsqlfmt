@@ -7,6 +7,8 @@
 
   <ItemGroup>
     <Compile Include="TestSupport.fs" />
+    <Compile Include="RegressionTests.fs" />
+    <Compile Include="BooleanExpressionTests.fs" />
     <Compile Include="SqlPromptParityTests.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>
