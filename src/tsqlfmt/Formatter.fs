@@ -242,7 +242,7 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
     | :? BooleanParenthesisExpression as bp ->
         boolParenDoc cfg bp
     | :? BooleanComparisonExpression as bc -> boolCompDoc cfg bc
-    | :? BooleanBinaryExpression as bb -> boolBinaryDoc cfg bb
+    | :? BooleanBinaryExpression as bb -> boolExprDoc cfg bb
     | :? BooleanNotExpression as bn ->
         keyword cfg "NOT" <++> boolExprDoc cfg bn.Expression
     | :? BooleanIsNullExpression as bisn ->
@@ -274,7 +274,9 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
     | _ -> tokenStreamDoc cfg expr
 
 and private boolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
-    exprDoc cfg expr
+    match expr with
+    | :? BooleanBinaryExpression as bb -> booleanChainDoc cfg false bb
+    | _ -> exprDoc cfg expr
 
 and private standaloneBoolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
     match expr with
@@ -762,8 +764,13 @@ and private booleanChainDoc (cfg: FormattingStyle) (nestFirst: bool) (bb: Boolea
     | [single] -> if nestFirst then nest (indentWidth cfg) single else single
     | first :: rest ->
         let firstDoc = if nestFirst then nest (indentWidth cfg) first else first
+        let continuationIndent =
+            match cfg.operators.andOr.alignment with
+            | Alignment.Indented -> indentWidth cfg
+            | _ -> 0
+
         let restDoc = join line rest
-        firstDoc <+> nest (indentWidth cfg) (line <+> restDoc)
+        firstDoc <+> nest continuationIndent (line <+> restDoc)
 
 and private standaloneBoolConditionDoc (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc =
     booleanChainDoc cfg false bb
