@@ -108,9 +108,9 @@ type private SequenceAlignment =
 type private SequencePolicy = {
     placeFirstItemOnNewLine: bool
     indentFirstItem: bool
-    itemIndent: int
-    continuationIndent: int
-    continuationAlignment: SequenceAlignment
+    firstItemIndent: int
+    subsequentItemsIndent: int
+    subsequentItemsAlignment: SequenceAlignment
 }
 
 // sequenceDoc:
@@ -121,11 +121,11 @@ let private sequenceDoc (policy: SequencePolicy) (items: Doc list) : Doc =
     match items with
     | [] -> empty
     | [singleItem] ->
-        if policy.indentFirstItem then nest policy.itemIndent singleItem else singleItem
+        if policy.indentFirstItem then nest policy.firstItemIndent singleItem else singleItem
     | firstItem :: remainingItems ->
-        let firstItemDoc = if policy.indentFirstItem then nest policy.itemIndent firstItem else firstItem
+        let firstItemDoc = if policy.indentFirstItem then nest policy.firstItemIndent firstItem else firstItem
         let remainingItemsDoc = join line remainingItems
-        firstItemDoc <+> nest policy.continuationIndent (line <+> remainingItemsDoc)
+        firstItemDoc <+> nest policy.subsequentItemsIndent (line <+> remainingItemsDoc)
 
 // headedSequenceDoc:
 //   SELECT a,
@@ -140,7 +140,7 @@ let private headedSequenceDoc (policy: SequencePolicy) (headDoc: Doc) (items: Do
     match items with
     | [] -> headDoc
     | _ when policy.placeFirstItemOnNewLine ->
-        headDoc <+> nest policy.continuationIndent (line <+> join line items)
+        headDoc <+> nest policy.subsequentItemsIndent (line <+> join line items)
     | _ ->
         headDoc <++> sequenceDoc policy items
 
@@ -149,9 +149,9 @@ let private listSequencePolicy (cfg: FormattingStyle) =
     {
         placeFirstItemOnNewLine = cfg.lists.placeFirstItemOnNewLine = PlaceOnNewLine.Always
         indentFirstItem = cfg.lists.indentListItems
-        itemIndent = indent
-        continuationIndent = indent
-        continuationAlignment = Indented
+        firstItemIndent = indent
+        subsequentItemsIndent = indent
+        subsequentItemsAlignment = Indented
     }
 
 let private andOrSequencePolicy (cfg: FormattingStyle) =
@@ -159,12 +159,12 @@ let private andOrSequencePolicy (cfg: FormattingStyle) =
     {
         placeFirstItemOnNewLine = false
         indentFirstItem = false
-        itemIndent = indent
-        continuationIndent =
+        firstItemIndent = indent
+        subsequentItemsIndent =
             match cfg.operators.andOr.alignment with
             | Alignment.Indented -> indent
             | _ -> 0
-        continuationAlignment =
+        subsequentItemsAlignment =
             match cfg.operators.andOr.alignment with
             | Alignment.Indented -> Indented
             | _ -> ToConstruct
@@ -173,7 +173,7 @@ let private andOrSequencePolicy (cfg: FormattingStyle) =
 let private withFirstItemIndent (indent: int) (policy: SequencePolicy) =
     { policy with
         indentFirstItem = true
-        itemIndent = indent }
+        firstItemIndent = indent }
 
 let private expandedListDoc (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
     let decoratedItems =
@@ -440,12 +440,12 @@ and private expandedCaseFromParts (cfg: FormattingStyle) (caseHead: Doc) (whenDo
         {
             placeFirstItemOnNewLine = cfg.caseExpressions.placeFirstWhenOnNewLine = PlaceOnNewLine.Always
             indentFirstItem = false
-            itemIndent = indent
-            continuationIndent =
+            firstItemIndent = indent
+            subsequentItemsIndent =
                 match cfg.caseExpressions.whenAlignment with
                 | WhenAlignment.IndentedFromCase -> indent
                 | _ -> 0
-            continuationAlignment =
+            subsequentItemsAlignment =
                 match cfg.caseExpressions.whenAlignment with
                 | WhenAlignment.IndentedFromCase -> Indented
                 | _ -> ToConstruct
