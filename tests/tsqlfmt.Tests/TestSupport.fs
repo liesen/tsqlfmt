@@ -99,6 +99,11 @@ let assertBooleanExpressionDoc (expected: string) (sql: string) =
 
     Assert.Equal(expectedSql, actual.TrimEnd())
 
+let assertRenderedDoc (maxWidth: int) (expected: string) (doc: Doc) =
+    let expectedDoc = expected.ReplaceLineEndings("\n").Trim().TrimEnd()
+    let actual = render maxWidth doc
+    Assert.Equal(expectedDoc, actual.TrimEnd())
+
 let testCases () : seq<obj[]> =
     Directory.GetFiles(testDataDir, "*.actual.sql")
     |> Array.map (fun path ->

@@ -3,8 +3,7 @@ module SequenceLayoutTests
 open Xunit
 open TSqlFormatter.Doc
 open TSqlFormatter.Formatter
-
-let private renderDoc (doc: Doc) = render 120 doc
+open TestSupport
 
 [<Fact>]
 let ``sequenceDoc indents the first item when configured`` () =
@@ -17,8 +16,6 @@ let ``sequenceDoc indents the first item when configured`` () =
         [ text "a IN (" <+> line <+> text "SELECT 1" <+> line <+> text ")"
           text "AND b = 2" ]
 
-    let actual = renderDoc (sequenceDoc policy items)
-
     let expected =
         """
     a IN (
@@ -27,7 +24,7 @@ let ``sequenceDoc indents the first item when configured`` () =
     AND b = 2
 """
 
-    Assert.Equal(expected.Trim(), actual)
+    assertRenderedDoc 120 expected (sequenceDoc policy items)
 
 [<Fact>]
 let ``sequenceDoc leaves subsequent items flush when policy has no subsequent indent`` () =
@@ -37,7 +34,6 @@ let ``sequenceDoc leaves subsequent items flush when policy has no subsequent in
           subsequentItemsIndent = None }
 
     let items = [ text "a = 1"; text "AND b = 2"; text "AND c = 3" ]
-    let actual = renderDoc (sequenceDoc policy items)
 
     let expected =
         """
@@ -46,7 +42,7 @@ AND b = 2
 AND c = 3
 """
 
-    Assert.Equal(expected.Trim(), actual)
+    assertRenderedDoc 120 expected (sequenceDoc policy items)
 
 [<Fact>]
 let ``headedSequenceDoc places the first item on a new line when policy requests it`` () =
@@ -56,7 +52,6 @@ let ``headedSequenceDoc places the first item on a new line when policy requests
           subsequentItemsIndent = Some 4 }
 
     let items = [ text "a,"; text "b,"; text "c" ]
-    let actual = renderDoc (headedSequenceDoc policy (text "SELECT") items)
 
     let expected =
         """
@@ -66,7 +61,7 @@ SELECT
     c
 """
 
-    Assert.Equal(expected.Trim(), actual)
+    assertRenderedDoc 120 expected (headedSequenceDoc policy (text "SELECT") items)
 
 [<Fact>]
 let ``headedSequenceDoc keeps the first item after the head when policy allows it`` () =
@@ -76,7 +71,6 @@ let ``headedSequenceDoc keeps the first item after the head when policy allows i
           subsequentItemsIndent = Some 4 }
 
     let items = [ text "a = 1"; text "AND b = 2" ]
-    let actual = renderDoc (headedSequenceDoc policy (text "WHERE") items)
 
     let expected =
         """
@@ -84,4 +78,4 @@ WHERE a = 1
     AND b = 2
 """
 
-    Assert.Equal(expected.Trim(), actual)
+    assertRenderedDoc 120 expected (headedSequenceDoc policy (text "WHERE") items)
