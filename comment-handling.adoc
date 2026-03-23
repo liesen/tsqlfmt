@@ -2,25 +2,220 @@
 
 This branch treats comments as discovered trivia that the formatter later attaches.
 
-== Model
+The goal is not to build a universal comment engine up front. The goal is to make the model explicit enough that list, operator, and clause formatting can make consistent layout decisions.
+
+== Core model
 
 - `Comment = SingleLineComment | MultilineComment`
-- Trivia discovery returns `Comment option` or `Comment list`
-- The formatter decides attachment:
-  - leading
-  - trailing
-
-`Between` is a discovery detail, not a final attachment category. Comments found between sibling fragments are eventually attached either to the previous fragment as trailing trivia or to the next fragment as leading trivia.
-
-`Inline` and `own-line` are rendering concerns, not core comment identity. In practice, single-line comments often force a break after the attachment point, while multiline comments may remain inline.
-
-== Module split
-
 - `Trivia.fs` discovers comments from token streams and fragment boundaries.
 - `Formatter.fs` decides how discovered comments affect layout and where they attach.
 
+Comments are values, not raw strings. Discovery helpers return `Comment option` or `Comment list`.
+
+== What the formatter decides
+
+The formatter mainly decides two things:
+
+- attachment
+  - leading
+  - trailing
+- layout
+  - inline with surrounding code
+  - on its own line
+
+`Between` is a discovery detail, not a final attachment category. Comments found between sibling fragments are eventually attached either to the previous fragment as trailing trivia or to the next fragment as leading trivia.
+
+== Module split
+
+- `Trivia.fs`
+  - token lookup
+  - comment discovery between fragments
+  - own-line comment discovery
+  - trailing comment discovery
+- `Formatter.fs`
+  - comment rendering
+  - attaching comments to docs
+  - separator-specific ownership rules
+  - layout consequences such as forcing expanded formatting
+
+== Leading, trailing, and between
+
+Examples:
+
+[source,sql]
+----
+-- leading comment
+SELECT 1
+----
+
+This is a leading comment for the next fragment.
+
+[source,sql]
+----
+SELECT 1 -- trailing comment
+----
+
+This is a trailing comment on the previous fragment.
+
+[source,sql]
+----
+SELECT a
+-- between items
+, b
+----
+
+This is discovered between sibling fragments. The formatter later decides whether it behaves as leading or trailing attachment.
+
+== Inline and own-line
+
+Examples:
+
+[source,sql]
+----
+SELECT a /* inline comment */
+FROM t
+----
+
+[source,sql]
+----
+SELECT a,
+    -- own-line comment
+    b
+----
+
+`Inline` and `own-line` are rendering concerns, not core comment identity. In practice, single-line comments often force a break after the attachment point, while multiline comments may remain inline.
+
+== Separator-specific handling
+
+The branch has reached the point where separator comments need explicit rules.
+
+That does not mean one universal rule for all separators. It means:
+
+- one generic comment model
+- separator-specific attachment rules
+
+=== Comma-separated lists
+
+Current SQL Prompt-compatible rule:
+
+- comments before the comma belong to the item on the left
+- comments after the comma stay with that comma on the previous line
+- own-line comments in the gap lead the next item
+- preserved after-comma comments force expanded list layout
+
+Examples:
+
+[source,sql]
+----
+SELECT 1 AS a /* comment */, 2 AS b
+----
+
+The comment belongs to `1 AS a`.
+
+[source,sql]
+----
+SELECT 1 AS a, /* comment */ 2 AS b
+----
+
+SQL Prompt-compatible output:
+
+[source,sql]
+----
+SELECT 1 AS a, /* comment */
+    2 AS b
+----
+
+The comment stays with the comma line, and the list expands.
+
+[source,sql]
+----
+SELECT 1 AS a,
+    -- own-line comment
+    2 AS b
+----
+
+The own-line comment leads the next item.
+
+This also explains the `test41` style case:
+
+[source,sql]
+----
+SELECT o.order_id,
+    o.order_date,
+    c.customer_name /* comment customer name */,
+    c.email, /* comment email */
+    SUM(ol.quantity * ol.unit_price) AS total_amount /* comment total amount */
+FROM dbo.orders o
+----
+
+The comment after `c.email,` stays on that line, not with the next item.
+
+=== Boolean operators
+
+Boolean chains are in the same family of problem, but they are not yet modeled with the same explicit separator policy.
+
+Observed SQL Prompt behavior suggests:
+
+- comments before `AND` or `OR` belong to the left expression
+- comments after `AND` or `OR` stay with the operator / right-hand side
+- own-line comments after the operator stay on their own line before the next expression
+
+Examples:
+
+[source,sql]
+----
+SELECT 1
+WHERE a = 1 /* before and */
+    AND b = 2
+----
+
+[source,sql]
+----
+SELECT 1
+WHERE a = 1
+    AND /* after and */ b = 2
+----
+
+[source,sql]
+----
+SELECT 1
+WHERE a = 1
+    AND
+    -- own-line
+    b = 2
+----
+
+This suggests boolean operators should probably get a dedicated separator-comment rule, analogous to comma lists, rather than being folded into a single universal comment policy.
+
+=== Comparison operators and other separators
+
+Cases like this reinforce the same idea:
+
+[source,sql]
+----
+a /* comment */ = /* another comment */ 2
+----
+
+There are comments both before and after the separator. That argues for:
+
+- one generic comment model
+- one generic discovery concept of comments around a separator
+- separator-specific attachment and layout rules
+
 == Incremental direction
 
-- Keep moving raw `string` comment flows toward `Comment`.
-- Keep token scanning in `Trivia.fs`.
-- Keep comment rendering and attachment in `Formatter.fs`.
+- keep moving raw `string` comment flows toward `Comment`
+- keep token scanning in `Trivia.fs`
+- keep comment rendering and attachment in `Formatter.fs`
+- only introduce separator-specific rules where tests or SQL Prompt comparisons prove they matter
+- avoid building a single grand comment system before the concrete sequence shapes are understood
+
+== Practical takeaway
+
+The current branch direction is:
+
+- model comments explicitly
+- keep discovery and rendering separate
+- let each sequence shape make its own ownership decision for comments found around separators
+
+That is model-driven enough to avoid ad hoc fixes, but still incremental enough to stay anchored to concrete formatter behavior and SQL Prompt parity cases.

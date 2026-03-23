@@ -88,6 +88,26 @@ let parseBooleanExpression (sql: string) =
         Assert.Fail("Expected T-SQL script")
         failwith "unreachable"
 
+let parseSelectStatement (sql: string) =
+    let parser = TSql160Parser(initialQuotedIdentifiers = true)
+    use reader = new StringReader(sql)
+    let mutable errors = null: System.Collections.Generic.IList<ParseError>
+    let fragment = parser.Parse(reader, &errors)
+
+    if errors <> null && errors.Count > 0 then
+        Assert.Fail(sprintf "Parse errors: %s" (String.Join("; ", errors |> Seq.map (fun e -> e.Message))))
+
+    match fragment with
+    | :? TSqlScript as script when script.Batches.Count > 0 && script.Batches.[0].Statements.Count > 0 ->
+        match script.Batches.[0].Statements.[0] with
+        | :? SelectStatement as stmt -> stmt
+        | _ ->
+            Assert.Fail("Expected SELECT statement")
+            failwith "unreachable"
+    | _ ->
+        Assert.Fail("Expected T-SQL script")
+        failwith "unreachable"
+
 let assertBooleanExpressionDoc (expected: string) (sql: string) =
     let expectedSql = expected.ReplaceLineEndings("\n").Trim().TrimEnd()
     let expr = parseBooleanExpression sql
