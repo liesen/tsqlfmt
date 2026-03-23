@@ -1875,6 +1875,59 @@ and private createTableElementDoc (cfg: FormattingStyle) (frag: TSqlFragment) : 
             nameDoc <++> typeDoc
         else
             nameDoc <++> typeDoc <++> text tail
+    | :? UniqueConstraintDefinition as constraintDef ->
+        let constraintNameDoc =
+            if constraintDef.ConstraintIdentifier <> null then
+                keyword cfg "CONSTRAINT" <++> identDoc constraintDef.ConstraintIdentifier
+            else
+                empty
+
+        let kindDoc =
+            if constraintDef.IsPrimaryKey then
+                keyword cfg "PRIMARY" <++> keyword cfg "KEY"
+            else
+                keyword cfg "UNIQUE"
+
+        let indexTypeDoc =
+            if constraintDef.Clustered.HasValue && constraintDef.Clustered.Value then
+                keyword cfg "CLUSTERED"
+            elif constraintDef.IndexType <> null then
+                tokenStreamDoc cfg constraintDef.IndexType
+            else
+                empty
+
+        let prefixDoc =
+            [ constraintNameDoc; kindDoc; indexTypeDoc ] |> List.filter ((<>) empty) |> hcat
+
+        let columns = constraintDef.Columns |> Seq.map (tokenStreamDoc cfg) |> Seq.toList
+
+        let columnsDoc =
+            match columns with
+            | [] -> text "()"
+            | [ singleColumn ] -> text "(" <+> singleColumn <+> text ")"
+            | _ ->
+                text "("
+                <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) columns)
+                <+> line
+                <+> text ")"
+
+        let optionsDoc =
+            if constraintDef.IndexOptions <> null && constraintDef.IndexOptions.Count > 0 then
+                let optionDocs =
+                    constraintDef.IndexOptions |> Seq.map (tokenStreamDoc cfg) |> Seq.toList
+
+                text " " <+> formatList cfg (keyword cfg "WITH") optionDocs
+            else
+                empty
+
+        let onDoc =
+            if constraintDef.OnFileGroupOrPartitionScheme <> null then
+                text " " <+> keyword cfg "ON"
+                <++> tokenStreamDoc cfg constraintDef.OnFileGroupOrPartitionScheme
+            else
+                empty
+
+        prefixDoc <++> columnsDoc <+> optionsDoc <+> onDoc
     | _ -> tokenStreamDoc cfg frag
 
 and private createTableDoc (cfg: FormattingStyle) (ct: CreateTableStatement) : Doc =
@@ -1891,7 +1944,7 @@ and private createTableDoc (cfg: FormattingStyle) (ct: CreateTableStatement) : D
                   yield createTableElementDoc cfg col
 
               for constraintDef in definition.TableConstraints do
-                  yield tokenStreamDoc cfg constraintDef ]
+                  yield createTableElementDoc cfg constraintDef ]
 
     let bodyDoc =
         match elements with
@@ -1902,13 +1955,20 @@ and private createTableDoc (cfg: FormattingStyle) (ct: CreateTableStatement) : D
             <+> line
             <+> text ")"
 
+    let onDoc =
+        if ct.OnFileGroupOrPartitionScheme <> null then
+            line <+> keyword cfg "ON"
+            <++> tokenStreamDoc cfg ct.OnFileGroupOrPartitionScheme
+        else
+            empty
+
     let selectDoc =
         if ct.SelectStatement <> null then
             line <+> selectStatementDoc cfg ct.SelectStatement
         else
             empty
 
-    header <+> bodyDoc <+> selectDoc
+    header <+> bodyDoc <+> onDoc <+> selectDoc
 
 and private inlineTvfSelectDoc (cfg: FormattingStyle) (selectSql: string) : Doc =
     let normalizedSql =
