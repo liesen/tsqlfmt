@@ -319,9 +319,6 @@ let private trailingComment (frag: TSqlFragment) : Doc =
 
 let private withTrailingComment (frag: TSqlFragment) (doc: Doc) : Doc = doc <+> trailingComment frag
 
-let private withStatementTerminator (stmt: TSqlStatement) (doc: Doc) : Doc =
-    if hasTrailingSemicolon stmt then doc <+> text ";" else doc
-
 let private keywordWithTrailingCommentDoc
     (cfg: FormattingStyle)
     (keywordText: string)
@@ -361,12 +358,26 @@ let private returnKeyword (cfg: FormattingStyle) (stmt: TSqlStatement) : Comment
 
     comment, doc
 
-let private withStatementTerminatorAndComment (stmt: TSqlStatement) (doc: Doc) : Doc =
-    let withSemicolon = if hasTrailingSemicolon stmt then doc <+> text ";" else doc
-
-    withSemicolon <+> trailingComment stmt
-
 type private TrailingFragmentDoc = { Comment: Comment option; Doc: Doc }
+
+// StatementContext controls semicolon behavior for a particular statement occurrence:
+// whether it carries a trailing semicolon and whether a top-level CTE starts with ';WITH'
+// or plain 'WITH'. We emit ';WITH' for standalone statements because the semicolon
+// terminates the previous statement, not the CTE itself. See:
+// https://learn.microsoft.com/en-us/sql/t-sql/queries/with-common-table-expression-transact-sql
+type private StatementContext =
+    { HasTrailingSemicolon: bool
+      HasLeadingCteSemicolon: bool }
+
+// Standalone statements own both trailing ';' and leading ';WITH'.
+let private standaloneStatementContext =
+    { HasTrailingSemicolon = true
+      HasLeadingCteSemicolon = true }
+
+// Embedded statements rely on the enclosing construct for those semicolons.
+let private embeddedStatementContext =
+    { HasTrailingSemicolon = false
+      HasLeadingCteSemicolon = false }
 
 let private trailingFragmentDoc (frag: TSqlFragment) (doc: Doc) : TrailingFragmentDoc =
     { Comment = trailingTriviaAfterFragment frag
@@ -1439,13 +1450,7 @@ and private selectStatementDoc (cfg: FormattingStyle) (ss: SelectStatement) : Do
                 |> Seq.map (fun cte -> cteExprDoc cfg cte)
                 |> Seq.toList
 
-            let withKw =
-                if cfg.formatterExtensions.cte.omitLeadingSemicolon then
-                    keyword cfg "WITH"
-                else
-                    text ";" <+> keyword cfg "WITH"
-
-            Some(withKw <++> join (text "," <+> line) cteParts)
+            Some(keyword cfg "WITH" <++> join (text "," <+> line) cteParts)
         else
             None
 
@@ -1538,6 +1543,7 @@ and private ddlParamListDoc
 
 and private statementListDoc
     (cfg: FormattingStyle)
+    (statementContext: StatementContext)
     (separator: Doc)
     (fallback: Doc)
     (statementList: StatementList)
@@ -1549,7 +1555,7 @@ and private statementListDoc
         |> Seq.cast<TSqlStatement>
         |> Seq.toList
         |> renderItemsWithLeadingComments
-            (statementDoc cfg)
+            (statementDoc cfg statementContext)
             (fun prev stmt ->
                 match prev with
                 | None -> []
@@ -1617,25 +1623,6 @@ and private inlineRoutineDoc
         <+> line
         <+> bodyDoc
 
-and private inlineTvfReturnSql (stmt: TSqlStatement) : string option =
-    let stream = stmt.ScriptTokenStream
-
-    if stream = null then
-        None
-    else
-        tokenIndexOfType stmt TSqlTokenType.Return
-        |> Option.map (fun returnIdx ->
-            let selectStart =
-                seq { returnIdx + 1 .. stmt.LastTokenIndex }
-                |> Seq.skipWhile (fun i -> stream.[i].TokenType = TSqlTokenType.WhiteSpace)
-                |> Seq.tryHead
-                |> Option.defaultValue (returnIdx + 1)
-
-            seq { selectStart .. stmt.LastTokenIndex }
-            |> Seq.map (fun i -> stream.[i].Text)
-            |> String.concat ""
-            |> fun s -> s.Trim())
-
 and private inlineTvfFormatterConfig (cfg: FormattingStyle) (omitLeadingSemicolon: bool) : FormattingStyle =
     if omitLeadingSemicolon then
         { cfg with
@@ -1647,36 +1634,39 @@ and private inlineTvfFormatterConfig (cfg: FormattingStyle) (omitLeadingSemicolo
     else
         cfg
 
-and private parseSingleStatement (sql: string) : TSqlStatement option =
-    let parser = TSql160Parser(true)
-    use reader = new StringReader(sql)
-    let fragment, errors = parser.Parse(reader)
+and private inlineTvfBodyShape (stmt: TSqlStatement) : bool * bool =
+    let stream = stmt.ScriptTokenStream
 
-    if errors.Count = 0 then
-        match fragment with
-        | :? TSqlScript as script when script.Batches.Count > 0 && script.Batches.[0].Statements.Count > 0 ->
-            Some script.Batches.[0].Statements.[0]
-        | _ -> None
+    if stream = null then
+        false, false
     else
-        None
+        match returnKeywordTokenIndex stmt with
+        | None -> false, false
+        | Some returnIdx ->
+            let bodyStartIdx =
+                seq { returnIdx + 1 .. stmt.LastTokenIndex }
+                |> Seq.skipWhile (fun i -> stream.[i].TokenType = TSqlTokenType.WhiteSpace)
+                |> Seq.tryHead
 
-and private normalizeInlineTvfSelect (selectSql: string) : string * bool * bool =
-    let bodySql, wrapInParens =
-        if selectSql.StartsWith("(") && selectSql.EndsWith(")") then
-            selectSql.Substring(1, selectSql.Length - 2).Trim(), true
-        else
-            selectSql.Trim(), false
+            match bodyStartIdx with
+            | None -> false, false
+            | Some idx ->
+                let startsWithParen = stream.[idx].TokenType = TSqlTokenType.LeftParenthesis
 
-    let normalizedSql =
-        if bodySql.StartsWith(";with", StringComparison.OrdinalIgnoreCase) then
-            bodySql.Substring(1).TrimStart()
-        else
-            bodySql
+                let firstContentIdx =
+                    if startsWithParen then
+                        seq { idx + 1 .. stmt.LastTokenIndex }
+                        |> Seq.skipWhile (fun i -> stream.[i].TokenType = TSqlTokenType.WhiteSpace)
+                        |> Seq.tryHead
+                    else
+                        Some idx
 
-    let omitLeadingSemicolon =
-        normalizedSql.StartsWith("with", StringComparison.OrdinalIgnoreCase)
+                let omitLeadingSemicolon =
+                    match firstContentIdx with
+                    | Some contentIdx when stream.[contentIdx].TokenType = TSqlTokenType.Semicolon -> true
+                    | _ -> false
 
-    normalizedSql, wrapInParens, omitLeadingSemicolon
+                startsWithParen, omitLeadingSemicolon
 
 and private selectFunctionBodyDoc
     (cfg: FormattingStyle)
@@ -1690,16 +1680,17 @@ and private selectFunctionBodyDoc
         | Some _ -> false, returnDoc <+> line <+> doc
         | None -> false, returnDoc <++> doc
 
-    match inlineTvfReturnSql stmt with
-    | Some selectSql ->
-        if selectSql.StartsWith("(") then
-            true, returnDoc <++> inlineTvfSelectDoc cfg selectSql
-        else
-            inlineTvfSelectDoc cfg selectSql |> returnSelectDoc
-    | None ->
-        selectStatementDoc cfg selectStatement
-        |> withStatementTerminator selectStatement
-        |> returnSelectDoc
+    let wrapInParens, _ = inlineTvfBodyShape stmt
+
+    let selectDoc = selectStatementDoc cfg selectStatement
+
+    if wrapInParens then
+        let wrappedDoc =
+            text "(" <+> nest (indentWidth cfg) (line <+> selectDoc) <+> line <+> text ")"
+
+        true, returnDoc <++> wrappedDoc
+    else
+        returnSelectDoc selectDoc
 
 and private procedureParamsHaveParens
     (stmt: TSqlStatement)
@@ -1786,15 +1777,24 @@ and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement)
                 returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> returnDoc
         | :? ScalarFunctionReturnType as srt ->
             let returnsDoc = keyword cfg "RETURNS" <++> dataTypeRefDoc cfg srt.DataType
-            let stmtDoc = statementListDoc cfg line empty af.StatementList
+
+            let stmtDoc =
+                statementListDoc cfg standaloneStatementContext line empty af.StatementList
+
             returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> stmtDoc
         | :? TableValuedFunctionReturnType ->
             let returnsDoc = keyword cfg "RETURNS" <++> keyword cfg "TABLE"
-            let stmtDoc = statementListDoc cfg line (tokenStreamDoc cfg af) af.StatementList
+
+            let stmtDoc =
+                statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg af) af.StatementList
+
             returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> stmtDoc
         | _ ->
             let returnsDoc = keyword cfg "RETURNS" <++> tokenStreamDoc cfg af.ReturnType
-            let stmtDoc = statementListDoc cfg line (tokenStreamDoc cfg af) af.StatementList
+
+            let stmtDoc =
+                statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg af) af.StatementList
+
             returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> stmtDoc
 
     header <+> paramsDoc <+> line <+> bodyDoc
@@ -1816,7 +1816,10 @@ and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatemen
         inlineRoutineDoc cfg sameLineAs header paramsDoc returnsDoc bodyDoc
     | _ ->
         let returnsDoc = regularFunctionReturnsDoc cfg cf.ReturnType
-        let bodyDoc = statementListDoc cfg line (tokenStreamDoc cfg cf) cf.StatementList
+
+        let bodyDoc =
+            statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg cf) cf.StatementList
+
         routineWithReturnsDoc cfg header paramsDoc returnsDoc bodyDoc
 
 and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatement) : Doc =
@@ -1828,7 +1831,10 @@ and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatemen
     let commentMap = getParamTrailingComments ap.Parameters
     let wrapParams = procedureParamsHaveParens (ap :> TSqlStatement) ap.Parameters
     let paramsDoc = ddlParamListDoc cfg ap.Parameters commentMap wrapParams
-    let bodyDoc = statementListDoc cfg (line <+> line) empty ap.StatementList
+
+    let bodyDoc =
+        statementListDoc cfg embeddedStatementContext (line <+> line) empty ap.StatementList
+
     routineWithAsDoc cfg header paramsDoc bodyDoc
 
 and private createProcedureDoc (cfg: FormattingStyle) (cp: CreateProcedureStatement) : Doc =
@@ -1840,8 +1846,95 @@ and private createProcedureDoc (cfg: FormattingStyle) (cp: CreateProcedureStatem
     let commentMap = getParamTrailingComments cp.Parameters
     let wrapParams = procedureParamsHaveParens (cp :> TSqlStatement) cp.Parameters
     let paramsDoc = ddlParamListDoc cfg cp.Parameters commentMap wrapParams
-    let bodyDoc = statementListDoc cfg (line <+> line) empty cp.StatementList
+
+    let bodyDoc =
+        statementListDoc cfg embeddedStatementContext (line <+> line) empty cp.StatementList
+
     routineWithAsDoc cfg header paramsDoc bodyDoc
+
+and private setOnOffDoc (cfg: FormattingStyle) (stmt: SetOnOffStatement) : Doc =
+    let formatSetOption (option: SetOptions) =
+        match option with
+        | SetOptions.QuotedIdentifier -> keyword cfg "QUOTED_IDENTIFIER"
+        | SetOptions.ConcatNullYieldsNull -> keyword cfg "CONCAT_NULL_YIELDS_NULL"
+        | SetOptions.CursorCloseOnCommit -> keyword cfg "CURSOR_CLOSE_ON_COMMIT"
+        | SetOptions.ArithAbort -> keyword cfg "ARITHABORT"
+        | SetOptions.ArithIgnore -> keyword cfg "ARITHIGNORE"
+        | SetOptions.FmtOnly -> keyword cfg "FMTONLY"
+        | SetOptions.NoCount -> keyword cfg "NOCOUNT"
+        | SetOptions.NoExec -> keyword cfg "NOEXEC"
+        | SetOptions.NumericRoundAbort -> keyword cfg "NUMERIC_ROUNDABORT"
+        | SetOptions.ParseOnly -> keyword cfg "PARSEONLY"
+        | SetOptions.AnsiDefaults -> keyword cfg "ANSI_DEFAULTS"
+        | SetOptions.AnsiNullDfltOff -> keyword cfg "ANSI_NULL_DFLT_OFF"
+        | SetOptions.AnsiNullDfltOn -> keyword cfg "ANSI_NULL_DFLT_ON"
+        | SetOptions.AnsiNulls -> keyword cfg "ANSI_NULLS"
+        | SetOptions.AnsiPadding -> keyword cfg "ANSI_PADDING"
+        | SetOptions.AnsiWarnings -> keyword cfg "ANSI_WARNINGS"
+        | SetOptions.ForcePlan -> keyword cfg "FORCEPLAN"
+        | SetOptions.ShowPlanAll -> keyword cfg "SHOWPLAN_ALL"
+        | SetOptions.ShowPlanText -> keyword cfg "SHOWPLAN_TEXT"
+        | SetOptions.ImplicitTransactions -> keyword cfg "IMPLICIT_TRANSACTIONS"
+        | SetOptions.RemoteProcTransactions -> keyword cfg "REMOTE_PROC_TRANSACTIONS"
+        | SetOptions.XactAbort -> keyword cfg "XACT_ABORT"
+        | SetOptions.DisableDefCnstChk -> keyword cfg "DISABLE_DEF_CNST_CHK"
+        | SetOptions.ShowPlanXml -> keyword cfg "SHOWPLAN_XML"
+        | SetOptions.NoBrowsetable -> keyword cfg "NO_BROWSETABLE"
+        | _ -> keyword cfg (option.ToString())
+
+    let optionDocs =
+        match stmt with
+        | :? PredicateSetStatement as predicateStmt ->
+            let knownOptions =
+                [ SetOptions.QuotedIdentifier
+                  SetOptions.ConcatNullYieldsNull
+                  SetOptions.CursorCloseOnCommit
+                  SetOptions.ArithAbort
+                  SetOptions.ArithIgnore
+                  SetOptions.FmtOnly
+                  SetOptions.NoCount
+                  SetOptions.NoExec
+                  SetOptions.NumericRoundAbort
+                  SetOptions.ParseOnly
+                  SetOptions.AnsiDefaults
+                  SetOptions.AnsiNullDfltOff
+                  SetOptions.AnsiNullDfltOn
+                  SetOptions.AnsiNulls
+                  SetOptions.AnsiPadding
+                  SetOptions.AnsiWarnings
+                  SetOptions.ForcePlan
+                  SetOptions.ShowPlanAll
+                  SetOptions.ShowPlanText
+                  SetOptions.ImplicitTransactions
+                  SetOptions.RemoteProcTransactions
+                  SetOptions.XactAbort
+                  SetOptions.DisableDefCnstChk
+                  SetOptions.ShowPlanXml
+                  SetOptions.NoBrowsetable ]
+
+            knownOptions
+            |> List.filter (fun option -> predicateStmt.Options.HasFlag(option))
+            |> List.map formatSetOption
+        | _ -> []
+
+    let optionsDoc = join (text "," <+> text " ") optionDocs
+    let stateDoc = if stmt.IsOn then keyword cfg "ON" else keyword cfg "OFF"
+
+    keyword cfg "SET" <++> optionsDoc <++> stateDoc
+
+and private dropTableDoc (cfg: FormattingStyle) (stmt: DropTableStatement) : Doc =
+    let baseParts =
+        [ keyword cfg "DROP"
+          keyword cfg "TABLE"
+          if stmt.IsIfExists then
+              keyword cfg "IF"
+              keyword cfg "EXISTS" ]
+
+    let baseDoc = join (text " ") baseParts
+
+    let tableDocs = stmt.Objects |> Seq.map (schemaObjectNameDoc cfg) |> Seq.toList
+
+    baseDoc <++> join (text "," <+> text " ") tableDocs
 
 and private viewColumnsDoc (cfg: FormattingStyle) (columns: IList<Identifier>) : Doc =
     if columns = null || columns.Count = 0 then
@@ -2014,22 +2107,6 @@ and private createTableDoc (cfg: FormattingStyle) (ct: CreateTableStatement) : D
 
     header <+> bodyDoc <+> onDoc <+> selectDoc
 
-and private inlineTvfSelectDoc (cfg: FormattingStyle) (selectSql: string) : Doc =
-    let normalizedSql, wrapInParens, omitLeadingSemicolon =
-        normalizeInlineTvfSelect selectSql
-
-    let inlineCfg = inlineTvfFormatterConfig cfg omitLeadingSemicolon
-
-    let selectDoc =
-        match parseSingleStatement normalizedSql with
-        | Some stmt -> statementDoc inlineCfg stmt
-        | None -> text normalizedSql
-
-    if wrapInParens then
-        text "(" <+> nest (indentWidth cfg) (line <+> selectDoc) <+> line <+> text ")"
-    else
-        selectDoc
-
 // ─── Control flow ───
 
 and private beginEndDoc (cfg: FormattingStyle) (be: BeginEndBlockStatement) : Doc =
@@ -2040,7 +2117,7 @@ and private beginEndDoc (cfg: FormattingStyle) (be: BeginEndBlockStatement) : Do
 
             statements
             |> renderItemsWithLeadingComments
-                (statementDoc cfg)
+                (statementDoc cfg standaloneStatementContext)
                 (fun prev stmt ->
                     match prev with
                     | Some prevStmt -> leadingInterComments prevStmt stmt
@@ -2059,7 +2136,7 @@ and private ifDoc (cfg: FormattingStyle) (ifs: IfStatement) : Doc =
     let ifCondition = headedConditionDoc cfg (keyword cfg "IF") ifs.Predicate
 
     let thenDoc =
-        let doc = statementDoc cfg ifs.ThenStatement
+        let doc = statementDoc cfg standaloneStatementContext ifs.ThenStatement
 
         match ifs.ThenStatement with
         | :? BeginEndBlockStatement -> line <+> doc
@@ -2067,7 +2144,7 @@ and private ifDoc (cfg: FormattingStyle) (ifs: IfStatement) : Doc =
 
     let elseDoc =
         if ifs.ElseStatement <> null then
-            let elseStmtDoc = statementDoc cfg ifs.ElseStatement
+            let elseStmtDoc = statementDoc cfg standaloneStatementContext ifs.ElseStatement
 
             match ifs.ElseStatement with
             | :? BeginEndBlockStatement -> line <+> keyword cfg "ELSE" <+> line <+> elseStmtDoc
@@ -2079,7 +2156,7 @@ and private ifDoc (cfg: FormattingStyle) (ifs: IfStatement) : Doc =
 
 and private whileDoc (cfg: FormattingStyle) (ws: WhileStatement) : Doc =
     let whileCondition = headedConditionDoc cfg (keyword cfg "WHILE") ws.Predicate
-    let bodyDoc = statementDoc cfg ws.Statement
+    let bodyDoc = statementDoc cfg standaloneStatementContext ws.Statement
     whileCondition <+> line <+> bodyDoc
 
 and private tryCatchDoc (cfg: FormattingStyle) (tc: TryCatchStatement) : Doc =
@@ -2087,7 +2164,7 @@ and private tryCatchDoc (cfg: FormattingStyle) (tc: TryCatchStatement) : Doc =
         if tc.TryStatements <> null then
             tc.TryStatements.Statements
             |> Seq.cast<TSqlStatement>
-            |> Seq.map (fun s -> statementDoc cfg s)
+            |> Seq.map (fun s -> statementDoc cfg standaloneStatementContext s)
             |> Seq.toList
         else
             []
@@ -2096,7 +2173,7 @@ and private tryCatchDoc (cfg: FormattingStyle) (tc: TryCatchStatement) : Doc =
         if tc.CatchStatements <> null then
             tc.CatchStatements.Statements
             |> Seq.cast<TSqlStatement>
-            |> Seq.map (fun s -> statementDoc cfg s)
+            |> Seq.map (fun s -> statementDoc cfg standaloneStatementContext s)
             |> Seq.toList
         else
             []
@@ -2403,92 +2480,72 @@ and private setVarDoc (cfg: FormattingStyle) (sv: SetVariableStatement) : Doc =
 
 // ─── Statement dispatcher ───
 
-and private statementDoc (cfg: FormattingStyle) (stmt: TSqlStatement) : Doc =
+and private statementDoc (cfg: FormattingStyle) (context: StatementContext) (stmt: TSqlStatement) : Doc =
+    let semicolon (doc: Doc) =
+        if context.HasTrailingSemicolon && hasTrailingSemicolon stmt then
+            doc <+> text ";"
+        else
+            doc
+
+    let semicolonAndTrailingComment (doc: Doc) = semicolon doc <+> trailingComment stmt
+
     match stmt with
-    | :? SelectStatement as ss -> selectStatementDoc cfg ss |> withStatementTerminator ss
-    | :? InsertStatement as ins -> insertDoc cfg ins |> withStatementTerminator ins
-    | :? UpdateStatement as upd -> updateDoc cfg upd |> withStatementTerminator upd
-    | :? DeleteStatement as del -> deleteDoc cfg del |> withStatementTerminator del
-    | :? MergeStatement as merge -> mergeDoc cfg merge |> withStatementTerminator merge
-    | :? CreateTableStatement as ct -> createTableDoc cfg ct |> withStatementTerminator ct
-    | :? CreateViewStatement as cv -> viewStatementDoc cfg "CREATE" cv |> withStatementTerminator cv
-    | :? AlterViewStatement as av -> viewStatementDoc cfg "ALTER" av |> withStatementTerminator av
-    | :? CreateOrAlterViewStatement as coav ->
-        viewStatementDoc cfg "CREATE OR ALTER" coav |> withStatementTerminator coav
-    | :? AlterFunctionStatement as af -> alterFunctionDoc cfg af
-    | :? CreateFunctionStatement as cf -> createFunctionDoc cfg cf
-    | :? AlterProcedureStatement as ap -> alterProcedureDoc cfg ap
-    | :? CreateProcedureStatement as cp -> createProcedureDoc cfg cp
-    | :? BeginEndBlockStatement as be -> beginEndDoc cfg be |> withStatementTerminator be
+    // Standalone statement forms that own their trailing semicolon here.
+    | :? SelectStatement as ss ->
+        let selectDoc = selectStatementDoc cfg ss
+
+        let doc =
+            if
+                context.HasLeadingCteSemicolon
+                && not cfg.formatterExtensions.cte.omitLeadingSemicolon
+                && ss.WithCtesAndXmlNamespaces <> null
+                && ss.WithCtesAndXmlNamespaces.CommonTableExpressions <> null
+                && ss.WithCtesAndXmlNamespaces.CommonTableExpressions.Count > 0
+            then
+                text ";" <+> selectDoc
+            else
+                selectDoc
+
+        semicolon doc
+    | :? InsertStatement as ins -> insertDoc cfg ins |> semicolon
+    | :? UpdateStatement as upd -> updateDoc cfg upd |> semicolon
+    | :? DeleteStatement as del -> deleteDoc cfg del |> semicolon
+    | :? MergeStatement as merge -> mergeDoc cfg merge |> semicolon
+    | :? CreateTableStatement as ct -> createTableDoc cfg ct |> semicolon
+    | :? DropTableStatement as dt -> dropTableDoc cfg dt |> semicolon
+    | :? CreateViewStatement as cv -> viewStatementDoc cfg "CREATE" cv |> semicolon
+    | :? AlterViewStatement as av -> viewStatementDoc cfg "ALTER" av |> semicolon
+    | :? CreateOrAlterViewStatement as coav -> viewStatementDoc cfg "CREATE OR ALTER" coav |> semicolon
+    | :? AlterFunctionStatement as af -> alterFunctionDoc cfg af |> semicolon
+    | :? CreateFunctionStatement as cf -> createFunctionDoc cfg cf |> semicolon
+    | :? AlterProcedureStatement as ap -> alterProcedureDoc cfg ap |> semicolon
+    | :? CreateProcedureStatement as cp -> createProcedureDoc cfg cp |> semicolon
+    | :? BeginEndBlockStatement as be -> beginEndDoc cfg be |> semicolon
+    | :? PredicateSetStatement as ps -> setOnOffDoc cfg ps |> semicolon
+    | :? ReturnStatement as rs ->
+        let doc =
+            if rs.Expression <> null then
+                keyword cfg "RETURN" <++> exprDoc cfg rs.Expression
+            else
+                tokenStreamDoc cfg rs
+
+        semicolon doc
+    | :? PrintStatement as ps -> keyword cfg "PRINT" <++> exprDoc cfg ps.Expression |> semicolon
+
+    // Statement forms that need semicolon/comment ordering handled together.
+    | :? DeclareVariableStatement as dv -> declareDoc cfg dv |> semicolonAndTrailingComment
+    | :? SetVariableStatement as sv -> setVarDoc cfg sv |> semicolonAndTrailingComment
+
+    // Container/control-flow statements do not own a trailing semicolon here.
     | :? IfStatement as ifs -> ifDoc cfg ifs
     | :? WhileStatement as ws -> whileDoc cfg ws
     | :? TryCatchStatement as tc -> tryCatchDoc cfg tc
-    | :? DeclareVariableStatement as dv -> declareDoc cfg dv |> withStatementTerminatorAndComment dv
-    | :? SetVariableStatement as sv -> setVarDoc cfg sv |> withStatementTerminatorAndComment sv
-    | :? ReturnStatement as rs ->
-        if rs.Expression <> null then
-            keyword cfg "RETURN" <++> exprDoc cfg rs.Expression
-            |> withStatementTerminator rs
-        else
-            tokenStreamDoc cfg rs
-    | :? PrintStatement as ps -> keyword cfg "PRINT" <++> exprDoc cfg ps.Expression |> withStatementTerminator ps
+
+    // Fallback: preserve unsupported statements exactly as parsed.
     | :? ExecuteStatement as es -> tokenStreamDoc cfg es
     | :? RaiseErrorStatement as re -> tokenStreamDoc cfg re
     | :? ThrowStatement as ts -> tokenStreamDoc cfg ts
     | _ -> tokenStreamDoc cfg stmt
-
-// ─── Top-level: handle RETURN SELECT for inline TVFs ───
-
-/// Special handling for AlterFunctionStatement with inline TVF (RETURN SELECT)
-and private handleInlineTvf (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
-    let header =
-        keyword cfg "ALTER"
-        <++> keyword cfg "FUNCTION"
-        <++> schemaObjectNameDoc cfg af.Name
-
-    let commentMap = getParamTrailingComments af.Parameters
-    let paramsDoc = ddlParamListDoc cfg af.Parameters commentMap true
-    let returnsDoc = keyword cfg "RETURNS" <++> keyword cfg "TABLE"
-    let asDoc = keyword cfg "AS"
-
-    // For inline TVFs, we need to find the RETURN SELECT in the token stream
-    let stream = af.ScriptTokenStream
-
-    let returnIdxOpt =
-        if stream <> null then
-            seq { af.FirstTokenIndex .. af.LastTokenIndex }
-            |> Seq.tryFind (fun i -> stream.[i].TokenType = TSqlTokenType.Return)
-        else
-            None
-
-    match returnIdxOpt with
-    | Some returnIdx ->
-        // Skip whitespace after RETURN to find the SELECT start
-        let selectStart =
-            seq { returnIdx + 1 .. af.LastTokenIndex }
-            |> Seq.skipWhile (fun i -> stream.[i].TokenType = TSqlTokenType.WhiteSpace)
-            |> Seq.tryHead
-            |> Option.defaultValue (returnIdx + 1)
-
-        // Build RETURN + SELECT doc from the remaining tokens
-        let selectSql =
-            seq { selectStart .. af.LastTokenIndex }
-            |> Seq.map (fun i -> stream.[i].Text)
-            |> String.concat ""
-            |> fun s -> s.Trim()
-
-        let selectDoc = inlineTvfSelectDoc cfg selectSql
-
-        header
-        <+> paramsDoc
-        <+> line
-        <+> returnsDoc
-        <+> line
-        <+> asDoc
-        <+> line
-        <+> keyword cfg "RETURN"
-        <++> selectDoc
-    | None -> header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> asDoc
 
 // ─── Top-level format function ───
 
@@ -2544,7 +2601,7 @@ let format (config: FormattingStyle) (sql: string) : Result<string, string list>
                     let stmtDocs =
                         batch.Statements
                         |> Seq.cast<TSqlStatement>
-                        |> Seq.map (fun stmt -> statementDoc config stmt)
+                        |> Seq.map (fun stmt -> statementDoc config standaloneStatementContext stmt)
                         |> Seq.toList
 
                     join (line <+> line) stmtDocs)
