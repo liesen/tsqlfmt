@@ -1636,11 +1636,47 @@ and private inlineTvfReturnSql (stmt: TSqlStatement) : string option =
             |> String.concat ""
             |> fun s -> s.Trim())
 
-and private inlineTvfBodyDoc (cfg: FormattingStyle) (selectSql: string) : Doc =
-    if selectSql.StartsWith("(") then
-        parenthesizedInlineTvfDoc cfg selectSql
+and private inlineTvfFormatterConfig (cfg: FormattingStyle) (omitLeadingSemicolon: bool) : FormattingStyle =
+    if omitLeadingSemicolon then
+        { cfg with
+            formatterExtensions =
+                { cfg.formatterExtensions with
+                    cte =
+                        { cfg.formatterExtensions.cte with
+                            omitLeadingSemicolon = true } } }
     else
-        inlineTvfSelectDoc cfg selectSql
+        cfg
+
+and private parseSingleStatement (sql: string) : TSqlStatement option =
+    let parser = TSql160Parser(true)
+    use reader = new StringReader(sql)
+    let fragment, errors = parser.Parse(reader)
+
+    if errors.Count = 0 then
+        match fragment with
+        | :? TSqlScript as script when script.Batches.Count > 0 && script.Batches.[0].Statements.Count > 0 ->
+            Some script.Batches.[0].Statements.[0]
+        | _ -> None
+    else
+        None
+
+and private normalizeInlineTvfSelect (selectSql: string) : string * bool * bool =
+    let bodySql, wrapInParens =
+        if selectSql.StartsWith("(") && selectSql.EndsWith(")") then
+            selectSql.Substring(1, selectSql.Length - 2).Trim(), true
+        else
+            selectSql.Trim(), false
+
+    let normalizedSql =
+        if bodySql.StartsWith(";with", StringComparison.OrdinalIgnoreCase) then
+            bodySql.Substring(1).TrimStart()
+        else
+            bodySql
+
+    let omitLeadingSemicolon =
+        normalizedSql.StartsWith("with", StringComparison.OrdinalIgnoreCase)
+
+    normalizedSql, wrapInParens, omitLeadingSemicolon
 
 and private selectFunctionBodyDoc
     (cfg: FormattingStyle)
@@ -1649,15 +1685,21 @@ and private selectFunctionBodyDoc
     : bool * Doc =
     let returnComment, returnDoc = returnKeyword cfg stmt
 
+    let returnSelectDoc (doc: Doc) =
+        match returnComment with
+        | Some _ -> false, returnDoc <+> line <+> doc
+        | None -> false, returnDoc <++> doc
+
     match inlineTvfReturnSql stmt with
     | Some selectSql ->
         if selectSql.StartsWith("(") then
-            true, returnDoc <++> parenthesizedInlineTvfDoc cfg selectSql
-        elif returnComment |> Option.isSome then
-            false, returnDoc <+> line <+> inlineTvfSelectDoc cfg selectSql
+            true, returnDoc <++> inlineTvfSelectDoc cfg selectSql
         else
-            false, returnDoc <++> inlineTvfSelectDoc cfg selectSql
-    | None -> false, returnDoc <++> selectStatementDoc cfg selectStatement
+            inlineTvfSelectDoc cfg selectSql |> returnSelectDoc
+    | None ->
+        selectStatementDoc cfg selectStatement
+        |> withStatementTerminator selectStatement
+        |> returnSelectDoc
 
 and private procedureParamsHaveParens
     (stmt: TSqlStatement)
@@ -1973,73 +2015,20 @@ and private createTableDoc (cfg: FormattingStyle) (ct: CreateTableStatement) : D
     header <+> bodyDoc <+> onDoc <+> selectDoc
 
 and private inlineTvfSelectDoc (cfg: FormattingStyle) (selectSql: string) : Doc =
-    let normalizedSql =
-        if selectSql.StartsWith("(") && selectSql.EndsWith(")") then
-            let inner = selectSql.Substring(1, selectSql.Length - 2).Trim()
+    let normalizedSql, wrapInParens, omitLeadingSemicolon =
+        normalizeInlineTvfSelect selectSql
 
-            if inner.StartsWith(";with", StringComparison.OrdinalIgnoreCase) then
-                inner.Substring(1).TrimStart()
-            elif inner.StartsWith("with", StringComparison.OrdinalIgnoreCase) then
-                inner
-            else
-                selectSql
-        else
-            selectSql
-
-    let parser = TSql160Parser(true)
-    use reader = new StringReader(normalizedSql)
-    let fragment, errors = parser.Parse(reader)
-
-    if errors.Count = 0 then
-        match fragment with
-        | :? TSqlScript as script when script.Batches.Count > 0 && script.Batches.[0].Statements.Count > 0 ->
-            let doc =
-                if normalizedSql.StartsWith("with", StringComparison.OrdinalIgnoreCase) then
-                    tokenStreamDoc cfg fragment
-                else
-                    statementDoc cfg script.Batches.[0].Statements.[0]
-
-            if normalizedSql <> selectSql then
-                text "(" <+> nest (indentWidth cfg) (line <+> doc) <+> line <+> text ")"
-            else
-                doc
-        | _ -> text selectSql
-    else
-        text selectSql
-
-and private parenthesizedInlineTvfDoc (cfg: FormattingStyle) (selectSql: string) : Doc =
-    let inner = selectSql.Substring(1, selectSql.Length - 2).Trim()
-
-    let normalizedInner =
-        if inner.StartsWith(";with", StringComparison.OrdinalIgnoreCase) then
-            inner.Substring(1).TrimStart()
-        else
-            inner
-
-    let inlineCfg =
-        { cfg with
-            formatterExtensions =
-                { cfg.formatterExtensions with
-                    cte =
-                        { cfg.formatterExtensions.cte with
-                            omitLeadingSemicolon = true } } }
+    let inlineCfg = inlineTvfFormatterConfig cfg omitLeadingSemicolon
 
     let selectDoc =
-        let parser = TSql160Parser(true)
-        use reader = new StringReader(normalizedInner)
-        let fragment, errors = parser.Parse(reader)
+        match parseSingleStatement normalizedSql with
+        | Some stmt -> statementDoc inlineCfg stmt
+        | None -> text normalizedSql
 
-        if errors.Count = 0 then
-            match fragment with
-            | :? TSqlScript as script when script.Batches.Count > 0 && script.Batches.[0].Statements.Count > 0 ->
-                match script.Batches.[0].Statements.[0] with
-                | :? SelectStatement as ss -> selectStatementDoc inlineCfg ss
-                | stmt -> statementDoc inlineCfg stmt
-            | _ -> text normalizedInner
-        else
-            text normalizedInner
-
-    text "(" <+> nest (indentWidth cfg) (line <+> selectDoc) <+> line <+> text ")"
+    if wrapInParens then
+        text "(" <+> nest (indentWidth cfg) (line <+> selectDoc) <+> line <+> text ")"
+    else
+        selectDoc
 
 // ─── Control flow ───
 
