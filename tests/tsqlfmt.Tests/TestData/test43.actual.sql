@@ -1,0 +1,1 @@
+CREATE TABLE dbo.test43(id INT NOT NULL, tenant_id INT NOT NULL, customer_id INT NOT NULL, created_at DATETIME2 NOT NULL, CONSTRAINT UQ_test43 UNIQUE NONCLUSTERED (tenant_id, customer_id, created_at) ON [PRIMARY]) ON [PRIMARY];

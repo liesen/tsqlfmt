@@ -1891,6 +1891,8 @@ and private createTableElementDoc (cfg: FormattingStyle) (frag: TSqlFragment) : 
         let indexTypeDoc =
             if constraintDef.Clustered.HasValue && constraintDef.Clustered.Value then
                 keyword cfg "CLUSTERED"
+            elif constraintDef.Clustered.HasValue && not constraintDef.Clustered.Value then
+                keyword cfg "NONCLUSTERED"
             elif constraintDef.IndexType <> null then
                 tokenStreamDoc cfg constraintDef.IndexType
             else
