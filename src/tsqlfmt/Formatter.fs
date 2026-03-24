@@ -8,13 +8,11 @@ open Microsoft.SqlServer.TransactSql.ScriptDom
 open TSqlFormatter.Doc
 open TSqlFormatter.Trivia
 open TSqlFormatter.Style
+open TSqlFormatter.Identifiers
 open TSqlFormatter.Keywords
 
 // ─── Helpers ───
 
-let private keyword (cfg: Style) (s: string) = text (caseKeyword cfg.casing s)
-let private functionName (cfg: Style) (s: string) = text (caseFunction cfg.casing s)
-let private dataType (cfg: Style) (s: string) = text (caseDataType cfg.casing s)
 let private indentWidth (cfg: Style) = cfg.whitespace.numberOfSpacesInTabs
 
 type private SingleLineMeasure = { length: int; hasComments: bool }
@@ -217,7 +215,7 @@ let private formatCommaList (cfg: Style) (keyword: Doc) (items: CommaListItem li
         ->
         let flatDoc = flatCommaListDoc keyword items
         let expandedDoc = expandedCommaListDoc cfg keyword items
-        TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
+        choice flatDoc expandedDoc
     | _ -> expandedCommaListDoc cfg keyword items
 
 let private formatList (cfg: Style) (keyword: Doc) (items: Doc list) : Doc =
@@ -467,7 +465,7 @@ let rec private exprDoc (cfg: Style) (expr: TSqlFragment) : Doc =
         | UnaryExpressionType.Negative -> text "-" <+> exprDoc cfg unex.Expression
         | UnaryExpressionType.Positive -> text "+" <+> exprDoc cfg unex.Expression
         | _ -> tokenStreamDoc cfg expr
-    | :? MultiPartIdentifier as mpi -> multiPartIdDoc cfg mpi
+    | :? MultiPartIdentifier as mpi -> multiPartIdentDoc mpi
     | :? SelectStarExpression as star -> selectStarDoc cfg star
     | :? SelectScalarExpression as sse -> selectScalarDoc cfg sse
     | :? SelectSetVariable as ssv -> selectSetVarDoc cfg ssv
@@ -506,29 +504,13 @@ and private headedConditionDoc (cfg: Style) (head: Doc) (expr: BooleanExpression
 
 and private columnRefDoc (_cfg: Style) (col: ColumnReferenceExpression) : Doc =
     if col.MultiPartIdentifier <> null then
-        multiPartIdDoc _cfg col.MultiPartIdentifier
+        multiPartIdentDoc col.MultiPartIdentifier
     else
         text (fragmentText col)
 
-and private multiPartIdDoc (_cfg: Style) (mpi: MultiPartIdentifier) : Doc =
-    let parts = mpi.Identifiers |> Seq.map (fun i -> identDoc i) |> Seq.toList
-    join (text ".") parts
-
-and private identDoc (ident: Identifier) : Doc =
-    match ident.QuoteType with
-    | QuoteType.SquareBracket -> text ("[" + ident.Value + "]")
-    | QuoteType.DoubleQuote -> text ("\"" + ident.Value + "\"")
-    | _ -> text ident.Value
-
-and private identOrValueDoc (iov: IdentifierOrValueExpression) : Doc =
-    if iov.Identifier <> null then
-        identDoc iov.Identifier
-    else
-        text ("'" + iov.Value.Replace("'", "''") + "'")
-
 and private selectStarDoc (_cfg: Style) (star: SelectStarExpression) : Doc =
     if star.Qualifier <> null then
-        multiPartIdDoc _cfg star.Qualifier <+> text ".*"
+        multiPartIdentDoc star.Qualifier <+> text ".*"
     else
         text "*"
 
@@ -687,7 +669,7 @@ and private simpleCaseDoc (cfg: Style) (c: SimpleCaseExpression) : Doc =
 and private castCallDoc (cfg: Style) (c: CastCall) : Doc =
     let dataTypeDoc = dataTypeRefDoc cfg c.DataType
 
-    functionName cfg "CAST" <+> text "(" <+> exprDoc cfg c.Parameter
+    builtInFunctionName cfg "CAST" <+> text "(" <+> exprDoc cfg c.Parameter
     <++> keyword cfg "AS"
     <++> dataTypeDoc
     <+> text ")"
@@ -695,7 +677,7 @@ and private castCallDoc (cfg: Style) (c: CastCall) : Doc =
 and private tryCastCallDoc (cfg: Style) (c: TryCastCall) : Doc =
     let dataTypeDoc = dataTypeRefDoc cfg c.DataType
 
-    functionName cfg "TRY_CAST" <+> text "(" <+> exprDoc cfg c.Parameter
+    builtInFunctionName cfg "TRY_CAST" <+> text "(" <+> exprDoc cfg c.Parameter
     <++> keyword cfg "AS"
     <++> dataTypeDoc
     <+> text ")"
@@ -710,7 +692,7 @@ and private convertCallDoc (cfg: Style) (c: ConvertCall) : Doc =
         else
             dataTypeDoc <+> text "," <++> exprDoc cfg c.Parameter
 
-    functionName cfg "CONVERT" <+> text "(" <+> args <+> text ")"
+    builtInFunctionName cfg "CONVERT" <+> text "(" <+> args <+> text ")"
 
 and private dataTypeRefDoc (cfg: Style) (dtr: DataTypeReference) : Doc =
     match dtr with
@@ -723,7 +705,7 @@ and private dataTypeRefDoc (cfg: Style) (dtr: DataTypeReference) : Doc =
             text typeName <+> text "(" <+> join (text ", ") parms <+> text ")"
         else
             text typeName
-    | :? UserDataTypeReference as udt -> multiPartIdDoc cfg udt.Name
+    | :? UserDataTypeReference as udt -> multiPartIdentDoc udt.Name
     | _ -> tokenStreamDoc cfg dtr
 
 // ─── Function calls ───
@@ -763,7 +745,7 @@ and private functionCallDoc (cfg: Style) (f: FunctionCall) : Doc =
                 <+> line
                 <+> text ")"
 
-            TSqlFormatter.Doc.Doc.Union(flatArgs, expandedArgs)
+            choice flatArgs expandedArgs
         else
             text "()"
 
@@ -849,11 +831,11 @@ and private coalesceDoc (cfg: Style) (c: CoalesceExpression) : Doc =
         <+> line
         <+> text ")"
 
-    functionName cfg "COALESCE"
-    <+> TSqlFormatter.Doc.Doc.Union(flatArgs, expandedArgs)
+    builtInFunctionName cfg "COALESCE"
+    <+> choice flatArgs expandedArgs
 
 and private iifCallDoc (cfg: Style) (iif: IIfCall) : Doc =
-    functionName cfg "IIF"
+    builtInFunctionName cfg "IIF"
     <+> text "("
     <+> boolExprDoc cfg iif.Predicate
     <+> text ","
@@ -863,7 +845,7 @@ and private iifCallDoc (cfg: Style) (iif: IIfCall) : Doc =
     <+> text ")"
 
 and private nullIfDoc (cfg: Style) (n: NullIfExpression) : Doc =
-    functionName cfg "NULLIF"
+    builtInFunctionName cfg "NULLIF"
     <+> text "("
     <+> exprDoc cfg n.FirstExpression
     <+> text ","
@@ -915,7 +897,7 @@ and private boolParenDoc (cfg: Style) (bp: BooleanParenthesisExpression) : Doc =
     let expandedDoc =
         text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
 
-    TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
+    choice flatDoc expandedDoc
 
 and private queryParensDoc
     (cfg: Style)
@@ -993,7 +975,7 @@ and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
             <+> line
             <+> text ")"
 
-        TSqlFormatter.Doc.Doc.Union(flatContent, expandedContent)
+        choice flatContent expandedContent
 
 and private likePredicateDoc (cfg: Style) (lk: LikePredicate) : Doc =
     let lhs = exprDoc cfg lk.FirstExpression
@@ -1245,29 +1227,29 @@ and private tableRefDoc (cfg: Style) (tr: TableReference) : Doc =
     | _ -> tokenStreamDoc cfg tr
 
 and private namedTableDoc (cfg: Style) (ntr: NamedTableReference) : Doc =
-    let nameDoc = schemaObjectNameDoc cfg ntr.SchemaObject
+    let nameDoc = schemaObjectNameDoc ntr.SchemaObject
 
     let hints =
         if ntr.TableHints <> null && ntr.TableHints.Count > 0 then
             let hintToText (h: TableHint) =
                 match h.HintKind with
-                | TableHintKind.NoLock -> caseKeyword cfg.casing "NOLOCK"
-                | TableHintKind.HoldLock -> caseKeyword cfg.casing "HOLDLOCK"
-                | TableHintKind.UpdLock -> caseKeyword cfg.casing "UPDLOCK"
-                | TableHintKind.Rowlock -> caseKeyword cfg.casing "ROWLOCK"
-                | TableHintKind.PagLock -> caseKeyword cfg.casing "PAGLOCK"
-                | TableHintKind.TabLock -> caseKeyword cfg.casing "TABLOCK"
-                | TableHintKind.TabLockX -> caseKeyword cfg.casing "TABLOCKX"
-                | TableHintKind.XLock -> caseKeyword cfg.casing "XLOCK"
-                | TableHintKind.ReadUncommitted -> caseKeyword cfg.casing "READUNCOMMITTED"
-                | TableHintKind.ReadCommitted -> caseKeyword cfg.casing "READCOMMITTED"
-                | TableHintKind.RepeatableRead -> caseKeyword cfg.casing "REPEATABLEREAD"
-                | TableHintKind.Serializable -> caseKeyword cfg.casing "SERIALIZABLE"
-                | TableHintKind.ReadPast -> caseKeyword cfg.casing "READPAST"
-                | _ -> fragmentText h
+                | TableHintKind.NoLock -> keyword cfg "NOLOCK"
+                | TableHintKind.HoldLock -> keyword cfg "HOLDLOCK"
+                | TableHintKind.UpdLock -> keyword cfg "UPDLOCK"
+                | TableHintKind.Rowlock -> keyword cfg "ROWLOCK"
+                | TableHintKind.PagLock -> keyword cfg "PAGLOCK"
+                | TableHintKind.TabLock -> keyword cfg "TABLOCK"
+                | TableHintKind.TabLockX -> keyword cfg "TABLOCKX"
+                | TableHintKind.XLock -> keyword cfg "XLOCK"
+                | TableHintKind.ReadUncommitted -> keyword cfg "READUNCOMMITTED"
+                | TableHintKind.ReadCommitted -> keyword cfg "READCOMMITTED"
+                | TableHintKind.RepeatableRead -> keyword cfg "REPEATABLEREAD"
+                | TableHintKind.Serializable -> keyword cfg "SERIALIZABLE"
+                | TableHintKind.ReadPast -> keyword cfg "READPAST"
+                | _ -> text (fragmentText h)
 
             let hintTexts = ntr.TableHints |> Seq.map hintToText |> Seq.toList
-            text " (" <+> join (text ", ") (hintTexts |> List.map text) <+> text ")"
+            text " (" <+> join (text ", ") hintTexts <+> text ")"
         else
             empty
 
@@ -1278,10 +1260,6 @@ and private namedTableDoc (cfg: Style) (ntr: NamedTableReference) : Doc =
             empty
 
     nameDoc <+> hints <+> alias
-
-and private schemaObjectNameDoc (_cfg: Style) (son: SchemaObjectName) : Doc =
-    let parts = son.Identifiers |> Seq.map identDoc |> Seq.toList
-    join (text ".") parts
 
 and private qualifiedJoinDoc (cfg: Style) (qj: QualifiedJoin) : Doc =
     let firstTable = tableRefDoc cfg qj.FirstTableReference
@@ -1342,7 +1320,7 @@ and private queryDerivedTableDoc (cfg: Style) (qdt: QueryDerivedTable) : Doc =
     parenDoc <+> aliasDoc
 
 and private schemaObjectFuncTableDoc (cfg: Style) (softr: SchemaObjectFunctionTableReference) : Doc =
-    let nameDoc = schemaObjectNameDoc cfg softr.SchemaObject
+    let nameDoc = schemaObjectNameDoc softr.SchemaObject
 
     let args =
         if softr.Parameters <> null && softr.Parameters.Count > 0 then
@@ -1419,7 +1397,7 @@ and private binaryQueryDoc (cfg: Style) (bqe: BinaryQueryExpression) : Doc =
 and private selectStatementDoc (cfg: Style) (ss: SelectStatement) : Doc =
     let intoTarget =
         if ss.Into <> null then
-            Some(trailingFragmentDoc (ss.Into :> TSqlFragment) (schemaObjectNameDoc cfg ss.Into))
+            Some(trailingFragmentDoc (ss.Into :> TSqlFragment) (schemaObjectNameDoc ss.Into))
         else
             None
 
@@ -1558,7 +1536,7 @@ and private functionHeaderDoc
     (name: SchemaObjectName)
     (parameters: System.Collections.Generic.IList<ProcedureParameter>)
     : Doc =
-    let header = keyword cfg "FUNCTION" <++> schemaObjectNameDoc cfg name
+    let header = keyword cfg "FUNCTION" <++> schemaObjectNameDoc name
 
     let commentMap = getParamTrailingComments parameters
     let paramsDoc = ddlParamListDoc cfg parameters commentMap true
@@ -1811,7 +1789,7 @@ and private alterProcedureDoc (cfg: Style) (ap: AlterProcedureStatement) : Doc =
     let header =
         keyword cfg "ALTER"
         <++> keyword cfg "PROCEDURE"
-        <++> schemaObjectNameDoc cfg ap.ProcedureReference.Name
+        <++> schemaObjectNameDoc ap.ProcedureReference.Name
 
     let commentMap = getParamTrailingComments ap.Parameters
     let wrapParams = procedureParamsHaveParens (ap :> TSqlStatement) ap.Parameters
@@ -1831,7 +1809,7 @@ and private createProcedureDoc (cfg: Style) (cp: CreateProcedureStatement) : Doc
     let header =
         keyword cfg "CREATE"
         <++> keyword cfg "PROCEDURE"
-        <++> schemaObjectNameDoc cfg cp.ProcedureReference.Name
+        <++> schemaObjectNameDoc cp.ProcedureReference.Name
 
     let commentMap = getParamTrailingComments cp.Parameters
     let wrapParams = procedureParamsHaveParens (cp :> TSqlStatement) cp.Parameters
@@ -1927,7 +1905,7 @@ and private dropTableDoc (cfg: Style) (stmt: DropTableStatement) : Doc =
 
     let baseDoc = join (text " ") baseParts
 
-    let tableDocs = stmt.Objects |> Seq.map (schemaObjectNameDoc cfg) |> Seq.toList
+    let tableDocs = stmt.Objects |> Seq.map schemaObjectNameDoc |> Seq.toList
 
     baseDoc <++> join (text "," <+> text " ") tableDocs
 
@@ -1945,7 +1923,7 @@ and private viewStatementDoc (cfg: Style) (verb: string) (vs: ViewStatementBody)
     let header =
         keyword cfg verb
         <++> keyword cfg "VIEW"
-        <++> schemaObjectNameDoc cfg vs.SchemaObjectName
+        <++> schemaObjectNameDoc vs.SchemaObjectName
 
     let columnsDoc = viewColumnsDoc cfg vs.Columns
     let optionsDoc = viewOptionsDoc cfg vs.ViewOptions
@@ -2080,7 +2058,7 @@ and private createTableDoc (cfg: Style) (ct: CreateTableStatement) : Doc =
     let header =
         keyword cfg "CREATE"
         <++> keyword cfg "TABLE"
-        <++> schemaObjectNameDoc cfg ct.SchemaObjectName
+        <++> schemaObjectNameDoc ct.SchemaObjectName
 
     let definition = ct.Definition
 
@@ -2225,7 +2203,7 @@ and private insertDoc (cfg: Style) (ins: InsertStatement) : Doc =
                 <+> line
                 <+> text ")"
 
-            TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
+            choice flatDoc expandedDoc
         else
             empty
 
@@ -2243,13 +2221,13 @@ and private insertDoc (cfg: Style) (ins: InsertStatement) : Doc =
                     <+> line
                     <+> text ")"
 
-                TSqlFormatter.Doc.Doc.Union(flatRow, expandedRow)
+                choice flatRow expandedRow
 
             let rows = vis.RowValues |> Seq.map rowDoc |> Seq.toList
             // Multiple rows: comma-separated with line breaks between
             let flatRows = keyword cfg "VALUES" <++> join (text ", ") rows |> flatten
             let expandedRows = keyword cfg "VALUES" <++> join (text ", ") rows
-            TSqlFormatter.Doc.Doc.Union(flatRows, expandedRows)
+            choice flatRows expandedRows
         | :? SelectInsertSource as sis -> queryExprDoc cfg sis.Select
         | _ -> tokenStreamDoc cfg spec.InsertSource
 
@@ -2403,7 +2381,7 @@ and private mergeDoc (cfg: Style) (merge: MergeStatement) : Doc =
                             <+> line
                             <+> text ")"
 
-                        TSqlFormatter.Doc.Doc.Union(flatCols, expandedCols)
+                        choice flatCols expandedCols
                     else
                         empty
 
@@ -2420,7 +2398,7 @@ and private mergeDoc (cfg: Style) (merge: MergeStatement) : Doc =
                             <+> line
                             <+> text ")"
 
-                        TSqlFormatter.Doc.Doc.Union(flatRow, expandedRow)
+                        choice flatRow expandedRow
 
                     let rows = vis.RowValues |> Seq.map rowDoc |> Seq.toList
                     keyword cfg "VALUES" <++> join (text ", ") rows

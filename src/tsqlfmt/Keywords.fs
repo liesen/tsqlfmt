@@ -3,6 +3,7 @@ module TSqlFormatter.Keywords
 
 open System.Collections.Generic
 open TSqlFormatter.Style
+open TSqlFormatter.Doc
 
 let private reservedKeywords =
     HashSet<string>(
@@ -527,3 +528,12 @@ let caseFunction (cfg: Casing) (name: string) : string = applyCase cfg.builtInFu
 
 /// Apply casing to a built-in data type.
 let caseDataType (cfg: Casing) (name: string) : string = applyCase cfg.builtInDataTypes name
+
+/// Render a keyword with configured keyword casing.
+let keyword (cfg: Style) (s: string) : Doc = text (caseKeyword cfg.casing s)
+
+/// Render a built-in function name with configured function casing.
+let builtInFunctionName (cfg: Style) (s: string) : Doc = text (caseFunction cfg.casing s)
+
+/// Render a built-in data type with configured data type casing.
+let dataTypeName (cfg: Style) (s: string) : Doc = text (caseDataType cfg.casing s)

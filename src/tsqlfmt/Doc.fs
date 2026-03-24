@@ -66,6 +66,9 @@ let rec flatten (doc: Doc) : Doc =
 /// If it fits, use the flattened version; otherwise keep line breaks.
 let group (doc: Doc) : Doc = Doc.Union(flatten doc, doc)
 
+/// Choose between an explicit flat layout and a broken layout.
+let choice (flatDoc: Doc) (brokenDoc: Doc) : Doc = Doc.Union(flatDoc, brokenDoc)
+
 // ─── Rendering ───
 
 type private Mode =
