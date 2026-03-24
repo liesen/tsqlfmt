@@ -393,6 +393,12 @@ let private attachOwnLineComments (comments: Comment list) (doc: Doc) : Doc =
     | [] -> doc
     | _ -> join line (comments |> List.map renderComment) <+> line <+> doc
 
+let private statementSeparatorComments (prevStmt: TSqlStatement) (nextStmt: TSqlStatement) : Comment list =
+    let inter = interComments prevStmt nextStmt
+    let ownLine = leadingInterComments prevStmt nextStmt
+
+    if ownLine.IsEmpty then inter else ownLine
+
 let private attachInlineLeadingComments (comments: Comment list) (doc: Doc) : Doc =
     match comments with
     | [] -> doc
@@ -1559,7 +1565,7 @@ and private statementListDoc
             (fun prev stmt ->
                 match prev with
                 | None -> []
-                | Some prevStmt -> leadingInterComments prevStmt stmt)
+                | Some prevStmt -> statementSeparatorComments prevStmt stmt)
             attachOwnLineComments
         |> join separator
 
@@ -2246,6 +2252,11 @@ and private insertDoc (cfg: FormattingStyle) (ins: InsertStatement) : Doc =
 
     header <+> colsDoc <+> line <+> sourceDoc
 
+and private setClauseDoc (cfg: FormattingStyle) (sc: SetClause) : Doc =
+    match sc with
+    | :? AssignmentSetClause as asc -> assignmentSetClauseDoc cfg asc
+    | _ -> tokenStreamDoc cfg sc
+
 and private updateDoc (cfg: FormattingStyle) (upd: UpdateStatement) : Doc =
     let spec = upd.UpdateSpecification
 
@@ -2255,30 +2266,7 @@ and private updateDoc (cfg: FormattingStyle) (upd: UpdateStatement) : Doc =
         else
             empty
 
-    let setClauses =
-        spec.SetClauses
-        |> Seq.map (fun sc ->
-            match sc with
-            | :? AssignmentSetClause as asc ->
-                let col = columnRefDoc cfg asc.Column
-                let value = exprDoc cfg asc.NewValue
-
-                let op =
-                    match asc.AssignmentKind with
-                    | AssignmentKind.Equals -> "="
-                    | AssignmentKind.AddEquals -> "+="
-                    | AssignmentKind.SubtractEquals -> "-="
-                    | AssignmentKind.MultiplyEquals -> "*="
-                    | AssignmentKind.DivideEquals -> "/="
-                    | AssignmentKind.ModEquals -> "%="
-                    | AssignmentKind.BitwiseAndEquals -> "&="
-                    | AssignmentKind.BitwiseOrEquals -> "|="
-                    | AssignmentKind.BitwiseXorEquals -> "^="
-                    | _ -> "="
-
-                col <++> text op <++> value
-            | _ -> tokenStreamDoc cfg sc)
-        |> Seq.toList
+    let setClauses = spec.SetClauses |> Seq.map (setClauseDoc cfg) |> Seq.toList
 
     let parts =
         [ yield keyword cfg "UPDATE" <++> target
@@ -2320,6 +2308,25 @@ and private deleteDoc (cfg: FormattingStyle) (del: DeleteStatement) : Doc =
 
     join line parts
 
+and private assignmentSetClauseDoc (cfg: FormattingStyle) (asc: AssignmentSetClause) : Doc =
+    let col = columnRefDoc cfg asc.Column
+    let value = exprDoc cfg asc.NewValue
+
+    let op =
+        match asc.AssignmentKind with
+        | AssignmentKind.Equals -> "="
+        | AssignmentKind.AddEquals -> "+="
+        | AssignmentKind.SubtractEquals -> "-="
+        | AssignmentKind.MultiplyEquals -> "*="
+        | AssignmentKind.DivideEquals -> "/="
+        | AssignmentKind.ModEquals -> "%="
+        | AssignmentKind.BitwiseAndEquals -> "&="
+        | AssignmentKind.BitwiseOrEquals -> "|="
+        | AssignmentKind.BitwiseXorEquals -> "^="
+        | _ -> "="
+
+    col <++> text op <++> value
+
 and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
     let spec = merge.MergeSpecification
 
@@ -2346,24 +2353,6 @@ and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
         <++> source
         <+> line
         <+> nest (indentWidth cfg) onCondition
-
-    let setClauseDoc (sc: SetClause) =
-        match sc with
-        | :? AssignmentSetClause as asc ->
-            let col = columnRefDoc cfg asc.Column
-            let value = exprDoc cfg asc.NewValue
-
-            let op =
-                match asc.AssignmentKind with
-                | AssignmentKind.Equals -> "="
-                | AssignmentKind.AddEquals -> "+="
-                | AssignmentKind.SubtractEquals -> "-="
-                | AssignmentKind.MultiplyEquals -> "*="
-                | AssignmentKind.DivideEquals -> "/="
-                | _ -> "="
-
-            col <++> text op <++> value
-        | _ -> tokenStreamDoc cfg sc
 
     let actionClauseDoc (ac: MergeActionClause) =
         let conditionKw =
@@ -2393,7 +2382,7 @@ and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
         let actionDoc =
             match ac.Action with
             | :? UpdateMergeAction as u ->
-                let setClauses = u.SetClauses |> Seq.map setClauseDoc |> Seq.toList
+                let setClauses = u.SetClauses |> Seq.map (setClauseDoc cfg) |> Seq.toList
 
                 keyword cfg "THEN"
                 <+> nest
