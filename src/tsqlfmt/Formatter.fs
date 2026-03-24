@@ -393,12 +393,6 @@ let private attachOwnLineComments (comments: Comment list) (doc: Doc) : Doc =
     | [] -> doc
     | _ -> join line (comments |> List.map renderComment) <+> line <+> doc
 
-let private statementSeparatorComments (prevStmt: TSqlStatement) (nextStmt: TSqlStatement) : Comment list =
-    let inter = interComments prevStmt nextStmt
-    let ownLine = leadingInterComments prevStmt nextStmt
-
-    if ownLine.IsEmpty then inter else ownLine
-
 let private attachInlineLeadingComments (comments: Comment list) (doc: Doc) : Doc =
     match comments with
     | [] -> doc
@@ -1565,7 +1559,7 @@ and private statementListDoc
             (fun prev stmt ->
                 match prev with
                 | None -> []
-                | Some prevStmt -> statementSeparatorComments prevStmt stmt)
+                | Some prevStmt -> leadingInterComments prevStmt stmt)
             attachOwnLineComments
         |> join separator
 
