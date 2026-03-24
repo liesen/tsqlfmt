@@ -1566,22 +1566,6 @@ and private statementListDoc
 and private routineWithAsDoc (cfg: FormattingStyle) (header: Doc) (paramsDoc: Doc) (bodyDoc: Doc) : Doc =
     header <+> paramsDoc <+> line <+> keyword cfg "AS" <+> line <+> bodyDoc
 
-and private routineWithReturnsDoc
-    (cfg: FormattingStyle)
-    (header: Doc)
-    (paramsDoc: Doc)
-    (returnsDoc: Doc)
-    (bodyDoc: Doc)
-    : Doc =
-    header
-    <+> paramsDoc
-    <+> line
-    <+> returnsDoc
-    <+> line
-    <+> keyword cfg "AS"
-    <+> line
-    <+> bodyDoc
-
 and private functionHeaderDoc
     (cfg: FormattingStyle)
     (verb: string)
@@ -1601,22 +1585,6 @@ and private regularFunctionReturnsDoc (cfg: FormattingStyle) (returnType: Functi
          | :? TableValuedFunctionReturnType -> keyword cfg "TABLE"
          | :? ScalarFunctionReturnType as srt -> dataTypeRefDoc cfg srt.DataType
          | _ -> tokenStreamDoc cfg returnType
-
-and private inlineRoutineDoc
-    (cfg: FormattingStyle)
-    (header: Doc)
-    (paramsDoc: Doc)
-    (returnsDoc: Doc)
-    (bodyDoc: Doc)
-    : Doc =
-    header
-    <+> paramsDoc
-    <+> line
-    <+> returnsDoc
-    <+> line
-    <+> keyword cfg "AS"
-    <+> line
-    <+> bodyDoc
 
 and private inlineTvfBodyStartsWithParen (stmt: TSqlStatement) : bool =
     let stream = stmt.ScriptTokenStream
@@ -1766,25 +1734,35 @@ and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement)
 and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatement) : Doc =
     let header, paramsDoc = functionHeaderDoc cfg "CREATE" cf.Name cf.Parameters
 
-    match cf.ReturnType with
-    | :? SelectFunctionReturnType as sfrt ->
-        let returnsComment, returnsKeywordDoc = returnsKeyword cfg cf
+    let returnsDoc, bodyDoc =
+        match cf.ReturnType with
+        | :? SelectFunctionReturnType as sfrt ->
+            let returnsComment, returnsKeywordDoc = returnsKeyword cfg cf
 
-        let returnsDoc =
-            if returnsComment |> Option.isSome then
-                returnsKeywordDoc <+> line <+> keyword cfg "TABLE"
-            else
-                returnsKeywordDoc <++> keyword cfg "TABLE"
+            let returnsDoc =
+                if returnsComment |> Option.isSome then
+                    returnsKeywordDoc <+> line <+> keyword cfg "TABLE"
+                else
+                    returnsKeywordDoc <++> keyword cfg "TABLE"
 
-        let bodyDoc = selectFunctionBodyDoc cfg cf sfrt.SelectStatement
-        inlineRoutineDoc cfg header paramsDoc returnsDoc bodyDoc
-    | _ ->
-        let returnsDoc = regularFunctionReturnsDoc cfg cf.ReturnType
+            let bodyDoc = selectFunctionBodyDoc cfg cf sfrt.SelectStatement
+            returnsDoc, bodyDoc
+        | _ ->
+            let returnsDoc = regularFunctionReturnsDoc cfg cf.ReturnType
 
-        let bodyDoc =
-            statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg cf) cf.StatementList
+            let bodyDoc =
+                statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg cf) cf.StatementList
 
-        routineWithReturnsDoc cfg header paramsDoc returnsDoc bodyDoc
+            returnsDoc, bodyDoc
+
+    header
+    <+> paramsDoc
+    <+> line
+    <+> returnsDoc
+    <+> line
+    <+> keyword cfg "AS"
+    <+> line
+    <+> bodyDoc
 
 and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatement) : Doc =
     let header =
