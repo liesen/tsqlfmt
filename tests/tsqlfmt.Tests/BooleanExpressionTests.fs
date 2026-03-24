@@ -61,16 +61,31 @@ WHERE x = 1
     assertFormatsTo expected sql
 
 [<Fact>]
-let ``IIF keeps a plain boolean expression inline`` () =
+let ``IIF uses structured argument layout`` () =
+    let testConfig =
+        { config with
+            lists =
+                { config.lists with
+                    placeFirstItemOnNewLine = PlaceOnNewLine.Always
+                    indentListItems = true }
+            functionCalls =
+                { config.functionCalls with
+                    placeArgumentsOnNewLines = PlaceOnNewLine.Always } }
+
     let sql = "select iif(a = 1 and b = 2, 'yes', 'no') as result"
 
     let expected =
         """
-SELECT IIF(a = 1
-        AND b = 2, 'yes', 'no') AS result
+SELECT
+    IIF(
+        a = 1
+            AND b = 2,
+        'yes',
+        'no'
+    ) AS result
 """
 
-    assertFormatsTo expected sql
+    assertFormatsToWithConfig testConfig expected sql
 
 [<Fact>]
 let ``NOT over a parenthesized boolean expression keeps generic boolean formatting`` () =

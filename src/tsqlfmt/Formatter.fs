@@ -221,6 +221,25 @@ let private formatCommaList (cfg: Style) (keyword: Doc) (items: CommaListItem li
 let private formatList (cfg: Style) (keyword: Doc) (items: Doc list) : Doc =
     formatCommaList cfg keyword (plainCommaListItems items)
 
+let private decoratedCommaDocs (items: Doc list) : Doc list =
+    items
+    |> List.mapi (fun i item ->
+        if i = List.length items - 1 then
+            item
+        else
+            item <+> text ",")
+
+let private parenthesizedCommaListDoc (cfg: Style) (items: Doc list) : Doc =
+    let flatDoc = text "(" <+> commaSep items <+> text ")"
+
+    let expandedDoc =
+        text "("
+        <+> sequenceDoc (listSequencePolicy cfg) (decoratedCommaDocs items)
+        <+> line
+        <+> text ")"
+
+    choice flatDoc expandedDoc
+
 /// Get the raw SQL text of a fragment from its token stream.
 let private fragmentText (frag: TSqlFragment) : string =
     if frag = null then
@@ -835,14 +854,26 @@ and private coalesceDoc (cfg: Style) (c: CoalesceExpression) : Doc =
     <+> choice flatArgs expandedArgs
 
 and private iifCallDoc (cfg: Style) (iif: IIfCall) : Doc =
-    builtInFunctionName cfg "IIF"
-    <+> text "("
-    <+> boolExprDoc cfg iif.Predicate
-    <+> text ","
-    <++> exprDoc cfg iif.ThenExpression
-    <+> text ","
-    <++> exprDoc cfg iif.ElseExpression
-    <+> text ")"
+    let argDocs =
+        [ boolExprDoc cfg iif.Predicate
+          exprDoc cfg iif.ThenExpression
+          exprDoc cfg iif.ElseExpression ]
+
+    let flatArgs = text "(" <+> commaSep argDocs <+> text ")"
+
+    let expandedArgs =
+        text "("
+        <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) argDocs)
+        <+> line
+        <+> text ")"
+
+    let argsDoc =
+        if cfg.functionCalls.placeArgumentsOnNewLines = PlaceOnNewLine.Always then
+            expandedArgs
+        else
+            choice flatArgs expandedArgs
+
+    builtInFunctionName cfg "IIF" <+> argsDoc
 
 and private nullIfDoc (cfg: Style) (n: NullIfExpression) : Doc =
     builtInFunctionName cfg "NULLIF"
@@ -1248,18 +1279,19 @@ and private namedTableDoc (cfg: Style) (ntr: NamedTableReference) : Doc =
                 | TableHintKind.ReadPast -> keyword cfg "READPAST"
                 | _ -> text (fragmentText h)
 
-            let hintTexts = ntr.TableHints |> Seq.map hintToText |> Seq.toList
-            text " (" <+> join (text ", ") hintTexts <+> text ")"
+            let hintDoc =
+                ntr.TableHints
+                |> Seq.map hintToText
+                |> Seq.toList
+                |> parenthesizedCommaListDoc cfg
+
+            hintDoc
         else
             empty
 
-    let alias =
-        if ntr.Alias <> null then
-            text " " <+> identDoc ntr.Alias
-        else
-            empty
+    let alias = if ntr.Alias <> null then identDoc ntr.Alias else empty
 
-    nameDoc <+> hints <+> alias
+    nameDoc <++?> hints <++?> alias
 
 and private qualifiedJoinDoc (cfg: Style) (qj: QualifiedJoin) : Doc =
     let firstTable = tableRefDoc cfg qj.FirstTableReference
@@ -1672,7 +1704,16 @@ and private optionsClauseDoc (cfg: Style) (optionDoc: 'T -> Doc) (options: Syste
         empty
     else
         let optionDocs = options |> Seq.map optionDoc |> Seq.toList
-        line <+> keyword cfg "WITH" <++> join (text ", ") optionDocs
+
+        let placeFirstOnNewLine = cfg.lists.placeFirstItemOnNewLine = PlaceOnNewLine.Always
+
+        let optionListDoc =
+            if placeFirstOnNewLine then
+                headedSequenceDoc (listSequencePolicy cfg) (keyword cfg "WITH") (decoratedCommaDocs optionDocs)
+            else
+                keyword cfg "WITH" <++> join (text ", ") optionDocs
+
+        line <+> optionListDoc
 
 and private methodSpecifierDoc (ms: MethodSpecifier) : Doc =
     text ms.AssemblyName.Value
@@ -1695,9 +1736,7 @@ and private orderHintDoc (cfg: Style) (orderHint: OrderBulkInsertOption) : Doc =
 
         let columns = orderHint.Columns |> Seq.map columnDoc |> Seq.toList
 
-        line <+> keyword cfg "ORDER" <++> text "("
-        <+> join (text ", ") columns
-        <+> text ")"
+        line <+> keyword cfg "ORDER" <++> parenthesizedCommaListDoc cfg columns
 
 and private procedureBodyDoc (cfg: Style) (stmt: ProcedureStatementBody) : Doc =
     if stmt.MethodSpecifier <> null then
@@ -2036,7 +2075,7 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
                             let columns =
                                 orderOption.Columns |> Seq.map (fun col -> exprDoc cfg col) |> Seq.toList
 
-                            keyword cfg "ORDER" <++> text "(" <+> join (text ", ") columns <+> text ")"
+                            keyword cfg "ORDER" <++> parenthesizedCommaListDoc cfg columns
                         | _ -> tokenStreamDoc cfg option)
                     |> Seq.toList
 

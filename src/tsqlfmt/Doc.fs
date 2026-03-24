@@ -39,6 +39,11 @@ let (<+>) (a: Doc) (b: Doc) : Doc =
 /// Concatenation with a space
 let (<++>) a b = a <+> text " " <+> b
 
+let (<++?>) a =
+    function
+    | Doc.Nil -> a
+    | b -> a <++> b
+
 /// Concatenation with a line (soft break)
 let (</>) a b = a <+> line <+> b
 

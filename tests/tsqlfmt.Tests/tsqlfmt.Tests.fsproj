@@ -12,6 +12,7 @@
     <Compile Include="SequencePolicyTests.fs" />
     <Compile Include="SequenceLayoutTests.fs" />
     <Compile Include="BooleanExpressionTests.fs" />
+    <Compile Include="StructuredListTests.fs" />
     <Compile Include="SqlPromptParityTests.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>
