@@ -2527,7 +2527,7 @@ and private statementDoc (cfg: FormattingStyle) (context: StatementContext) (stm
             if rs.Expression <> null then
                 keyword cfg "RETURN" <++> exprDoc cfg rs.Expression
             else
-                tokenStreamDoc cfg rs
+                keyword cfg "RETURN"
 
         semicolon doc
     | :? PrintStatement as ps -> keyword cfg "PRINT" <++> exprDoc cfg ps.Expression |> semicolon
