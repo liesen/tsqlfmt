@@ -1604,24 +1604,19 @@ and private regularFunctionReturnsDoc (cfg: FormattingStyle) (returnType: Functi
 
 and private inlineRoutineDoc
     (cfg: FormattingStyle)
-    (sameLineAs: bool)
     (header: Doc)
     (paramsDoc: Doc)
     (returnsDoc: Doc)
     (bodyDoc: Doc)
     : Doc =
-    if sameLineAs then
-        header <+> paramsDoc <+> line <+> returnsDoc <+> line <+> keyword cfg "AS"
-        <++> bodyDoc
-    else
-        header
-        <+> paramsDoc
-        <+> line
-        <+> returnsDoc
-        <+> line
-        <+> keyword cfg "AS"
-        <+> line
-        <+> bodyDoc
+    header
+    <+> paramsDoc
+    <+> line
+    <+> returnsDoc
+    <+> line
+    <+> keyword cfg "AS"
+    <+> line
+    <+> bodyDoc
 
 and private inlineTvfFormatterConfig (cfg: FormattingStyle) (omitLeadingSemicolon: bool) : FormattingStyle =
     if omitLeadingSemicolon then
@@ -1672,13 +1667,13 @@ and private selectFunctionBodyDoc
     (cfg: FormattingStyle)
     (stmt: TSqlStatement)
     (selectStatement: SelectStatement)
-    : bool * Doc =
+    : Doc =
     let returnComment, returnDoc = returnKeyword cfg stmt
 
     let returnSelectDoc (doc: Doc) =
         match returnComment with
-        | Some _ -> false, returnDoc <+> line <+> doc
-        | None -> false, returnDoc <++> doc
+        | Some _ -> returnDoc <+> line <+> doc
+        | None -> returnDoc <++> doc
 
     let wrapInParens, _ = inlineTvfBodyShape stmt
 
@@ -1688,7 +1683,7 @@ and private selectFunctionBodyDoc
         let wrappedDoc =
             text "(" <+> nest (indentWidth cfg) (line <+> selectDoc) <+> line <+> text ")"
 
-        true, returnDoc <++> wrappedDoc
+        returnDoc <++> wrappedDoc
     else
         returnSelectDoc selectDoc
 
@@ -1769,12 +1764,8 @@ and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement)
                 else
                     returnsKeywordDoc <++> keyword cfg "TABLE"
 
-            let sameLineAs, returnDoc = selectFunctionBodyDoc cfg af sfrt.SelectStatement
-
-            if sameLineAs then
-                returnsDoc <+> line <+> keyword cfg "AS" <++> returnDoc
-            else
-                returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> returnDoc
+            let returnDoc = selectFunctionBodyDoc cfg af sfrt.SelectStatement
+            returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> returnDoc
         | :? ScalarFunctionReturnType as srt ->
             let returnsDoc = keyword cfg "RETURNS" <++> dataTypeRefDoc cfg srt.DataType
 
@@ -1812,8 +1803,8 @@ and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatemen
             else
                 returnsKeywordDoc <++> keyword cfg "TABLE"
 
-        let sameLineAs, bodyDoc = selectFunctionBodyDoc cfg cf sfrt.SelectStatement
-        inlineRoutineDoc cfg sameLineAs header paramsDoc returnsDoc bodyDoc
+        let bodyDoc = selectFunctionBodyDoc cfg cf sfrt.SelectStatement
+        inlineRoutineDoc cfg header paramsDoc returnsDoc bodyDoc
     | _ ->
         let returnsDoc = regularFunctionReturnsDoc cfg cf.ReturnType
 

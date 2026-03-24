@@ -1,6 +1,7 @@
 CREATE FUNCTION dbo.fn_test27(@param INT)
 RETURNS TABLE
-AS RETURN (
+AS
+RETURN (
     WITH cte AS (
         SELECT @param AS col1
     )
