@@ -1568,12 +1568,10 @@ and private routineWithAsDoc (cfg: FormattingStyle) (header: Doc) (paramsDoc: Do
 
 and private functionHeaderDoc
     (cfg: FormattingStyle)
-    (verb: string)
     (name: SchemaObjectName)
     (parameters: System.Collections.Generic.IList<ProcedureParameter>)
     : Doc =
-    let header =
-        keyword cfg verb <++> keyword cfg "FUNCTION" <++> schemaObjectNameDoc cfg name
+    let header = keyword cfg "FUNCTION" <++> schemaObjectNameDoc cfg name
 
     let commentMap = getParamTrailingComments parameters
     let paramsDoc = ddlParamListDoc cfg parameters commentMap true
@@ -1706,7 +1704,7 @@ and private getParamTrailingComments
         |> Map.ofSeq
 
 and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
-    let headerDoc = functionHeaderDoc cfg "ALTER" af.Name af.Parameters
+    let headerDoc = keyword cfg "ALTER" <++> functionHeaderDoc cfg af.Name af.Parameters
     let returnsDoc = returnTypeDoc cfg af af.ReturnType
     let bodyDoc = functionBodyDoc cfg af
 
@@ -1719,7 +1717,9 @@ and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement)
     <+> bodyDoc
 
 and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatement) : Doc =
-    let headerDoc = functionHeaderDoc cfg "CREATE" cf.Name cf.Parameters
+    let headerDoc =
+        keyword cfg "CREATE" <++> functionHeaderDoc cfg cf.Name cf.Parameters
+
     let returnsDoc = returnTypeDoc cfg cf cf.ReturnType
     let bodyDoc = functionBodyDoc cfg cf
 
