@@ -1618,25 +1618,14 @@ and private inlineRoutineDoc
     <+> line
     <+> bodyDoc
 
-and private inlineTvfFormatterConfig (cfg: FormattingStyle) (omitLeadingSemicolon: bool) : FormattingStyle =
-    if omitLeadingSemicolon then
-        { cfg with
-            formatterExtensions =
-                { cfg.formatterExtensions with
-                    cte =
-                        { cfg.formatterExtensions.cte with
-                            omitLeadingSemicolon = true } } }
-    else
-        cfg
-
-and private inlineTvfBodyShape (stmt: TSqlStatement) : bool * bool =
+and private inlineTvfBodyStartsWithParen (stmt: TSqlStatement) : bool =
     let stream = stmt.ScriptTokenStream
 
     if stream = null then
-        false, false
+        false
     else
         match returnKeywordTokenIndex stmt with
-        | None -> false, false
+        | None -> false
         | Some returnIdx ->
             let bodyStartIdx =
                 seq { returnIdx + 1 .. stmt.LastTokenIndex }
@@ -1644,24 +1633,8 @@ and private inlineTvfBodyShape (stmt: TSqlStatement) : bool * bool =
                 |> Seq.tryHead
 
             match bodyStartIdx with
-            | None -> false, false
-            | Some idx ->
-                let startsWithParen = stream.[idx].TokenType = TSqlTokenType.LeftParenthesis
-
-                let firstContentIdx =
-                    if startsWithParen then
-                        seq { idx + 1 .. stmt.LastTokenIndex }
-                        |> Seq.skipWhile (fun i -> stream.[i].TokenType = TSqlTokenType.WhiteSpace)
-                        |> Seq.tryHead
-                    else
-                        Some idx
-
-                let omitLeadingSemicolon =
-                    match firstContentIdx with
-                    | Some contentIdx when stream.[contentIdx].TokenType = TSqlTokenType.Semicolon -> true
-                    | _ -> false
-
-                startsWithParen, omitLeadingSemicolon
+            | None -> false
+            | Some idx -> stream.[idx].TokenType = TSqlTokenType.LeftParenthesis
 
 and private selectFunctionBodyDoc
     (cfg: FormattingStyle)
@@ -1675,7 +1648,7 @@ and private selectFunctionBodyDoc
         | Some _ -> returnDoc <+> line <+> doc
         | None -> returnDoc <++> doc
 
-    let wrapInParens, _ = inlineTvfBodyShape stmt
+    let wrapInParens = inlineTvfBodyStartsWithParen stmt
 
     let selectDoc = selectStatementDoc cfg selectStatement
 
