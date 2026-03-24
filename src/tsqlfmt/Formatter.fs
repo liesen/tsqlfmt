@@ -1587,8 +1587,28 @@ and private returnTypeDoc (cfg: FormattingStyle) (stmt: TSqlStatement) (returnTy
             returnsKeywordDoc <++> doc
 
     match returnType with
-    | :? TableValuedFunctionReturnType
     | :? SelectFunctionReturnType -> returnsWith (keyword cfg "TABLE")
+    | :? TableValuedFunctionReturnType as tvfReturn ->
+        let definition = tvfReturn.DeclareTableVariableBody.Definition
+
+        let elements =
+            [ if definition <> null then
+                  for col in definition.ColumnDefinitions do
+                      yield createTableElementDoc cfg col
+
+                  for constraintDef in definition.TableConstraints do
+                      yield createTableElementDoc cfg constraintDef ]
+
+        let tableDoc =
+            match elements with
+            | [] -> keyword cfg "TABLE"
+            | _ ->
+                keyword cfg "TABLE" <++> text "("
+                <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) elements)
+                <+> line
+                <+> text ")"
+
+        returnsWith tableDoc
     | :? ScalarFunctionReturnType as srt -> returnsWith (dataTypeRefDoc cfg srt.DataType)
     | _ -> returnsWith (tokenStreamDoc cfg returnType)
 
@@ -1626,7 +1646,105 @@ and private functionBodyDoc (cfg: FormattingStyle) (stmt: FunctionStatementBody)
         match returnComment with
         | Some _ -> returnDoc <+> line <+> bodyDoc
         | None -> returnDoc <++> bodyDoc
+    | _ when stmt.MethodSpecifier <> null ->
+        keyword cfg "EXTERNAL"
+        <++> keyword cfg "NAME"
+        <++> methodSpecifierDoc stmt.MethodSpecifier
     | _ -> statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg stmt) stmt.StatementList
+
+and private executeAsOptionNameDoc (cfg: FormattingStyle) (executeAs: ExecuteAsOption) : Doc =
+    match executeAs with
+    | ExecuteAsOption.Caller -> keyword cfg "CALLER"
+    | ExecuteAsOption.Self -> keyword cfg "SELF"
+    | ExecuteAsOption.Owner -> keyword cfg "OWNER"
+    | ExecuteAsOption.String -> keyword cfg "STRING"
+    | ExecuteAsOption.Login -> keyword cfg "LOGIN"
+    | ExecuteAsOption.User -> keyword cfg "USER"
+    | _ -> text (executeAs.ToString().ToUpperInvariant())
+
+and private executeAsClauseDoc (cfg: FormattingStyle) (clause: ExecuteAsClause) : Doc =
+    let principalDoc =
+        if clause.Literal <> null then
+            exprDoc cfg clause.Literal
+        else
+            empty
+
+    let optionDoc = executeAsOptionNameDoc cfg clause.ExecuteAsOption
+
+    if principalDoc = empty then
+        keyword cfg "EXECUTE" <++> keyword cfg "AS" <++> optionDoc
+    else
+        keyword cfg "EXECUTE" <++> keyword cfg "AS" <++> optionDoc <++> principalDoc
+
+and private optionStateDoc (cfg: FormattingStyle) (state: OptionState) : Doc =
+    match state with
+    | OptionState.On -> keyword cfg "ON"
+    | OptionState.Off -> keyword cfg "OFF"
+    | OptionState.Primary -> keyword cfg "PRIMARY"
+    | _ -> text (state.ToString().ToUpperInvariant())
+
+and private functionOptionDoc (cfg: FormattingStyle) (option: FunctionOption) : Doc =
+    match option with
+    | :? ExecuteAsFunctionOption as executeAs -> executeAsClauseDoc cfg executeAs.ExecuteAs
+    | :? InlineFunctionOption as inlineOpt ->
+        keyword cfg "INLINE" <++> text "=" <++> optionStateDoc cfg inlineOpt.OptionState
+    | _ -> tokenStreamDoc cfg option
+
+and private procedureOptionDoc (cfg: FormattingStyle) (option: ProcedureOption) : Doc =
+    match option with
+    | :? ExecuteAsProcedureOption as executeAs -> executeAsClauseDoc cfg executeAs.ExecuteAs
+    | _ -> tokenStreamDoc cfg option
+
+and private viewOptionDoc (cfg: FormattingStyle) (option: ViewOption) : Doc =
+    match option.OptionKind with
+    | ViewOptionKind.Encryption -> keyword cfg "ENCRYPTION"
+    | ViewOptionKind.SchemaBinding -> keyword cfg "SCHEMABINDING"
+    | ViewOptionKind.ViewMetadata -> keyword cfg "VIEW_METADATA"
+    | _ -> tokenStreamDoc cfg option
+
+and private optionsClauseDoc
+    (cfg: FormattingStyle)
+    (optionDoc: 'T -> Doc)
+    (options: System.Collections.Generic.IList<'T>)
+    : Doc =
+    if options = null || options.Count = 0 then
+        empty
+    else
+        let optionDocs = options |> Seq.map optionDoc |> Seq.toList
+        line <+> keyword cfg "WITH" <++> join (text ", ") optionDocs
+
+and private methodSpecifierDoc (ms: MethodSpecifier) : Doc =
+    text ms.AssemblyName.Value
+    <+> text "."
+    <+> text ms.ClassName.Value
+    <+> text "."
+    <+> text ms.MethodName.Value
+
+and private orderHintDoc (cfg: FormattingStyle) (orderHint: OrderBulkInsertOption) : Doc =
+    if orderHint = null then
+        empty
+    else
+        let columnDoc (c: ColumnWithSortOrder) =
+            let columnExprDoc = exprDoc cfg c.Column
+
+            match c.SortOrder with
+            | SortOrder.Ascending -> columnExprDoc <++> keyword cfg "ASC"
+            | SortOrder.Descending -> columnExprDoc <++> keyword cfg "DESC"
+            | _ -> columnExprDoc
+
+        let columns = orderHint.Columns |> Seq.map columnDoc |> Seq.toList
+
+        line <+> keyword cfg "ORDER" <++> text "("
+        <+> join (text ", ") columns
+        <+> text ")"
+
+and private procedureBodyDoc (cfg: FormattingStyle) (stmt: ProcedureStatementBody) : Doc =
+    if stmt.MethodSpecifier <> null then
+        keyword cfg "EXTERNAL"
+        <++> keyword cfg "NAME"
+        <++> methodSpecifierDoc stmt.MethodSpecifier
+    else
+        statementListDoc cfg embeddedStatementContext (line <+> line) empty stmt.StatementList
 
 and private procedureParamsHaveParens
     (stmt: TSqlStatement)
@@ -1691,33 +1809,22 @@ and private getParamTrailingComments
         |> Seq.choose (fun (i, comment) -> comment |> Option.map (fun c -> i, c))
         |> Map.ofSeq
 
-and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
-    let headerDoc = keyword cfg "ALTER" <++> functionHeaderDoc cfg af.Name af.Parameters
-    let returnsDoc = returnTypeDoc cfg af af.ReturnType
-    let bodyDoc = functionBodyDoc cfg af
-
-    headerDoc
+and private functionStatementDoc (cfg: FormattingStyle) (verb: string) (stmt: FunctionStatementBody) : Doc =
+    keyword cfg verb <++> functionHeaderDoc cfg stmt.Name stmt.Parameters
+    <+> optionsClauseDoc cfg (functionOptionDoc cfg) stmt.Options
     <+> line
-    <+> returnsDoc
+    <+> returnTypeDoc cfg (stmt :> TSqlStatement) stmt.ReturnType
+    <+> orderHintDoc cfg stmt.OrderHint
     <+> line
     <+> keyword cfg "AS"
     <+> line
-    <+> bodyDoc
+    <+> functionBodyDoc cfg stmt
+
+and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
+    functionStatementDoc cfg "ALTER" af
 
 and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatement) : Doc =
-    let headerDoc =
-        keyword cfg "CREATE" <++> functionHeaderDoc cfg cf.Name cf.Parameters
-
-    let returnsDoc = returnTypeDoc cfg cf cf.ReturnType
-    let bodyDoc = functionBodyDoc cfg cf
-
-    headerDoc
-    <+> line
-    <+> returnsDoc
-    <+> line
-    <+> keyword cfg "AS"
-    <+> line
-    <+> bodyDoc
+    functionStatementDoc cfg "CREATE" cf
 
 and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatement) : Doc =
     let header =
@@ -1729,10 +1836,15 @@ and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatemen
     let wrapParams = procedureParamsHaveParens (ap :> TSqlStatement) ap.Parameters
     let paramsDoc = ddlParamListDoc cfg ap.Parameters commentMap wrapParams
 
-    let bodyDoc =
-        statementListDoc cfg embeddedStatementContext (line <+> line) empty ap.StatementList
+    let bodyDoc = procedureBodyDoc cfg ap
 
-    routineWithAsDoc cfg header paramsDoc bodyDoc
+    header
+    <+> paramsDoc
+    <+> optionsClauseDoc cfg (procedureOptionDoc cfg) ap.Options
+    <+> line
+    <+> keyword cfg "AS"
+    <+> line
+    <+> bodyDoc
 
 and private createProcedureDoc (cfg: FormattingStyle) (cp: CreateProcedureStatement) : Doc =
     let header =
@@ -1744,10 +1856,15 @@ and private createProcedureDoc (cfg: FormattingStyle) (cp: CreateProcedureStatem
     let wrapParams = procedureParamsHaveParens (cp :> TSqlStatement) cp.Parameters
     let paramsDoc = ddlParamListDoc cfg cp.Parameters commentMap wrapParams
 
-    let bodyDoc =
-        statementListDoc cfg embeddedStatementContext (line <+> line) empty cp.StatementList
+    let bodyDoc = procedureBodyDoc cfg cp
 
-    routineWithAsDoc cfg header paramsDoc bodyDoc
+    header
+    <+> paramsDoc
+    <+> optionsClauseDoc cfg (procedureOptionDoc cfg) cp.Options
+    <+> line
+    <+> keyword cfg "AS"
+    <+> line
+    <+> bodyDoc
 
 and private setOnOffDoc (cfg: FormattingStyle) (stmt: SetOnOffStatement) : Doc =
     let formatSetOption (option: SetOptions) =
@@ -1841,11 +1958,7 @@ and private viewColumnsDoc (cfg: FormattingStyle) (columns: IList<Identifier>) :
         text "(" <+> join (text "," <+> line) columnDocs <+> text ")"
 
 and private viewOptionsDoc (cfg: FormattingStyle) (options: IList<ViewOption>) : Doc =
-    if options = null || options.Count = 0 then
-        empty
-    else
-        let optionDocs = options |> Seq.map (tokenStreamDoc cfg) |> Seq.toList
-        line <+> formatList cfg (keyword cfg "WITH") optionDocs
+    optionsClauseDoc cfg (viewOptionDoc cfg) options
 
 and private viewStatementDoc (cfg: FormattingStyle) (verb: string) (vs: ViewStatementBody) : Doc =
     let header =
@@ -1926,7 +2039,16 @@ and private createTableElementDoc (cfg: FormattingStyle) (frag: TSqlFragment) : 
             elif constraintDef.Clustered.HasValue && not constraintDef.Clustered.Value then
                 keyword cfg "NONCLUSTERED"
             elif constraintDef.IndexType <> null then
-                tokenStreamDoc cfg constraintDef.IndexType
+                if constraintDef.IndexType.IndexTypeKind.HasValue then
+                    match constraintDef.IndexType.IndexTypeKind.Value with
+                    | IndexTypeKind.Clustered -> keyword cfg "CLUSTERED"
+                    | IndexTypeKind.NonClustered -> keyword cfg "NONCLUSTERED"
+                    | IndexTypeKind.NonClusteredHash -> keyword cfg "NONCLUSTERED" <++> keyword cfg "HASH"
+                    | IndexTypeKind.ClusteredColumnStore -> keyword cfg "CLUSTERED" <++> keyword cfg "COLUMNSTORE"
+                    | IndexTypeKind.NonClusteredColumnStore -> keyword cfg "NONCLUSTERED" <++> keyword cfg "COLUMNSTORE"
+                    | _ -> tokenStreamDoc cfg constraintDef.IndexType
+                else
+                    tokenStreamDoc cfg constraintDef.IndexType
             else
                 empty
 
@@ -1948,7 +2070,16 @@ and private createTableElementDoc (cfg: FormattingStyle) (frag: TSqlFragment) : 
         let optionsDoc =
             if constraintDef.IndexOptions <> null && constraintDef.IndexOptions.Count > 0 then
                 let optionDocs =
-                    constraintDef.IndexOptions |> Seq.map (tokenStreamDoc cfg) |> Seq.toList
+                    constraintDef.IndexOptions
+                    |> Seq.map (fun option ->
+                        match option with
+                        | :? OrderIndexOption as orderOption ->
+                            let columns =
+                                orderOption.Columns |> Seq.map (fun col -> exprDoc cfg col) |> Seq.toList
+
+                            keyword cfg "ORDER" <++> text "(" <+> join (text ", ") columns <+> text ")"
+                        | _ -> tokenStreamDoc cfg option)
+                    |> Seq.toList
 
                 text " " <+> formatList cfg (keyword cfg "WITH") optionDocs
             else
