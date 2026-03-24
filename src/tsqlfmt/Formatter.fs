@@ -1579,12 +1579,20 @@ and private functionHeaderDoc
     let paramsDoc = ddlParamListDoc cfg parameters commentMap true
     header, paramsDoc
 
-and private regularFunctionReturnsDoc (cfg: FormattingStyle) (returnType: FunctionReturnType) : Doc =
-    keyword cfg "RETURNS"
-    <++> match returnType with
-         | :? TableValuedFunctionReturnType -> keyword cfg "TABLE"
-         | :? ScalarFunctionReturnType as srt -> dataTypeRefDoc cfg srt.DataType
-         | _ -> tokenStreamDoc cfg returnType
+and private returnTypeDoc (cfg: FormattingStyle) (stmt: TSqlStatement) (returnType: FunctionReturnType) : Doc =
+    let returnsComment, returnsKeywordDoc = returnsKeyword cfg stmt
+
+    let returnsWith (doc: Doc) =
+        if returnsComment |> Option.isSome then
+            returnsKeywordDoc <+> line <+> doc
+        else
+            returnsKeywordDoc <++> doc
+
+    match returnType with
+    | :? TableValuedFunctionReturnType
+    | :? SelectFunctionReturnType -> returnsWith (keyword cfg "TABLE")
+    | :? ScalarFunctionReturnType as srt -> returnsWith (dataTypeRefDoc cfg srt.DataType)
+    | _ -> returnsWith (tokenStreamDoc cfg returnType)
 
 and private inlineTvfBodyStartsWithParen (stmt: TSqlStatement) : bool =
     let stream = stmt.ScriptTokenStream
@@ -1604,29 +1612,35 @@ and private inlineTvfBodyStartsWithParen (stmt: TSqlStatement) : bool =
             | None -> false
             | Some idx -> stream.[idx].TokenType = TSqlTokenType.LeftParenthesis
 
-and private selectFunctionBodyDoc
+and private inlineSelectFunctionBodyDoc
     (cfg: FormattingStyle)
-    (stmt: TSqlStatement)
+    (wrapInParens: bool)
     (selectStatement: SelectStatement)
     : Doc =
-    let returnComment, returnDoc = returnKeyword cfg stmt
-
-    let returnSelectDoc (doc: Doc) =
-        match returnComment with
-        | Some _ -> returnDoc <+> line <+> doc
-        | None -> returnDoc <++> doc
-
-    let wrapInParens = inlineTvfBodyStartsWithParen stmt
-
     let selectDoc = selectStatementDoc cfg selectStatement
 
     if wrapInParens then
         let wrappedDoc =
             text "(" <+> nest (indentWidth cfg) (line <+> selectDoc) <+> line <+> text ")"
 
-        returnDoc <++> wrappedDoc
+        wrappedDoc
     else
-        returnSelectDoc selectDoc
+        selectDoc
+
+and private functionBodyDoc (cfg: FormattingStyle) (stmt: FunctionStatementBody) : Doc =
+    match stmt.ReturnType with
+    | :? SelectFunctionReturnType as sfrt ->
+        let stmt = stmt :> TSqlStatement
+        let returnComment, returnDoc = returnKeyword cfg stmt
+        let wrapInParens = inlineTvfBodyStartsWithParen stmt
+
+        let selectBodyDoc =
+            inlineSelectFunctionBodyDoc cfg wrapInParens sfrt.SelectStatement
+
+        match returnComment with
+        | Some _ -> returnDoc <+> line <+> selectBodyDoc
+        | None -> returnDoc <++> selectBodyDoc
+    | _ -> statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg stmt) stmt.StatementList
 
 and private procedureParamsHaveParens
     (stmt: TSqlStatement)
@@ -1693,67 +1707,22 @@ and private getParamTrailingComments
 
 and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
     let header, paramsDoc = functionHeaderDoc cfg "ALTER" af.Name af.Parameters
+    let returnsDoc = returnTypeDoc cfg af af.ReturnType
+    let bodyDoc = functionBodyDoc cfg af
 
-    let bodyDoc =
-        match af.ReturnType with
-        | :? SelectFunctionReturnType as sfrt ->
-            let returnsComment, returnsKeywordDoc = returnsKeyword cfg af
-
-            let returnsDoc =
-                if returnsComment |> Option.isSome then
-                    returnsKeywordDoc <+> line <+> keyword cfg "TABLE"
-                else
-                    returnsKeywordDoc <++> keyword cfg "TABLE"
-
-            let returnDoc = selectFunctionBodyDoc cfg af sfrt.SelectStatement
-            returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> returnDoc
-        | :? ScalarFunctionReturnType as srt ->
-            let returnsDoc = keyword cfg "RETURNS" <++> dataTypeRefDoc cfg srt.DataType
-
-            let stmtDoc =
-                statementListDoc cfg standaloneStatementContext line empty af.StatementList
-
-            returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> stmtDoc
-        | :? TableValuedFunctionReturnType ->
-            let returnsDoc = keyword cfg "RETURNS" <++> keyword cfg "TABLE"
-
-            let stmtDoc =
-                statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg af) af.StatementList
-
-            returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> stmtDoc
-        | _ ->
-            let returnsDoc = keyword cfg "RETURNS" <++> tokenStreamDoc cfg af.ReturnType
-
-            let stmtDoc =
-                statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg af) af.StatementList
-
-            returnsDoc <+> line <+> keyword cfg "AS" <+> line <+> stmtDoc
-
-    header <+> paramsDoc <+> line <+> bodyDoc
+    header
+    <+> paramsDoc
+    <+> line
+    <+> returnsDoc
+    <+> line
+    <+> keyword cfg "AS"
+    <+> line
+    <+> bodyDoc
 
 and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatement) : Doc =
     let header, paramsDoc = functionHeaderDoc cfg "CREATE" cf.Name cf.Parameters
-
-    let returnsDoc, bodyDoc =
-        match cf.ReturnType with
-        | :? SelectFunctionReturnType as sfrt ->
-            let returnsComment, returnsKeywordDoc = returnsKeyword cfg cf
-
-            let returnsDoc =
-                if returnsComment |> Option.isSome then
-                    returnsKeywordDoc <+> line <+> keyword cfg "TABLE"
-                else
-                    returnsKeywordDoc <++> keyword cfg "TABLE"
-
-            let bodyDoc = selectFunctionBodyDoc cfg cf sfrt.SelectStatement
-            returnsDoc, bodyDoc
-        | _ ->
-            let returnsDoc = regularFunctionReturnsDoc cfg cf.ReturnType
-
-            let bodyDoc =
-                statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg cf) cf.StatementList
-
-            returnsDoc, bodyDoc
+    let returnsDoc = returnTypeDoc cfg cf cf.ReturnType
+    let bodyDoc = functionBodyDoc cfg cf
 
     header
     <+> paramsDoc
