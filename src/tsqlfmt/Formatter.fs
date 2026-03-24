@@ -1610,34 +1610,22 @@ and private inlineTvfBodyStartsWithParen (stmt: TSqlStatement) : bool =
             | None -> false
             | Some idx -> stream.[idx].TokenType = TSqlTokenType.LeftParenthesis
 
-and private inlineSelectFunctionBodyDoc
-    (cfg: FormattingStyle)
-    (wrapInParens: bool)
-    (selectStatement: SelectStatement)
-    : Doc =
-    let selectDoc = selectStatementDoc cfg selectStatement
-
-    if wrapInParens then
-        let wrappedDoc =
-            text "(" <+> nest (indentWidth cfg) (line <+> selectDoc) <+> line <+> text ")"
-
-        wrappedDoc
-    else
-        selectDoc
-
 and private functionBodyDoc (cfg: FormattingStyle) (stmt: FunctionStatementBody) : Doc =
     match stmt.ReturnType with
     | :? SelectFunctionReturnType as sfrt ->
         let stmt = stmt :> TSqlStatement
         let returnComment, returnDoc = returnKeyword cfg stmt
-        let wrapInParens = inlineTvfBodyStartsWithParen stmt
+        let selectDoc = selectStatementDoc cfg sfrt.SelectStatement
 
-        let selectBodyDoc =
-            inlineSelectFunctionBodyDoc cfg wrapInParens sfrt.SelectStatement
+        let bodyDoc =
+            if inlineTvfBodyStartsWithParen stmt then
+                text "(" <+> nest (indentWidth cfg) (line <+> selectDoc) <+> line <+> text ")"
+            else
+                selectDoc
 
         match returnComment with
-        | Some _ -> returnDoc <+> line <+> selectBodyDoc
-        | None -> returnDoc <++> selectBodyDoc
+        | Some _ -> returnDoc <+> line <+> bodyDoc
+        | None -> returnDoc <++> bodyDoc
     | _ -> statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg stmt) stmt.StatementList
 
 and private procedureParamsHaveParens
