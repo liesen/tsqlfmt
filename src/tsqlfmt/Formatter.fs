@@ -1571,13 +1571,13 @@ and private functionHeaderDoc
     (verb: string)
     (name: SchemaObjectName)
     (parameters: System.Collections.Generic.IList<ProcedureParameter>)
-    : Doc * Doc =
+    : Doc =
     let header =
         keyword cfg verb <++> keyword cfg "FUNCTION" <++> schemaObjectNameDoc cfg name
 
     let commentMap = getParamTrailingComments parameters
     let paramsDoc = ddlParamListDoc cfg parameters commentMap true
-    header, paramsDoc
+    header <+> paramsDoc
 
 and private returnTypeDoc (cfg: FormattingStyle) (stmt: TSqlStatement) (returnType: FunctionReturnType) : Doc =
     let returnsComment, returnsKeywordDoc = returnsKeyword cfg stmt
@@ -1706,12 +1706,11 @@ and private getParamTrailingComments
         |> Map.ofSeq
 
 and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
-    let header, paramsDoc = functionHeaderDoc cfg "ALTER" af.Name af.Parameters
+    let headerDoc = functionHeaderDoc cfg "ALTER" af.Name af.Parameters
     let returnsDoc = returnTypeDoc cfg af af.ReturnType
     let bodyDoc = functionBodyDoc cfg af
 
-    header
-    <+> paramsDoc
+    headerDoc
     <+> line
     <+> returnsDoc
     <+> line
@@ -1720,12 +1719,11 @@ and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement)
     <+> bodyDoc
 
 and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatement) : Doc =
-    let header, paramsDoc = functionHeaderDoc cfg "CREATE" cf.Name cf.Parameters
+    let headerDoc = functionHeaderDoc cfg "CREATE" cf.Name cf.Parameters
     let returnsDoc = returnTypeDoc cfg cf cf.ReturnType
     let bodyDoc = functionBodyDoc cfg cf
 
-    header
-    <+> paramsDoc
+    headerDoc
     <+> line
     <+> returnsDoc
     <+> line
