@@ -58,3 +58,6 @@ let private commaItems (cfg: Style) (items: Doc list) =
 
 let commaListDoc (cfg: Style) (items: Doc list) : Doc =
     sequenceDoc (listSequencePolicy cfg) (commaItems cfg items)
+
+let headedCommaListDoc (cfg: Style) (headDoc: Doc) (items: Doc list) : Doc =
+    headedSequenceDoc (listSequencePolicy cfg) headDoc (commaItems cfg items)

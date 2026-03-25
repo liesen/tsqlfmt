@@ -60,16 +60,6 @@ let private canCollapseFragment (enabled: bool) (maxLength: int) (frag: TSqlFrag
 let private fragmentHasComments (frag: TSqlFragment) =
     fragmentSingleLineMeasure frag |> fun measure -> measure.hasComments
 
-let private canCollapseFragments (enabled: bool) (maxLength: int) (fragments: TSqlFragment seq) =
-    if not enabled then
-        false
-    else
-        let measures = fragments |> Seq.map fragmentSingleLineMeasure |> Seq.toList
-        let hasComments = measures |> List.exists (fun m -> m.hasComments)
-        let separatorsLength = max 0 ((List.length measures - 1) * 2)
-        let totalLength = measures |> List.sumBy (fun m -> m.length) |> (+) separatorsLength
-        not hasComments && totalLength <= maxLength
-
 let private canCollapseList (cfg: Style) (items: Doc list) =
     match items with
     | []
@@ -164,8 +154,6 @@ let private formatCommaList (cfg: Style) (keyword: Doc) (items: CommaListItem li
         group expandedDoc
     | _ -> expandedCommaListDoc cfg keyword items
 
-let private formatList (cfg: Style) (keyword: Doc) (items: Doc list) : Doc =
-    formatCommaList cfg keyword (plainCommaListItems items)
 
 /// Get the raw SQL text of a fragment from its token stream.
 let private fragmentText (frag: TSqlFragment) : string =
@@ -1031,7 +1019,7 @@ and private querySpecDoc (cfg: Style) (qs: QuerySpecification) (intoTarget: Trai
                       | _ -> tokenStreamDoc cfg g)
                   |> Seq.toList
 
-              yield formatList cfg (keyword cfg "GROUP" <++> keyword cfg "BY") groupItems
+              yield headedCommaListDoc cfg (keyword cfg "GROUP" <++> keyword cfg "BY") groupItems
 
           // HAVING clause
           if qs.HavingClause <> null && qs.HavingClause.SearchCondition <> null then
@@ -1048,7 +1036,7 @@ and private querySpecDoc (cfg: Style) (qs: QuerySpecification) (intoTarget: Trai
                   |> Seq.map (fun o -> orderByElemDoc cfg o)
                   |> Seq.toList
 
-              yield formatList cfg (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems ]
+              yield headedCommaListDoc cfg (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems ]
 
     join line parts
 
@@ -1250,7 +1238,7 @@ and private binaryQueryDoc (cfg: Style) (bqe: BinaryQueryExpression) : Doc =
 
         result
         <+> line
-        <+> formatList cfg (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems
+        <+> headedCommaListDoc cfg (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems
     else
         result
 
@@ -1909,12 +1897,13 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
                             let columns =
                                 orderOption.Columns |> Seq.map (fun col -> exprDoc cfg col) |> Seq.toList
 
-                            keyword cfg "ORDER"
-                            <++> (commaListDoc cfg columns |> parenthesesDoc cfg empty |> group)
+                            (keyword cfg "ORDER" <++> commaListDoc cfg columns
+                             |> parenthesesDoc cfg empty
+                             |> group)
                         | _ -> tokenStreamDoc cfg option)
                     |> Seq.toList
 
-                text " " <+> formatList cfg (keyword cfg "WITH") optionDocs
+                text " " <+> headedCommaListDoc cfg (keyword cfg "WITH") optionDocs
             else
                 empty
 
@@ -2106,7 +2095,7 @@ and private updateDoc (cfg: Style) (upd: UpdateStatement) : Doc =
 
     let parts =
         [ yield keyword cfg "UPDATE" <++> target
-          yield formatList cfg (keyword cfg "SET") setClauses
+          yield headedCommaListDoc cfg (keyword cfg "SET") setClauses
 
           if
               spec.FromClause <> null
@@ -2223,7 +2212,8 @@ and private mergeDoc (cfg: Style) (merge: MergeStatement) : Doc =
                 keyword cfg "THEN"
                 <+> nest
                         (indentWidth cfg)
-                        (line <+> formatList cfg (keyword cfg "UPDATE" <++> keyword cfg "SET") setClauses)
+                        (line
+                         <+> headedCommaListDoc cfg (keyword cfg "UPDATE" <++> keyword cfg "SET") setClauses)
             | :? InsertMergeAction as ins ->
                 let cols =
                     if ins.Columns <> null && ins.Columns.Count > 0 then
@@ -2284,7 +2274,7 @@ and private declareDoc (cfg: Style) (decl: DeclareVariableStatement) : Doc =
             nameDoc <++> typeDoc <+> valueDoc)
         |> Seq.toList
 
-    formatList cfg (keyword cfg "DECLARE") varDocs
+    headedCommaListDoc cfg (keyword cfg "DECLARE") varDocs
 
 and private setVarDoc (cfg: Style) (sv: SetVariableStatement) : Doc =
     let varDoc = text sv.Variable.Name
