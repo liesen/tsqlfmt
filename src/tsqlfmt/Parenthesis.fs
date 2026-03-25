@@ -5,27 +5,23 @@ open TSqlFormatter.Style
 
 type ParenthesisCombinator = Doc -> Doc -> Doc
 
-let private indentWidth (cfg: Style) = cfg.whitespace.numberOfSpacesInTabs
+let private expandedSplit (indentWidth: int) (indentContents: bool) (anchorDoc: Doc) (contentsDoc: Doc) =
+    let laidOutContents =
+        if indentContents then
+            nest indentWidth (softline <+> contentsDoc)
+        else
+            softline <+> contentsDoc
 
-let private expandedSplit (indentWidth: int) (indentContents: bool) : ParenthesisCombinator =
-    fun anchorDoc contentsDoc ->
-        let laidOutContents =
-            if indentContents then
-                nest indentWidth (softline <+> contentsDoc)
-            else
-                softline <+> contentsDoc
+    anchorDoc <+> text "(" <+> laidOutContents <+> softline <+> text ")"
 
-        anchorDoc <+> text "(" <+> laidOutContents <+> softline <+> text ")"
+let private compactIndented (indentWidth: int) (indentContents: bool) (anchorDoc: Doc) (contentsDoc: Doc) =
+    let laidOutContents =
+        if indentContents then
+            nest indentWidth (softline <+> contentsDoc)
+        else
+            softline <+> contentsDoc
 
-let private compactIndented (indentWidth: int) (indentContents: bool) : ParenthesisCombinator =
-    fun anchorDoc contentsDoc ->
-        let laidOutContents =
-            if indentContents then
-                nest indentWidth (softline <+> contentsDoc)
-            else
-                softline <+> contentsDoc
-
-        anchorDoc <+> text "(" <+> laidOutContents <+> softline <+> text ")"
+    anchorDoc <+> text "(" <+> laidOutContents <+> softline <+> text ")"
 
 let private parenthesisDoc (indentWidth: int) (indentContents: bool) (style: ParenthesisStyle) : ParenthesisCombinator =
     match style with
@@ -34,22 +30,25 @@ let private parenthesisDoc (indentWidth: int) (indentContents: bool) (style: Par
     | unsupported -> failwithf "Unsupported parenthesis style: %A" unsupported
 
 let parenthesesDoc (cfg: Style) : ParenthesisCombinator =
-    parenthesisDoc (indentWidth cfg) cfg.parentheses.indentParenthesesContents cfg.parentheses.parenthesisStyle
+    parenthesisDoc
+        cfg.whitespace.numberOfSpacesInTabs
+        cfg.parentheses.indentParenthesesContents
+        cfg.parentheses.parenthesisStyle
 
 let ddlDoc (cfg: Style) : ParenthesisCombinator =
-    parenthesisDoc (indentWidth cfg) cfg.ddl.indentParenthesesContents cfg.ddl.parenthesisStyle
+    parenthesisDoc cfg.whitespace.numberOfSpacesInTabs cfg.ddl.indentParenthesesContents cfg.ddl.parenthesisStyle
 
 let cteDoc (cfg: Style) : ParenthesisCombinator =
-    parenthesisDoc (indentWidth cfg) cfg.cte.indentContents cfg.cte.parenthesisStyle
+    parenthesisDoc cfg.whitespace.numberOfSpacesInTabs cfg.cte.indentContents cfg.cte.parenthesisStyle
 
 let insertColumnsDoc (cfg: Style) : ParenthesisCombinator =
     parenthesisDoc
-        (indentWidth cfg)
+        cfg.whitespace.numberOfSpacesInTabs
         cfg.insertStatements.columns.indentContents
         cfg.insertStatements.columns.parenthesisStyle
 
 let insertValuesDoc (cfg: Style) : ParenthesisCombinator =
     parenthesisDoc
-        (indentWidth cfg)
+        cfg.whitespace.numberOfSpacesInTabs
         cfg.insertStatements.values.indentContents
         cfg.insertStatements.values.parenthesisStyle

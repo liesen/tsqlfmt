@@ -11,6 +11,7 @@ open TSqlFormatter.Style
 open TSqlFormatter.Identifiers
 open TSqlFormatter.Keywords
 open TSqlFormatter.Parenthesis
+open TSqlFormatter.FunctionCalls
 
 // ─── Helpers ───
 
@@ -231,15 +232,9 @@ let private decoratedCommaDocs (items: Doc list) : Doc list =
             item <+> text ",")
 
 let private parenthesizedCommaListDoc (cfg: Style) (items: Doc list) : Doc =
-    let flatDoc = text "(" <+> commaSep items <+> text ")"
-
-    let expandedDoc =
-        text "("
-        <+> sequenceDoc (listSequencePolicy cfg) (decoratedCommaDocs items)
-        <+> line
-        <+> text ")"
-
-    choice flatDoc expandedDoc
+    let parens = parenthesesDoc cfg
+    let contents = sequenceDoc (listSequencePolicy cfg) (decoratedCommaDocs items)
+    group (parens empty contents)
 
 /// Get the raw SQL text of a fragment from its token stream.
 let private fragmentText (frag: TSqlFragment) : string =
@@ -688,31 +683,27 @@ and private simpleCaseDoc (cfg: Style) (c: SimpleCaseExpression) : Doc =
 
 and private castCallDoc (cfg: Style) (c: CastCall) : Doc =
     let dataTypeDoc = dataTypeRefDoc cfg c.DataType
-
-    builtInFunctionName cfg "CAST" <+> text "(" <+> exprDoc cfg c.Parameter
-    <++> keyword cfg "AS"
-    <++> dataTypeDoc
-    <+> text ")"
+    contentsDoc cfg (builtInFunctionName cfg "CAST") (exprDoc cfg c.Parameter <++> keyword cfg "AS" <++> dataTypeDoc)
 
 and private tryCastCallDoc (cfg: Style) (c: TryCastCall) : Doc =
     let dataTypeDoc = dataTypeRefDoc cfg c.DataType
 
-    builtInFunctionName cfg "TRY_CAST" <+> text "(" <+> exprDoc cfg c.Parameter
-    <++> keyword cfg "AS"
-    <++> dataTypeDoc
-    <+> text ")"
+    contentsDoc
+        cfg
+        (builtInFunctionName cfg "TRY_CAST")
+        (exprDoc cfg c.Parameter <++> keyword cfg "AS" <++> dataTypeDoc)
 
 and private convertCallDoc (cfg: Style) (c: ConvertCall) : Doc =
     let dataTypeDoc = dataTypeRefDoc cfg c.DataType
+    let call = callDoc cfg
 
     let args =
         if c.Style <> null then
-            dataTypeDoc <+> text "," <++> exprDoc cfg c.Parameter <+> text ","
-            <++> exprDoc cfg c.Style
+            [ dataTypeDoc; exprDoc cfg c.Parameter; exprDoc cfg c.Style ]
         else
-            dataTypeDoc <+> text "," <++> exprDoc cfg c.Parameter
+            [ dataTypeDoc; exprDoc cfg c.Parameter ]
 
-    builtInFunctionName cfg "CONVERT" <+> text "(" <+> args <+> text ")"
+    call (builtInFunctionName cfg "CONVERT") args
 
 and private dataTypeRefDoc (cfg: Style) (dtr: DataTypeReference) : Doc =
     match dtr with
@@ -731,6 +722,8 @@ and private dataTypeRefDoc (cfg: Style) (dtr: DataTypeReference) : Doc =
 // ─── Function calls ───
 
 and private functionCallDoc (cfg: Style) (f: FunctionCall) : Doc =
+    let call = callDoc cfg
+
     let name =
         if f.FunctionName <> null then
             let n = f.FunctionName.Value
@@ -751,23 +744,20 @@ and private functionCallDoc (cfg: Style) (f: FunctionCall) : Doc =
 
             let prefix =
                 if uniqueStyle = UniqueRowFilter.Distinct then
-                    keyword cfg "DISTINCT" <++> empty
+                    Some(keyword cfg "DISTINCT")
                 elif uniqueStyle = UniqueRowFilter.All then
-                    keyword cfg "ALL" <++> empty
+                    Some(keyword cfg "ALL")
                 else
-                    empty
+                    None
 
-            let flatArgs = text "(" <+> prefix <+> commaSep argDocs <+> text ")"
+            let args =
+                match prefix, argDocs with
+                | Some prefixDoc, firstArg :: rest -> (prefixDoc <++> firstArg) :: rest
+                | _ -> argDocs
 
-            let expandedArgs =
-                text "("
-                <+> nest (indentWidth cfg) (line <+> prefix <+> join (text "," <+> line) argDocs)
-                <+> line
-                <+> text ")"
-
-            choice flatArgs expandedArgs
+            call callName args
         else
-            text "()"
+            call callName []
 
     let overDoc =
         if f.OverClause <> null then
@@ -775,7 +765,7 @@ and private functionCallDoc (cfg: Style) (f: FunctionCall) : Doc =
         else
             empty
 
-    callName <+> argsDoc <+> overDoc
+    argsDoc <+> overDoc
 
 and private overClauseDoc (cfg: Style) (oc: OverClause) : Doc =
     let parts =
@@ -843,15 +833,7 @@ and private overClauseDoc (cfg: Style) (oc: OverClause) : Doc =
 
 and private coalesceDoc (cfg: Style) (c: CoalesceExpression) : Doc =
     let argDocs = c.Expressions |> Seq.map (fun e -> exprDoc cfg e) |> Seq.toList
-    let flatArgs = text "(" <+> commaSep argDocs <+> text ")"
-
-    let expandedArgs =
-        text "("
-        <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) argDocs)
-        <+> line
-        <+> text ")"
-
-    builtInFunctionName cfg "COALESCE" <+> choice flatArgs expandedArgs
+    callDoc cfg (builtInFunctionName cfg "COALESCE") argDocs
 
 and private iifCallDoc (cfg: Style) (iif: IIfCall) : Doc =
     let argDocs =
@@ -859,29 +841,10 @@ and private iifCallDoc (cfg: Style) (iif: IIfCall) : Doc =
           exprDoc cfg iif.ThenExpression
           exprDoc cfg iif.ElseExpression ]
 
-    let flatArgs = text "(" <+> commaSep argDocs <+> text ")"
-
-    let expandedArgs =
-        text "("
-        <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) argDocs)
-        <+> line
-        <+> text ")"
-
-    let argsDoc =
-        if cfg.functionCalls.placeArgumentsOnNewLines = PlaceOnNewLine.Always then
-            expandedArgs
-        else
-            choice flatArgs expandedArgs
-
-    builtInFunctionName cfg "IIF" <+> argsDoc
+    callDoc cfg (builtInFunctionName cfg "IIF") argDocs
 
 and private nullIfDoc (cfg: Style) (n: NullIfExpression) : Doc =
-    builtInFunctionName cfg "NULLIF"
-    <+> text "("
-    <+> exprDoc cfg n.FirstExpression
-    <+> text ","
-    <++> exprDoc cfg n.SecondExpression
-    <+> text ")"
+    callDoc cfg (builtInFunctionName cfg "NULLIF") [ exprDoc cfg n.FirstExpression; exprDoc cfg n.SecondExpression ]
 
 // ─── Boolean expressions ───
 
@@ -1451,18 +1414,18 @@ and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
     let colsDoc =
         if cte.Columns <> null && cte.Columns.Count > 0 then
             let cols = cte.Columns |> Seq.map identDoc |> Seq.toList
-            text " (" <+> commaSep cols <+> text ")"
+            text " " <+> parenthesizedCommaListDoc cfg cols
         else
             empty
 
-    let asDoc = keyword cfg "AS"
-    let body = queryExprDoc cfg cte.QueryExpression
-    let parens = cteDoc cfg
+    let asDoc =
+        if cfg.cte.placeAsOnNewLine then
+            line <+> keyword cfg "AS"
+        else
+            keyword cfg "AS"
 
-    if cfg.cte.placeAsOnNewLine then
-        parens (nameDoc <+> colsDoc <+> line <+> asDoc <+> text " ") body
-    else
-        parens (nameDoc <+> colsDoc <++> asDoc <+> text " ") body
+    let body = queryExprDoc cfg cte.QueryExpression
+    cteDoc cfg (nameDoc <+> colsDoc <++> asDoc <+> text " ") body
 
 // ─── DDL: ALTER/CREATE FUNCTION/PROCEDURE ───
 

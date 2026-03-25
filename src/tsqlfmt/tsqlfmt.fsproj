@@ -9,6 +9,7 @@
     <Compile Include="Doc.fs" />
     <Compile Include="Trivia.fs" />
     <Compile Include="Style.fs" />
+    <Compile Include="FunctionCalls.fs" />
     <Compile Include="Keywords.fs" />
     <Compile Include="Identifiers.fs" />
     <Compile Include="Parenthesis.fs" />
