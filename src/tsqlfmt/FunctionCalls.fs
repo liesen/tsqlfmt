@@ -77,8 +77,23 @@ let contentsDoc (cfg: Style) (functionNameDoc: Doc) (contentsDoc: Doc) : Doc =
         else
             text "(" <+> contentsDoc <+> text ")"
 
+    let openingBreak =
+        if cfg.functionCalls.addSpacesAroundArgumentList then
+            line
+        else
+            softline
+
+    let closingBreak =
+        if cfg.functionCalls.addSpacesAroundArgumentList then
+            line
+        else
+            softline
+
     let expandedDoc =
-        text "(" <+> nest (indentWidth cfg) (line <+> contentsDoc) <+> line <+> text ")"
+        text "("
+        <+> nest (indentWidth cfg) (openingBreak <+> contentsDoc)
+        <+> closingBreak
+        <+> text ")"
 
     let argsDoc = chooseArgsDoc cfg flatDoc expandedDoc true
     combineNameAndArgs cfg functionNameDoc argsDoc
