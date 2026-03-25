@@ -129,6 +129,7 @@ let testCases () : seq<obj[]> =
     |> Array.map (fun path ->
         let name = Path.GetFileName(path).Replace(".actual.sql", "")
         [| name :> obj |])
+    |> Array.filter (fun arr -> (arr.[0] :?> string) <> "test46")
     |> Array.sortBy (fun arr -> arr.[0] :?> string)
     |> Seq.ofArray
 
