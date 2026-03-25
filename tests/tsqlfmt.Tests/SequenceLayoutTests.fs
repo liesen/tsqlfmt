@@ -3,6 +3,7 @@ module SequenceLayoutTests
 open Xunit
 open TSqlFormatter.Doc
 open TSqlFormatter.Formatter
+open TSqlFormatter.Lists
 open TestSupport
 
 [<Fact>]

@@ -12,6 +12,7 @@ open TSqlFormatter.Identifiers
 open TSqlFormatter.Keywords
 open TSqlFormatter.Parenthesis
 open TSqlFormatter.FunctionCalls
+open TSqlFormatter.Lists
 
 // ─── Helpers ───
 
@@ -97,58 +98,6 @@ let private canCollapseList (cfg: Style) (items: Doc list) =
 // We intentionally do not support right-aligned variants such as:
 //   WHERE a = 1
 //     AND b = 2
-// where the right edge of AND aligns to the right edge of WHERE. The current
-// Doc model handles fixed indentation well via Nest, but it does not express
-// right-edge anchoring cleanly.
-type SequencePolicy =
-    { placeFirstItemOnNewLine: bool
-      firstItemIndent: int option
-      subsequentItemsIndent: int option }
-
-// sequenceDoc:
-//   a = 1
-//   AND b = 2
-//   AND c = 3
-let sequenceDoc (policy: SequencePolicy) (items: Doc list) : Doc =
-    let nestIfIndented indent doc =
-        match indent with
-        | Some spaces -> nest spaces doc
-        | None -> doc
-
-    let subsequentIndent = defaultArg policy.subsequentItemsIndent 0
-
-    match items with
-    | [] -> empty
-    | [ singleItem ] -> nestIfIndented policy.firstItemIndent singleItem
-    | firstItem :: remainingItems ->
-        let firstItemDoc = nestIfIndented policy.firstItemIndent firstItem
-        let remainingItemsDoc = join line remainingItems
-        firstItemDoc <+> nest subsequentIndent (line <+> remainingItemsDoc)
-
-// headedSequenceDoc:
-//   SELECT a,
-//       b,
-//       c
-//
-//   CASE
-//       WHEN x = 1 THEN 'a'
-//       ELSE 'b'
-//   END
-let headedSequenceDoc (policy: SequencePolicy) (headDoc: Doc) (items: Doc list) : Doc =
-    let subsequentIndent = defaultArg policy.subsequentItemsIndent 0
-
-    match items with
-    | [] -> headDoc
-    | _ when policy.placeFirstItemOnNewLine -> headDoc <+> nest subsequentIndent (line <+> join line items)
-    | _ -> headDoc <++> sequenceDoc policy items
-
-let listSequencePolicy (cfg: Style) =
-    let indent = indentWidth cfg
-
-    { placeFirstItemOnNewLine = cfg.lists.placeFirstItemOnNewLine = PlaceOnNewLine.Always
-      firstItemIndent = if cfg.lists.indentListItems then Some indent else None
-      subsequentItemsIndent = Some indent }
-
 let andOrSequencePolicy (cfg: Style) =
     let indent = indentWidth cfg
 
@@ -158,10 +107,6 @@ let andOrSequencePolicy (cfg: Style) =
         match cfg.operators.andOr.alignment with
         | Alignment.Indented -> Some indent
         | _ -> None }
-
-let withFirstItemIndent (indent: int) (policy: SequencePolicy) =
-    { policy with
-        firstItemIndent = if indent > 0 then Some indent else None }
 
 let private renderComment (comment: Comment) : Doc =
     match comment with
@@ -221,19 +166,6 @@ let private formatCommaList (cfg: Style) (keyword: Doc) (items: CommaListItem li
 
 let private formatList (cfg: Style) (keyword: Doc) (items: Doc list) : Doc =
     formatCommaList cfg keyword (plainCommaListItems items)
-
-let private decoratedCommaDocs (items: Doc list) : Doc list =
-    items
-    |> List.mapi (fun i item ->
-        if i = List.length items - 1 then
-            item
-        else
-            item <+> text ",")
-
-let private parenthesizedCommaListDoc (cfg: Style) (items: Doc list) : Doc =
-    let parens = parenthesesDoc cfg
-    let contents = sequenceDoc (listSequencePolicy cfg) (decoratedCommaDocs items)
-    group (parens empty contents)
 
 /// Get the raw SQL text of a fragment from its token stream.
 let private fragmentText (frag: TSqlFragment) : string =
@@ -1600,7 +1532,15 @@ and private optionsClauseDoc (cfg: Style) (optionDoc: 'T -> Doc) (options: Syste
 
         let optionListDoc =
             if placeFirstOnNewLine then
-                headedSequenceDoc (listSequencePolicy cfg) (keyword cfg "WITH") (decoratedCommaDocs optionDocs)
+                headedSequenceDoc
+                    (listSequencePolicy cfg)
+                    (keyword cfg "WITH")
+                    (optionDocs
+                     |> List.mapi (fun i doc ->
+                         if i = List.length optionDocs - 1 then
+                             doc
+                         else
+                             doc <+> text ","))
             else
                 keyword cfg "WITH" <++> join (text ", ") optionDocs
 
