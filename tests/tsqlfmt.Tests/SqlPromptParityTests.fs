@@ -4,7 +4,7 @@ open System
 open System.Diagnostics
 open System.IO
 open Xunit
-open TSqlFormatter.Config
+open TSqlFormatter.Style
 open TSqlFormatter.Formatter
 open TestSupport
 
@@ -98,7 +98,7 @@ let ``existing fixture matches sqlprompt for default style`` (testName: string, 
         let stylePath = writeStyleFile localStyleDir "Default" styleJson
 
         let ourConfig =
-            loadConfig stylePath |> validateConfig |> withOptionalCasing applyCasing
+            loadStyle stylePath |> validateStyle |> withOptionalCasing applyCasing
 
         let ourOutput =
             match format ourConfig inputSql with
