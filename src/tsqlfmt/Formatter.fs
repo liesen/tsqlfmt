@@ -113,13 +113,6 @@ let private afterCommaComments (leftFrag: TSqlFragment) (rightFrag: TSqlFragment
 
     afterCommaComments
 
-let private plainCommaListItems (items: Doc list) : CommaListItem list =
-    items
-    |> List.map (fun doc ->
-        { Doc = doc
-          ForcesExpandedLayout = false
-          AfterCommaComments = [] })
-
 let private decoratedCommaItemDoc (isLast: bool) (item: CommaListItem) : Doc =
     if isLast then
         item.Doc
@@ -134,13 +127,6 @@ let private expandedCommaListDoc (cfg: Style) (keyword: Doc) (items: CommaListIt
         |> List.mapi (fun i item -> decoratedCommaItemDoc (i = List.length items - 1) item)
 
     headedSequenceDoc (listSequencePolicy cfg) keyword decoratedItems
-
-let private flatCommaListDoc (keyword: Doc) (items: CommaListItem list) : Doc =
-    let decoratedItems =
-        items
-        |> List.mapi (fun i item -> decoratedCommaItemDoc (i = List.length items - 1) item)
-
-    keyword <++> join (text " ") decoratedItems |> flatten
 
 let private formatCommaList (cfg: Style) (keyword: Doc) (items: CommaListItem list) : Doc =
     match items with
@@ -171,20 +157,6 @@ let private fragmentText (frag: TSqlFragment) : string =
                 sb.Append(stream.[i].Text) |> ignore
 
             sb.ToString().Trim()
-
-/// Collect comments between two token indices from the token stream.
-let private collectComments (stream: IList<TSqlParserToken>) (fromIdx: int) (toIdx: int) : string list =
-    if stream = null then
-        []
-    else
-        [ for i in fromIdx..toIdx do
-              let tok = stream.[i]
-
-              if
-                  tok.TokenType = TSqlTokenType.SingleLineComment
-                  || tok.TokenType = TSqlTokenType.MultilineComment
-              then
-                  yield tok.Text.Trim() ]
 
 /// Emit a fragment's tokens as raw text (fallback for unhandled node types).
 let private tokenStreamDoc (cfg: Style) (frag: TSqlFragment) : Doc =
@@ -386,12 +358,7 @@ let rec private exprDoc (cfg: Style) (expr: TSqlFragment) : Doc =
     | :? InPredicate as inp -> inPredicateDoc cfg inp
     | :? LikePredicate as lk -> likePredicateDoc cfg lk
     | :? ExistsPredicate as ep ->
-        keyword cfg "EXISTS"
-        <++> blockParenthesizedQueryDoc
-            cfg
-            true
-            ep.Subquery.QueryExpression
-            (queryExprDoc cfg ep.Subquery.QueryExpression)
+        parenthesesDoc cfg (keyword cfg "EXISTS" <+> text " ") (queryExprDoc cfg ep.Subquery.QueryExpression)
     | :? BooleanTernaryExpression as be -> betweenDoc cfg be
     | :? BinaryExpression as binex -> binaryExprDoc cfg binex
     | :? UnaryExpression as unex ->
