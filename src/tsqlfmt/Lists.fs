@@ -2,7 +2,6 @@ module TSqlFormatter.Lists
 
 open TSqlFormatter.Doc
 open TSqlFormatter.Style
-open TSqlFormatter.Parenthesis
 
 type SequencePolicy =
     { placeFirstItemOnNewLine: bool
@@ -44,7 +43,7 @@ let withFirstItemIndent (indent: int) (policy: SequencePolicy) =
     { policy with
         firstItemIndent = if indent > 0 then Some indent else None }
 
-let private parenthesizedCommaItems (cfg: Style) (items: Doc list) =
+let private commaItems (cfg: Style) (items: Doc list) =
     let comma =
         if cfg.lists.addSpaceBeforeComma then
             text " ,"
@@ -57,10 +56,5 @@ let private parenthesizedCommaItems (cfg: Style) (items: Doc list) =
         items
         |> List.mapi (fun i item -> if i = List.length items - 1 then item else item <+> comma)
 
-let parenthesizedCommaListDoc (cfg: Style) (items: Doc list) : Doc =
-    let parens = parenthesesDoc cfg
-
-    let contents =
-        sequenceDoc (listSequencePolicy cfg) (parenthesizedCommaItems cfg items)
-
-    group (parens empty contents)
+let commaListDoc (cfg: Style) (items: Doc list) : Doc =
+    sequenceDoc (listSequencePolicy cfg) (commaItems cfg items)

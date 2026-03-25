@@ -1129,7 +1129,9 @@ and private namedTableDoc (cfg: Style) (ntr: NamedTableReference) : Doc =
                 ntr.TableHints
                 |> Seq.map hintToText
                 |> Seq.toList
-                |> parenthesizedCommaListDoc cfg
+                |> commaListDoc cfg
+                |> parenthesesDoc cfg empty
+                |> group
 
             hintDoc
         else
@@ -1293,7 +1295,7 @@ and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
     let colsDoc =
         if cte.Columns <> null && cte.Columns.Count > 0 then
             let cols = cte.Columns |> Seq.map identDoc |> Seq.toList
-            text " " <+> parenthesizedCommaListDoc cfg cols
+            text " " <+> (commaListDoc cfg cols |> parenthesesDoc cfg empty |> group)
         else
             empty
 
@@ -1567,7 +1569,8 @@ and private orderHintDoc (cfg: Style) (orderHint: OrderBulkInsertOption) : Doc =
 
         let columns = orderHint.Columns |> Seq.map columnDoc |> Seq.toList
 
-        line <+> keyword cfg "ORDER" <++> parenthesizedCommaListDoc cfg columns
+        line <+> keyword cfg "ORDER"
+        <++> (commaListDoc cfg columns |> parenthesesDoc cfg empty |> group)
 
 and private procedureBodyDoc (cfg: Style) (stmt: ProcedureStatementBody) : Doc =
     if stmt.MethodSpecifier <> null then
@@ -1906,7 +1909,8 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
                             let columns =
                                 orderOption.Columns |> Seq.map (fun col -> exprDoc cfg col) |> Seq.toList
 
-                            keyword cfg "ORDER" <++> parenthesizedCommaListDoc cfg columns
+                            keyword cfg "ORDER"
+                            <++> (commaListDoc cfg columns |> parenthesesDoc cfg empty |> group)
                         | _ -> tokenStreamDoc cfg option)
                     |> Seq.toList
 
