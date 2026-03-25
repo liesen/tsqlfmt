@@ -693,16 +693,11 @@ and private tryCastCallDoc (cfg: Style) (c: TryCastCall) : Doc =
         [ exprDoc cfg c.Parameter <++> keyword cfg "AS" <++> dataTypeRefDoc cfg c.DataType ]
 
 and private convertCallDoc (cfg: Style) (c: ConvertCall) : Doc =
-    let dataTypeDoc = dataTypeRefDoc cfg c.DataType
-    let call = callDoc cfg
-
-    let args =
-        if c.Style <> null then
-            [ dataTypeDoc; exprDoc cfg c.Parameter; exprDoc cfg c.Style ]
-        else
-            [ dataTypeDoc; exprDoc cfg c.Parameter ]
-
-    call (builtInFunctionName cfg "CONVERT") args
+    [ dataTypeRefDoc cfg c.DataType
+      exprDoc cfg c.Parameter
+      if c.Style <> null then
+          exprDoc cfg c.Style ]
+    |> callDoc cfg (builtInFunctionName cfg "CONVERT")
 
 and private dataTypeRefDoc (cfg: Style) (dtr: DataTypeReference) : Doc =
     match dtr with
@@ -831,19 +826,20 @@ and private overClauseDoc (cfg: Style) (oc: OverClause) : Doc =
     keyword cfg "OVER" <++> text "(" <+> join (text " ") parts <+> text ")"
 
 and private coalesceDoc (cfg: Style) (c: CoalesceExpression) : Doc =
-    let argDocs = c.Expressions |> Seq.map (fun e -> exprDoc cfg e) |> Seq.toList
-    callDoc cfg (builtInFunctionName cfg "COALESCE") argDocs
+    c.Expressions
+    |> Seq.map (exprDoc cfg)
+    |> Seq.toList
+    |> callDoc cfg (builtInFunctionName cfg "COALESCE")
 
 and private iifCallDoc (cfg: Style) (iif: IIfCall) : Doc =
-    let argDocs =
-        [ boolExprDoc cfg iif.Predicate
-          exprDoc cfg iif.ThenExpression
-          exprDoc cfg iif.ElseExpression ]
-
-    callDoc cfg (builtInFunctionName cfg "IIF") argDocs
+    [ boolExprDoc cfg iif.Predicate
+      exprDoc cfg iif.ThenExpression
+      exprDoc cfg iif.ElseExpression ]
+    |> callDoc cfg (builtInFunctionName cfg "IIF")
 
 and private nullIfDoc (cfg: Style) (n: NullIfExpression) : Doc =
-    callDoc cfg (builtInFunctionName cfg "NULLIF") [ exprDoc cfg n.FirstExpression; exprDoc cfg n.SecondExpression ]
+    [ exprDoc cfg n.FirstExpression; exprDoc cfg n.SecondExpression ]
+    |> callDoc cfg (builtInFunctionName cfg "NULLIF")
 
 // ─── Boolean expressions ───
 
