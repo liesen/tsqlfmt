@@ -682,13 +682,16 @@ and private simpleCaseDoc (cfg: Style) (c: SimpleCaseExpression) : Doc =
 // ─── CAST / CONVERT ───
 
 and private castCallDoc (cfg: Style) (c: CastCall) : Doc =
-    callDoc cfg (builtInFunctionName cfg "CAST") [exprDoc cfg c.Parameter <++> keyword cfg "AS" <++> dataTypeRefDoc cfg c.DataType]
+    callDoc
+        cfg
+        (builtInFunctionName cfg "CAST")
+        [ exprDoc cfg c.Parameter <++> keyword cfg "AS" <++> dataTypeRefDoc cfg c.DataType ]
 
 and private tryCastCallDoc (cfg: Style) (c: TryCastCall) : Doc =
     callDoc
         cfg
         (builtInFunctionName cfg "TRY_CAST")
-        [exprDoc cfg c.Parameter <++> keyword cfg "AS" <++> dataTypeRefDoc cfg c.DataType]
+        [ exprDoc cfg c.Parameter <++> keyword cfg "AS" <++> dataTypeRefDoc cfg c.DataType ]
 
 and private convertCallDoc (cfg: Style) (c: ConvertCall) : Doc =
     let dataTypeDoc = dataTypeRefDoc cfg c.DataType
