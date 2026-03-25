@@ -868,21 +868,8 @@ and private boolCompDoc (cfg: Style) (bc: BooleanComparisonExpression) : Doc =
         else
             lhs <+> text op <+> rhs
 
-and private boolBinaryDoc (cfg: Style) (bb: BooleanBinaryExpression) : Doc =
-    let opText =
-        match bb.BinaryExpressionType with
-        | BooleanBinaryExpressionType.And -> "AND"
-        | BooleanBinaryExpressionType.Or -> "OR"
-        | _ -> "AND"
-
-    let lhs = exprDoc cfg bb.FirstExpression
-    let rhs = exprDoc cfg bb.SecondExpression
-    lhs <+> line <+> nest (indentWidth cfg) (keyword cfg opText <++> rhs)
-
 and private boolParenDoc (cfg: Style) (bp: BooleanParenthesisExpression) : Doc =
-    let inner = boolExprDoc cfg bp.Expression
-    let parens = parenthesesDoc cfg
-    group (parens empty inner)
+    boolExprDoc cfg bp.Expression |> parenthesesDoc cfg empty |> group
 
 and private queryParensDoc (cfg: Style) (allowCollapse: bool) (queryExpr: QueryExpression) (brokenDoc: Doc) : Doc =
     if
@@ -901,14 +888,6 @@ and private blockParenthesizedQueryDoc
     : Doc =
     let parens = parenthesesDoc cfg
     queryParensDoc cfg allowCollapse queryExpr (parens empty inner)
-
-and private inlineParenthesizedQueryDoc
-    (cfg: Style)
-    (allowCollapse: bool)
-    (queryExpr: QueryExpression)
-    (inner: Doc)
-    : Doc =
-    queryParensDoc cfg allowCollapse queryExpr (text "(" <+> inner <+> text ")")
 
 and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
     let lhs = exprDoc cfg inp.Expression
@@ -1273,10 +1252,7 @@ and private unqualifiedJoinDoc (cfg: Style) (uj: UnqualifiedJoin) : Doc =
     firstTable <+> line <+> joinType <++> secondTable
 
 and private queryDerivedTableDoc (cfg: Style) (qdt: QueryDerivedTable) : Doc =
-    let inner = queryExprDoc cfg qdt.QueryExpression
-
-    let parenDoc =
-        text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
+    let parenDoc = queryExprDoc cfg qdt.QueryExpression |> parenthesesDoc cfg empty
 
     let aliasDoc =
         if qdt.Alias <> null then
@@ -1289,26 +1265,11 @@ and private queryDerivedTableDoc (cfg: Style) (qdt: QueryDerivedTable) : Doc =
 and private schemaObjectFuncTableDoc (cfg: Style) (softr: SchemaObjectFunctionTableReference) : Doc =
     let nameDoc = schemaObjectNameDoc softr.SchemaObject
 
-    let args =
-        if softr.Parameters <> null && softr.Parameters.Count > 0 then
-            let argDocs = softr.Parameters |> Seq.map (fun a -> exprDoc cfg a) |> Seq.toList
-            let flatArgs = join (text ", ") argDocs
-
-            if
-                canCollapseFragments
-                    cfg.parentheses.collapseShortParenthesisContents
-                    cfg.parentheses.collapseParenthesesShorterThan
-                    (softr.Parameters |> Seq.cast<TSqlFragment>)
-            then
-                text "(" <+> flatArgs <+> text ")"
-            else
-                let argBody = commaSep argDocs
-
-                text "("
-                <+> nest (2 * indentWidth cfg) argBody
-                <+> nest (indentWidth cfg) (line <+> text ")")
+    let argDocs =
+        if softr.Parameters <> null then
+            softr.Parameters |> Seq.map (exprDoc cfg) |> Seq.toList
         else
-            text "()"
+            []
 
     let aliasDoc =
         if softr.Alias <> null then
@@ -1316,7 +1277,7 @@ and private schemaObjectFuncTableDoc (cfg: Style) (softr: SchemaObjectFunctionTa
         else
             empty
 
-    nameDoc <+> args <+> aliasDoc
+    callDoc cfg nameDoc argDocs <+> aliasDoc
 
 // ─── Binary Query (UNION, EXCEPT, INTERSECT) ───
 

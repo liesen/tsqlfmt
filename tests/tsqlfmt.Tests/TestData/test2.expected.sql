@@ -12,8 +12,4 @@ RETURN SELECT ir.Source_Code,
     ir.Target_Code,
     ir.Target_Base_Rate,
     ir.Target_Adj_Rate
-FROM aa.f_Detail_Lookup_Conversion_Rate(@Source_Code,
-        @Source_Frequency,
-        @Target_Code,
-        @Target_Frequency
-    ) ir
+FROM aa.f_Detail_Lookup_Conversion_Rate(@Source_Code, @Source_Frequency, @Target_Code, @Target_Frequency) ir
