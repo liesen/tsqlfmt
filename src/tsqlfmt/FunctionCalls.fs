@@ -4,7 +4,7 @@ open TSqlFormatter.Doc
 open TSqlFormatter.Style
 
 let callDoc (cfg: Style) (functionNameDoc: Doc) (argDocs: Doc list) =
-    let openParen =
+    let openDoc =
         if cfg.functionCalls.addSpacesAroundParentheses then
             text " ("
         else
@@ -12,17 +12,17 @@ let callDoc (cfg: Style) (functionNameDoc: Doc) (argDocs: Doc list) =
 
     let argsDoc =
         match argDocs with
-        | [] when cfg.functionCalls.addSpaceBetweenEmptyParentheses -> openParen <++> text ")"
-        | [] -> openParen <+> text ")"
+        | [] when cfg.functionCalls.addSpaceBetweenEmptyParentheses -> openDoc <++> text ")"
+        | [] -> openDoc <+> text ")"
         | _ ->
-            let ``open``, close =
+            let openDoc, closeDoc =
                 if cfg.functionCalls.addSpacesAroundArgumentList then
-                    openParen <+> text " ", text " )"
+                    openDoc <+> text " ", text " )"
                 else
-                    openParen, text ")"
+                    openDoc, text ")"
 
             if cfg.functionCalls.placeArgumentsOnNewLines = PlaceOnNewLine.Never then
-                ``open`` <+> join (text ", ") argDocs <+> close
+                openDoc <+> join (text ", ") argDocs <+> closeDoc
             else
                 let argListSpacing =
                     if cfg.functionCalls.addSpacesAroundArgumentList then
@@ -31,10 +31,10 @@ let callDoc (cfg: Style) (functionNameDoc: Doc) (argDocs: Doc list) =
                         softline
 
                 let doc =
-                    ``open``
+                    openDoc
                     <+> nest cfg.whitespace.numberOfSpacesInTabs (argListSpacing <+> join (text "," <+> line) argDocs)
                     <+> argListSpacing
-                    <+> close
+                    <+> closeDoc
 
                 match cfg.functionCalls.placeArgumentsOnNewLines with
                 | PlaceOnNewLine.Always -> doc
