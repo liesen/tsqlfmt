@@ -10,6 +10,7 @@ open TSqlFormatter.Trivia
 open TSqlFormatter.Style
 open TSqlFormatter.Identifiers
 open TSqlFormatter.Keywords
+open TSqlFormatter.Parenthesis
 
 // ─── Helpers ───
 
@@ -850,8 +851,7 @@ and private coalesceDoc (cfg: Style) (c: CoalesceExpression) : Doc =
         <+> line
         <+> text ")"
 
-    builtInFunctionName cfg "COALESCE"
-    <+> choice flatArgs expandedArgs
+    builtInFunctionName cfg "COALESCE" <+> choice flatArgs expandedArgs
 
 and private iifCallDoc (cfg: Style) (iif: IIfCall) : Doc =
     let argDocs =
@@ -923,29 +923,17 @@ and private boolBinaryDoc (cfg: Style) (bb: BooleanBinaryExpression) : Doc =
 
 and private boolParenDoc (cfg: Style) (bp: BooleanParenthesisExpression) : Doc =
     let inner = boolExprDoc cfg bp.Expression
-    let flatDoc = text "(" <+> flatten inner <+> text ")"
+    let parens = parenthesesDoc cfg
+    group (parens empty inner)
 
-    let expandedDoc =
-        text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
-
-    choice flatDoc expandedDoc
-
-and private queryParensDoc
-    (cfg: Style)
-    (allowCollapse: bool)
-    (queryExpr: QueryExpression)
-    (expandedDoc: Doc)
-    (inner: Doc)
-    : Doc =
-    let flatDoc = text "(" <+> flatten inner <+> text ")"
-
+and private queryParensDoc (cfg: Style) (allowCollapse: bool) (queryExpr: QueryExpression) (brokenDoc: Doc) : Doc =
     if
         allowCollapse
         && canCollapseFragment cfg.dml.collapseShortSubqueries cfg.dml.collapseSubqueriesShorterThan queryExpr
     then
-        flatDoc
+        group brokenDoc
     else
-        expandedDoc
+        brokenDoc
 
 and private blockParenthesizedQueryDoc
     (cfg: Style)
@@ -953,10 +941,8 @@ and private blockParenthesizedQueryDoc
     (queryExpr: QueryExpression)
     (inner: Doc)
     : Doc =
-    let expandedDoc =
-        text "(" <+> nest (indentWidth cfg) (line <+> inner) <+> line <+> text ")"
-
-    queryParensDoc cfg allowCollapse queryExpr expandedDoc inner
+    let parens = parenthesesDoc cfg
+    queryParensDoc cfg allowCollapse queryExpr (parens empty inner)
 
 and private inlineParenthesizedQueryDoc
     (cfg: Style)
@@ -964,8 +950,7 @@ and private inlineParenthesizedQueryDoc
     (queryExpr: QueryExpression)
     (inner: Doc)
     : Doc =
-    let expandedDoc = text "(" <+> inner <+> text ")"
-    queryParensDoc cfg allowCollapse queryExpr expandedDoc inner
+    queryParensDoc cfg allowCollapse queryExpr (text "(" <+> inner <+> text ")")
 
 and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
     let lhs = exprDoc cfg inp.Expression
@@ -1063,7 +1048,8 @@ and private binaryExprDoc (cfg: Style) (be: BinaryExpression) : Doc =
 // ─── Parenthesized expressions ───
 
 and private parenExprDoc (cfg: Style) (p: ParenthesisExpression) : Doc =
-    text "(" <+> exprDoc cfg p.Expression <+> text ")"
+    let parens = parenthesesDoc cfg
+    group (parens empty (exprDoc cfg p.Expression))
 
 and private scalarSubqueryDoc (cfg: Style) (sq: ScalarSubquery) : Doc =
     blockParenthesizedQueryDoc cfg true sq.QueryExpression (queryExprDoc cfg sq.QueryExpression)
@@ -1471,17 +1457,12 @@ and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
 
     let asDoc = keyword cfg "AS"
     let body = queryExprDoc cfg cte.QueryExpression
+    let parens = cteDoc cfg
 
     if cfg.cte.placeAsOnNewLine then
-        nameDoc <+> colsDoc <+> line <+> asDoc <++> text "("
-        <+> nest (indentWidth cfg) (line <+> body)
-        <+> line
-        <+> text ")"
+        parens (nameDoc <+> colsDoc <+> line <+> asDoc <+> text " ") body
     else
-        nameDoc <+> colsDoc <++> asDoc <++> text "("
-        <+> nest (indentWidth cfg) (line <+> body)
-        <+> line
-        <+> text ")"
+        parens (nameDoc <+> colsDoc <++> asDoc <+> text " ") body
 
 // ─── DDL: ALTER/CREATE FUNCTION/PROCEDURE ───
 
@@ -2230,47 +2211,28 @@ and private insertDoc (cfg: Style) (ins: InsertStatement) : Doc =
 
     let header = keyword cfg "INSERT" <++> keyword cfg "INTO" <++> target
 
-    let colsDoc =
+    let targetDoc =
         if spec.Columns <> null && spec.Columns.Count > 0 then
             let cols = spec.Columns |> Seq.map (fun c -> columnRefDoc cfg c) |> Seq.toList
-            // expandedSplit: ( at end of line, content indented, ) on own line
-            let flatDoc = text " (" <+> join (text ", ") cols <+> text ")"
-
-            let expandedDoc =
-                text " ("
-                <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) cols)
-                <+> line
-                <+> text ")"
-
-            choice flatDoc expandedDoc
+            let parens = insertColumnsDoc cfg
+            group (parens (header <+> text " ") (join (text "," <+> line) cols))
         else
-            empty
+            header
 
     let sourceDoc =
         match spec.InsertSource with
         | :? ValuesInsertSource as vis ->
             let rowDoc (rv: RowValue) =
                 let vals = rv.ColumnValues |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
-                // Each row: collapse if short, expand (compactIndented) if long
-                let flatRow = text "(" <+> join (text ", ") vals <+> text ")"
-
-                let expandedRow =
-                    text "("
-                    <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) vals)
-                    <+> line
-                    <+> text ")"
-
-                choice flatRow expandedRow
+                let parens = insertValuesDoc cfg
+                group (parens empty (join (text "," <+> line) vals))
 
             let rows = vis.RowValues |> Seq.map rowDoc |> Seq.toList
-            // Multiple rows: comma-separated with line breaks between
-            let flatRows = keyword cfg "VALUES" <++> join (text ", ") rows |> flatten
-            let expandedRows = keyword cfg "VALUES" <++> join (text ", ") rows
-            choice flatRows expandedRows
+            group (keyword cfg "VALUES" <++> join (text ", ") rows)
         | :? SelectInsertSource as sis -> queryExprDoc cfg sis.Select
         | _ -> tokenStreamDoc cfg spec.InsertSource
 
-    header <+> colsDoc <+> line <+> sourceDoc
+    targetDoc <+> line <+> sourceDoc
 
 and private setClauseDoc (cfg: Style) (sc: SetClause) : Doc =
     match sc with

@@ -8,6 +8,7 @@ type Doc =
     | Nil
     | Text of string
     | Line // Line break, renders at current indent
+    | SoftLine // Line break in broken mode, nothing in flat mode
     | Cat of Doc * Doc // Concatenation
     | Nest of int * Doc // Add indent to context for doc
     | Union of Doc * Doc // Flattened vs normal
@@ -26,6 +27,8 @@ let text (s: string) =
     if s.Length = 0 then Doc.Nil else Doc.Text(s)
 
 let line = Doc.Line
+
+let softline = Doc.SoftLine
 
 // ─── Concatenation ───
 
@@ -63,6 +66,7 @@ let rec flatten (doc: Doc) : Doc =
     | Doc.Nil -> Doc.Nil
     | Doc.Text _ -> doc
     | Doc.Line -> Doc.Text(" ")
+    | Doc.SoftLine -> Doc.Nil
     | Doc.Cat(a, b) -> Doc.Cat(flatten a, flatten b)
     | Doc.Nest(i, d) -> Doc.Nest(i, flatten d)
     | Doc.Union(a, _) -> flatten a
@@ -102,9 +106,11 @@ let private best (width: int) (doc: Doc) : SDoc =
         | (i, Flat, Doc.Line) :: rest ->
             // In flat mode, line becomes a space
             SText(" ", go (col + 1) rest)
+        | (i, Flat, Doc.SoftLine) :: rest -> go col rest
         | (i, Break, Doc.Line) :: rest ->
             // In break mode, emit a line at current indent
             SLine(i, go i rest)
+        | (i, Break, Doc.SoftLine) :: rest -> SLine(i, go i rest)
         | (i, m, Doc.Nest(j, d)) :: rest ->
             // Push new indent context for the nested doc
             go col ((i + j, m, d) :: rest)

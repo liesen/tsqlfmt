@@ -11,6 +11,7 @@
     <Compile Include="Style.fs" />
     <Compile Include="Keywords.fs" />
     <Compile Include="Identifiers.fs" />
+    <Compile Include="Parenthesis.fs" />
     <Compile Include="Formatter.fs" />
     <Compile Include="CliArgs.fs" />
     <Compile Include="Program.fs" />
