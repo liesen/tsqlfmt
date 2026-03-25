@@ -758,24 +758,6 @@ and private boolCompDoc (cfg: Style) (bc: BooleanComparisonExpression) : Doc =
 and private boolParenDoc (cfg: Style) (bp: BooleanParenthesisExpression) : Doc =
     boolExprDoc cfg bp.Expression |> parenthesesDoc cfg empty |> group
 
-and private queryParensDoc (cfg: Style) (allowCollapse: bool) (queryExpr: QueryExpression) (brokenDoc: Doc) : Doc =
-    if
-        allowCollapse
-        && canCollapseFragment cfg.dml.collapseShortSubqueries cfg.dml.collapseSubqueriesShorterThan queryExpr
-    then
-        group brokenDoc
-    else
-        brokenDoc
-
-and private blockParenthesizedQueryDoc
-    (cfg: Style)
-    (allowCollapse: bool)
-    (queryExpr: QueryExpression)
-    (inner: Doc)
-    : Doc =
-    let parens = parenthesesDoc cfg
-    queryParensDoc cfg allowCollapse queryExpr (parens empty inner)
-
 and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
     let lhs = exprDoc cfg inp.Expression
 
@@ -788,12 +770,8 @@ and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
     let inKw = keyword cfg "IN"
 
     if inp.Subquery <> null then
-        lhs <++> notPart <+> inKw
-        <++> blockParenthesizedQueryDoc
-            cfg
-            true
-            inp.Subquery.QueryExpression
-            (queryExprDoc cfg inp.Subquery.QueryExpression)
+        lhs <++> notPart
+        <+> parenthesesDoc cfg (inKw <+> text " ") (queryExprDoc cfg inp.Subquery.QueryExpression)
     else
         let valDocs = inp.Values |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
 
@@ -867,7 +845,7 @@ and private parenExprDoc (cfg: Style) (p: ParenthesisExpression) : Doc =
     group (parens empty (exprDoc cfg p.Expression))
 
 and private scalarSubqueryDoc (cfg: Style) (sq: ScalarSubquery) : Doc =
-    blockParenthesizedQueryDoc cfg true sq.QueryExpression (queryExprDoc cfg sq.QueryExpression)
+    parenthesesDoc cfg empty (queryExprDoc cfg sq.QueryExpression)
 
 // ─── Query expressions ───
 
@@ -877,8 +855,7 @@ and private querySpecOrExprDoc (cfg: Style) (qe: QueryExpression) (intoTarget: T
     match qe with
     | :? QuerySpecification as qs -> querySpecDoc cfg qs intoTarget
     | :? BinaryQueryExpression as bqe -> binaryQueryDoc cfg bqe
-    | :? QueryParenthesisExpression as qpe ->
-        blockParenthesizedQueryDoc cfg false qpe.QueryExpression (queryExprDoc cfg qpe.QueryExpression)
+    | :? QueryParenthesisExpression as qpe -> parenthesesDoc cfg empty (queryExprDoc cfg qpe.QueryExpression)
     | _ -> tokenStreamDoc cfg qe
 
 and private querySpecDoc (cfg: Style) (qs: QuerySpecification) (intoTarget: TrailingFragmentDoc option) : Doc =
