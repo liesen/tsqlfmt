@@ -2,6 +2,7 @@
 module TSqlFormatter.Keywords
 
 open System.Collections.Generic
+open TSqlFormatter.Style
 
 let private reservedKeywords =
     HashSet<string>(
@@ -485,11 +486,11 @@ let private globalVariables =
     )
 
 /// Applies casing to a word based on the CasingStyle.
-let applyCase (style: Config.CasingStyle) (word: string) : string =
+let applyCase (style: CasingStyle) (word: string) : string =
     match style with
-    | Config.CasingStyle.LeaveAsIs -> word
-    | Config.CasingStyle.Uppercase -> word.ToUpperInvariant()
-    | Config.CasingStyle.Lowercase -> word.ToLowerInvariant()
+    | CasingStyle.LeaveAsIs -> word
+    | CasingStyle.Uppercase -> word.ToUpperInvariant()
+    | CasingStyle.Lowercase -> word.ToLowerInvariant()
     | _ -> word // LowerCamelCase / UpperCamelCase not implemented yet
 
 /// Determine if a token text is a reserved keyword.
@@ -505,8 +506,8 @@ let isBuiltInDataType (s: string) = builtInDataTypes.Contains(s)
 let isGlobalVariable (s: string) =
     s.StartsWith("@@") && globalVariables.Contains(s)
 
-/// Apply the appropriate casing to a token based on config.
-let caseToken (cfg: Config.CasingConfig) (tokenText: string) : string =
+/// Apply the appropriate casing to a token based on style.
+let caseToken (cfg: Casing) (tokenText: string) : string =
     if isGlobalVariable tokenText then
         applyCase cfg.globalVariables tokenText
     elif isBuiltInFunction tokenText then
@@ -519,10 +520,10 @@ let caseToken (cfg: Config.CasingConfig) (tokenText: string) : string =
         tokenText
 
 /// Apply casing to a keyword (known to be a reserved keyword).
-let caseKeyword (cfg: Config.CasingConfig) (keyword: string) : string = applyCase cfg.reservedKeywords keyword
+let caseKeyword (cfg: Casing) (keyword: string) : string = applyCase cfg.reservedKeywords keyword
 
 /// Apply casing to a built-in function name.
-let caseFunction (cfg: Config.CasingConfig) (name: string) : string = applyCase cfg.builtInFunctions name
+let caseFunction (cfg: Casing) (name: string) : string = applyCase cfg.builtInFunctions name
 
 /// Apply casing to a built-in data type.
-let caseDataType (cfg: Config.CasingConfig) (name: string) : string = applyCase cfg.builtInDataTypes name
+let caseDataType (cfg: Casing) (name: string) : string = applyCase cfg.builtInDataTypes name

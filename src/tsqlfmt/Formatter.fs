@@ -7,15 +7,15 @@ open System.Collections.Generic
 open Microsoft.SqlServer.TransactSql.ScriptDom
 open TSqlFormatter.Doc
 open TSqlFormatter.Trivia
-open TSqlFormatter.Config
+open TSqlFormatter.Style
 open TSqlFormatter.Keywords
 
 // ─── Helpers ───
 
-let private keyword (cfg: FormattingStyle) (s: string) = text (caseKeyword cfg.casing s)
-let private functionName (cfg: FormattingStyle) (s: string) = text (caseFunction cfg.casing s)
-let private dataType (cfg: FormattingStyle) (s: string) = text (caseDataType cfg.casing s)
-let private indentWidth (cfg: FormattingStyle) = cfg.whitespace.numberOfSpacesInTabs
+let private keyword (cfg: Style) (s: string) = text (caseKeyword cfg.casing s)
+let private functionName (cfg: Style) (s: string) = text (caseFunction cfg.casing s)
+let private dataType (cfg: Style) (s: string) = text (caseDataType cfg.casing s)
+let private indentWidth (cfg: Style) = cfg.whitespace.numberOfSpacesInTabs
 
 type private SingleLineMeasure = { length: int; hasComments: bool }
 
@@ -69,7 +69,7 @@ let private canCollapseFragments (enabled: bool) (maxLength: int) (fragments: TS
         let totalLength = measures |> List.sumBy (fun m -> m.length) |> (+) separatorsLength
         not hasComments && totalLength <= maxLength
 
-let private canCollapseList (cfg: FormattingStyle) (items: Doc list) =
+let private canCollapseList (cfg: Style) (items: Doc list) =
     match items with
     | []
     | [ _ ] -> false
@@ -142,14 +142,14 @@ let headedSequenceDoc (policy: SequencePolicy) (headDoc: Doc) (items: Doc list) 
     | _ when policy.placeFirstItemOnNewLine -> headDoc <+> nest subsequentIndent (line <+> join line items)
     | _ -> headDoc <++> sequenceDoc policy items
 
-let listSequencePolicy (cfg: FormattingStyle) =
+let listSequencePolicy (cfg: Style) =
     let indent = indentWidth cfg
 
     { placeFirstItemOnNewLine = cfg.lists.placeFirstItemOnNewLine = PlaceOnNewLine.Always
       firstItemIndent = if cfg.lists.indentListItems then Some indent else None
       subsequentItemsIndent = Some indent }
 
-let andOrSequencePolicy (cfg: FormattingStyle) =
+let andOrSequencePolicy (cfg: Style) =
     let indent = indentWidth cfg
 
     { placeFirstItemOnNewLine = false
@@ -193,7 +193,7 @@ let private decoratedCommaItemDoc (isLast: bool) (item: CommaListItem) : Doc =
         | [] -> item.Doc <+> text ","
         | comments -> item.Doc <+> text ", " <+> join (text " ") (comments |> List.map renderComment)
 
-let private expandedCommaListDoc (cfg: FormattingStyle) (keyword: Doc) (items: CommaListItem list) : Doc =
+let private expandedCommaListDoc (cfg: Style) (keyword: Doc) (items: CommaListItem list) : Doc =
     let decoratedItems =
         items
         |> List.mapi (fun i item -> decoratedCommaItemDoc (i = List.length items - 1) item)
@@ -207,7 +207,7 @@ let private flatCommaListDoc (keyword: Doc) (items: CommaListItem list) : Doc =
 
     keyword <++> join (text " ") decoratedItems |> flatten
 
-let private formatCommaList (cfg: FormattingStyle) (keyword: Doc) (items: CommaListItem list) : Doc =
+let private formatCommaList (cfg: Style) (keyword: Doc) (items: CommaListItem list) : Doc =
     match items with
     | [] -> keyword
     | [ single ] when not cfg.lists.indentListItems -> keyword <++> single.Doc
@@ -220,7 +220,7 @@ let private formatCommaList (cfg: FormattingStyle) (keyword: Doc) (items: CommaL
         TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
     | _ -> expandedCommaListDoc cfg keyword items
 
-let private formatList (cfg: FormattingStyle) (keyword: Doc) (items: Doc list) : Doc =
+let private formatList (cfg: Style) (keyword: Doc) (items: Doc list) : Doc =
     formatCommaList cfg keyword (plainCommaListItems items)
 
 /// Get the raw SQL text of a fragment from its token stream.
@@ -255,7 +255,7 @@ let private collectComments (stream: IList<TSqlParserToken>) (fromIdx: int) (toI
                   yield tok.Text.Trim() ]
 
 /// Emit a fragment's tokens as raw text (fallback for unhandled node types).
-let private tokenStreamDoc (cfg: FormattingStyle) (frag: TSqlFragment) : Doc =
+let private tokenStreamDoc (cfg: Style) (frag: TSqlFragment) : Doc =
     if frag = null then
         empty
     else
@@ -320,7 +320,7 @@ let private trailingComment (frag: TSqlFragment) : Doc =
 let private withTrailingComment (frag: TSqlFragment) (doc: Doc) : Doc = doc <+> trailingComment frag
 
 let private keywordWithTrailingCommentDoc
-    (cfg: FormattingStyle)
+    (cfg: Style)
     (keywordText: string)
     (tokenIndex: int option)
     (stmt: TSqlStatement)
@@ -339,7 +339,7 @@ let private trailingCommentForToken (tokenIndex: int option) (stmt: TSqlStatemen
 
 let private returnsKeywordTokenIndex (stmt: TSqlStatement) = tokenIndexOfIdentifier stmt "RETURNS"
 
-let private returnsKeyword (cfg: FormattingStyle) (stmt: TSqlStatement) : Comment option * Doc =
+let private returnsKeyword (cfg: Style) (stmt: TSqlStatement) : Comment option * Doc =
     let comment = trailingCommentForToken (returnsKeywordTokenIndex stmt) stmt
 
     let doc =
@@ -350,7 +350,7 @@ let private returnsKeyword (cfg: FormattingStyle) (stmt: TSqlStatement) : Commen
 let private returnKeywordTokenIndex (stmt: TSqlStatement) =
     tokenIndexOfType stmt TSqlTokenType.Return
 
-let private returnKeyword (cfg: FormattingStyle) (stmt: TSqlStatement) : Comment option * Doc =
+let private returnKeyword (cfg: Style) (stmt: TSqlStatement) : Comment option * Doc =
     let comment = trailingCommentForToken (returnKeywordTokenIndex stmt) stmt
 
     let doc =
@@ -414,7 +414,7 @@ let private renderItemsWithLeadingComments<'T when 'T :> TSqlFragment>
 
 // ─── Expression formatting ───
 
-let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
+let rec private exprDoc (cfg: Style) (expr: TSqlFragment) : Doc =
     match expr with
     | :? ColumnReferenceExpression as col -> columnRefDoc cfg col
     | :? IntegerLiteral as lit -> text lit.Value
@@ -482,12 +482,12 @@ let rec private exprDoc (cfg: FormattingStyle) (expr: TSqlFragment) : Doc =
             text ("'" + iov.Value.Replace("'", "''") + "'")
     | _ -> tokenStreamDoc cfg expr
 
-and private boolExprDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc =
+and private boolExprDoc (cfg: Style) (expr: BooleanExpression) : Doc =
     match expr with
     | :? BooleanBinaryExpression as bb -> boolBinaryExprDoc cfg false bb
     | _ -> exprDoc cfg expr
 
-and private boolBinaryExprDoc (cfg: FormattingStyle) (afterHead: bool) (bb: BooleanBinaryExpression) : Doc =
+and private boolBinaryExprDoc (cfg: Style) (afterHead: bool) (bb: BooleanBinaryExpression) : Doc =
     let policy =
         if afterHead then
             andOrSequencePolicy cfg |> withFirstItemIndent (indentWidth cfg)
@@ -496,7 +496,7 @@ and private boolBinaryExprDoc (cfg: FormattingStyle) (afterHead: bool) (bb: Bool
 
     sequenceDoc policy (booleanSequenceItems cfg bb)
 
-and private headedConditionDoc (cfg: FormattingStyle) (head: Doc) (expr: BooleanExpression) : Doc =
+and private headedConditionDoc (cfg: Style) (head: Doc) (expr: BooleanExpression) : Doc =
     let body =
         match expr with
         | :? BooleanBinaryExpression as bb -> boolBinaryExprDoc cfg true bb
@@ -504,13 +504,13 @@ and private headedConditionDoc (cfg: FormattingStyle) (head: Doc) (expr: Boolean
 
     head <++> body
 
-and private columnRefDoc (_cfg: FormattingStyle) (col: ColumnReferenceExpression) : Doc =
+and private columnRefDoc (_cfg: Style) (col: ColumnReferenceExpression) : Doc =
     if col.MultiPartIdentifier <> null then
         multiPartIdDoc _cfg col.MultiPartIdentifier
     else
         text (fragmentText col)
 
-and private multiPartIdDoc (_cfg: FormattingStyle) (mpi: MultiPartIdentifier) : Doc =
+and private multiPartIdDoc (_cfg: Style) (mpi: MultiPartIdentifier) : Doc =
     let parts = mpi.Identifiers |> Seq.map (fun i -> identDoc i) |> Seq.toList
     join (text ".") parts
 
@@ -526,13 +526,13 @@ and private identOrValueDoc (iov: IdentifierOrValueExpression) : Doc =
     else
         text ("'" + iov.Value.Replace("'", "''") + "'")
 
-and private selectStarDoc (_cfg: FormattingStyle) (star: SelectStarExpression) : Doc =
+and private selectStarDoc (_cfg: Style) (star: SelectStarExpression) : Doc =
     if star.Qualifier <> null then
         multiPartIdDoc _cfg star.Qualifier <+> text ".*"
     else
         text "*"
 
-and private selectScalarDoc (cfg: FormattingStyle) (sse: SelectScalarExpression) : Doc =
+and private selectScalarDoc (cfg: Style) (sse: SelectScalarExpression) : Doc =
     if fragmentHasComments sse then
         tokenStreamDoc cfg sse
     else
@@ -557,10 +557,10 @@ and private selectScalarDoc (cfg: FormattingStyle) (sse: SelectScalarExpression)
             else
                 e <++> aliasDoc
 
-and private selectSetVarDoc (cfg: FormattingStyle) (ssv: SelectSetVariable) : Doc =
+and private selectSetVarDoc (cfg: Style) (ssv: SelectSetVariable) : Doc =
     text ssv.Variable.Name <++> text "=" <++> exprDoc cfg ssv.Expression
 
-and private topDoc (cfg: FormattingStyle) (top: TopRowFilter) : Doc =
+and private topDoc (cfg: Style) (top: TopRowFilter) : Doc =
     // TOP always adds parens, so unwrap ParenthesisExpression to avoid double parens
     let inner =
         match top.Expression with
@@ -597,12 +597,7 @@ and private caseBodyLines (elseDoc: Doc option) (whenDocs: Doc list) =
       | Some doc -> yield doc
       | None -> () ]
 
-and private expandedCaseFromParts
-    (cfg: FormattingStyle)
-    (caseHead: Doc)
-    (whenDocs: Doc list)
-    (elseDoc: Doc option)
-    : Doc =
+and private expandedCaseFromParts (cfg: Style) (caseHead: Doc) (whenDocs: Doc list) (elseDoc: Doc option) : Doc =
     let bodyItems = caseBodyLines elseDoc whenDocs
 
     let whenPolicy =
@@ -617,7 +612,7 @@ and private expandedCaseFromParts
 
     headedSequenceDoc whenPolicy caseHead bodyItems <+> line <+> keyword cfg "END"
 
-and private searchedCaseDoc (cfg: FormattingStyle) (c: SearchedCaseExpression) : Doc =
+and private searchedCaseDoc (cfg: Style) (c: SearchedCaseExpression) : Doc =
     let whenDocs =
         [ for wc in c.WhenClauses do
               yield
@@ -650,7 +645,7 @@ and private searchedCaseDoc (cfg: FormattingStyle) (c: SearchedCaseExpression) :
         flatDoc
         expandedDoc
 
-and private simpleCaseDoc (cfg: FormattingStyle) (c: SimpleCaseExpression) : Doc =
+and private simpleCaseDoc (cfg: Style) (c: SimpleCaseExpression) : Doc =
     let inputExpr = exprDoc cfg c.InputExpression
 
     let whenDocs =
@@ -689,7 +684,7 @@ and private simpleCaseDoc (cfg: FormattingStyle) (c: SimpleCaseExpression) : Doc
 
 // ─── CAST / CONVERT ───
 
-and private castCallDoc (cfg: FormattingStyle) (c: CastCall) : Doc =
+and private castCallDoc (cfg: Style) (c: CastCall) : Doc =
     let dataTypeDoc = dataTypeRefDoc cfg c.DataType
 
     functionName cfg "CAST" <+> text "(" <+> exprDoc cfg c.Parameter
@@ -697,7 +692,7 @@ and private castCallDoc (cfg: FormattingStyle) (c: CastCall) : Doc =
     <++> dataTypeDoc
     <+> text ")"
 
-and private tryCastCallDoc (cfg: FormattingStyle) (c: TryCastCall) : Doc =
+and private tryCastCallDoc (cfg: Style) (c: TryCastCall) : Doc =
     let dataTypeDoc = dataTypeRefDoc cfg c.DataType
 
     functionName cfg "TRY_CAST" <+> text "(" <+> exprDoc cfg c.Parameter
@@ -705,7 +700,7 @@ and private tryCastCallDoc (cfg: FormattingStyle) (c: TryCastCall) : Doc =
     <++> dataTypeDoc
     <+> text ")"
 
-and private convertCallDoc (cfg: FormattingStyle) (c: ConvertCall) : Doc =
+and private convertCallDoc (cfg: Style) (c: ConvertCall) : Doc =
     let dataTypeDoc = dataTypeRefDoc cfg c.DataType
 
     let args =
@@ -717,7 +712,7 @@ and private convertCallDoc (cfg: FormattingStyle) (c: ConvertCall) : Doc =
 
     functionName cfg "CONVERT" <+> text "(" <+> args <+> text ")"
 
-and private dataTypeRefDoc (cfg: FormattingStyle) (dtr: DataTypeReference) : Doc =
+and private dataTypeRefDoc (cfg: Style) (dtr: DataTypeReference) : Doc =
     match dtr with
     | :? SqlDataTypeReference as sdt ->
         let name = sdt.SqlDataTypeOption.ToString().ToUpperInvariant()
@@ -733,7 +728,7 @@ and private dataTypeRefDoc (cfg: FormattingStyle) (dtr: DataTypeReference) : Doc
 
 // ─── Function calls ───
 
-and private functionCallDoc (cfg: FormattingStyle) (f: FunctionCall) : Doc =
+and private functionCallDoc (cfg: Style) (f: FunctionCall) : Doc =
     let name =
         if f.FunctionName <> null then
             let n = f.FunctionName.Value
@@ -780,7 +775,7 @@ and private functionCallDoc (cfg: FormattingStyle) (f: FunctionCall) : Doc =
 
     callName <+> argsDoc <+> overDoc
 
-and private overClauseDoc (cfg: FormattingStyle) (oc: OverClause) : Doc =
+and private overClauseDoc (cfg: Style) (oc: OverClause) : Doc =
     let parts =
         [ if oc.Partitions <> null && oc.Partitions.Count > 0 then
               let partDocs = oc.Partitions |> Seq.map (fun p -> exprDoc cfg p) |> Seq.toList
@@ -844,7 +839,7 @@ and private overClauseDoc (cfg: FormattingStyle) (oc: OverClause) : Doc =
 
     keyword cfg "OVER" <++> text "(" <+> join (text " ") parts <+> text ")"
 
-and private coalesceDoc (cfg: FormattingStyle) (c: CoalesceExpression) : Doc =
+and private coalesceDoc (cfg: Style) (c: CoalesceExpression) : Doc =
     let argDocs = c.Expressions |> Seq.map (fun e -> exprDoc cfg e) |> Seq.toList
     let flatArgs = text "(" <+> commaSep argDocs <+> text ")"
 
@@ -857,7 +852,7 @@ and private coalesceDoc (cfg: FormattingStyle) (c: CoalesceExpression) : Doc =
     functionName cfg "COALESCE"
     <+> TSqlFormatter.Doc.Doc.Union(flatArgs, expandedArgs)
 
-and private iifCallDoc (cfg: FormattingStyle) (iif: IIfCall) : Doc =
+and private iifCallDoc (cfg: Style) (iif: IIfCall) : Doc =
     functionName cfg "IIF"
     <+> text "("
     <+> boolExprDoc cfg iif.Predicate
@@ -867,7 +862,7 @@ and private iifCallDoc (cfg: FormattingStyle) (iif: IIfCall) : Doc =
     <++> exprDoc cfg iif.ElseExpression
     <+> text ")"
 
-and private nullIfDoc (cfg: FormattingStyle) (n: NullIfExpression) : Doc =
+and private nullIfDoc (cfg: Style) (n: NullIfExpression) : Doc =
     functionName cfg "NULLIF"
     <+> text "("
     <+> exprDoc cfg n.FirstExpression
@@ -877,7 +872,7 @@ and private nullIfDoc (cfg: FormattingStyle) (n: NullIfExpression) : Doc =
 
 // ─── Boolean expressions ───
 
-and private boolCompDoc (cfg: FormattingStyle) (bc: BooleanComparisonExpression) : Doc =
+and private boolCompDoc (cfg: Style) (bc: BooleanComparisonExpression) : Doc =
     if fragmentHasComments bc then
         tokenStreamDoc cfg bc
     else
@@ -902,7 +897,7 @@ and private boolCompDoc (cfg: FormattingStyle) (bc: BooleanComparisonExpression)
         else
             lhs <+> text op <+> rhs
 
-and private boolBinaryDoc (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc =
+and private boolBinaryDoc (cfg: Style) (bb: BooleanBinaryExpression) : Doc =
     let opText =
         match bb.BinaryExpressionType with
         | BooleanBinaryExpressionType.And -> "AND"
@@ -913,7 +908,7 @@ and private boolBinaryDoc (cfg: FormattingStyle) (bb: BooleanBinaryExpression) :
     let rhs = exprDoc cfg bb.SecondExpression
     lhs <+> line <+> nest (indentWidth cfg) (keyword cfg opText <++> rhs)
 
-and private boolParenDoc (cfg: FormattingStyle) (bp: BooleanParenthesisExpression) : Doc =
+and private boolParenDoc (cfg: Style) (bp: BooleanParenthesisExpression) : Doc =
     let inner = boolExprDoc cfg bp.Expression
     let flatDoc = text "(" <+> flatten inner <+> text ")"
 
@@ -923,7 +918,7 @@ and private boolParenDoc (cfg: FormattingStyle) (bp: BooleanParenthesisExpressio
     TSqlFormatter.Doc.Doc.Union(flatDoc, expandedDoc)
 
 and private queryParensDoc
-    (cfg: FormattingStyle)
+    (cfg: Style)
     (allowCollapse: bool)
     (queryExpr: QueryExpression)
     (expandedDoc: Doc)
@@ -940,7 +935,7 @@ and private queryParensDoc
         expandedDoc
 
 and private blockParenthesizedQueryDoc
-    (cfg: FormattingStyle)
+    (cfg: Style)
     (allowCollapse: bool)
     (queryExpr: QueryExpression)
     (inner: Doc)
@@ -951,7 +946,7 @@ and private blockParenthesizedQueryDoc
     queryParensDoc cfg allowCollapse queryExpr expandedDoc inner
 
 and private inlineParenthesizedQueryDoc
-    (cfg: FormattingStyle)
+    (cfg: Style)
     (allowCollapse: bool)
     (queryExpr: QueryExpression)
     (inner: Doc)
@@ -959,7 +954,7 @@ and private inlineParenthesizedQueryDoc
     let expandedDoc = text "(" <+> inner <+> text ")"
     queryParensDoc cfg allowCollapse queryExpr expandedDoc inner
 
-and private inPredicateDoc (cfg: FormattingStyle) (inp: InPredicate) : Doc =
+and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
     let lhs = exprDoc cfg inp.Expression
 
     let notPart =
@@ -1000,7 +995,7 @@ and private inPredicateDoc (cfg: FormattingStyle) (inp: InPredicate) : Doc =
 
         TSqlFormatter.Doc.Doc.Union(flatContent, expandedContent)
 
-and private likePredicateDoc (cfg: FormattingStyle) (lk: LikePredicate) : Doc =
+and private likePredicateDoc (cfg: Style) (lk: LikePredicate) : Doc =
     let lhs = exprDoc cfg lk.FirstExpression
     let rhs = exprDoc cfg lk.SecondExpression
 
@@ -1018,7 +1013,7 @@ and private likePredicateDoc (cfg: FormattingStyle) (lk: LikePredicate) : Doc =
 
     lhs <++> notPart <+> keyword cfg "LIKE" <++> rhs <+> escape
 
-and private betweenDoc (cfg: FormattingStyle) (be: BooleanTernaryExpression) : Doc =
+and private betweenDoc (cfg: Style) (be: BooleanTernaryExpression) : Doc =
     let e = exprDoc cfg be.FirstExpression
     let lo = exprDoc cfg be.SecondExpression
     let hi = exprDoc cfg be.ThirdExpression
@@ -1031,7 +1026,7 @@ and private betweenDoc (cfg: FormattingStyle) (be: BooleanTernaryExpression) : D
 
     e <++> notPart <+> keyword cfg "BETWEEN" <++> lo <++> keyword cfg "AND" <++> hi
 
-and private binaryExprDoc (cfg: FormattingStyle) (be: BinaryExpression) : Doc =
+and private binaryExprDoc (cfg: Style) (be: BinaryExpression) : Doc =
     let op =
         match be.BinaryExpressionType with
         | BinaryExpressionType.Add -> "+"
@@ -1054,21 +1049,17 @@ and private binaryExprDoc (cfg: FormattingStyle) (be: BinaryExpression) : Doc =
 
 // ─── Parenthesized expressions ───
 
-and private parenExprDoc (cfg: FormattingStyle) (p: ParenthesisExpression) : Doc =
+and private parenExprDoc (cfg: Style) (p: ParenthesisExpression) : Doc =
     text "(" <+> exprDoc cfg p.Expression <+> text ")"
 
-and private scalarSubqueryDoc (cfg: FormattingStyle) (sq: ScalarSubquery) : Doc =
+and private scalarSubqueryDoc (cfg: Style) (sq: ScalarSubquery) : Doc =
     blockParenthesizedQueryDoc cfg true sq.QueryExpression (queryExprDoc cfg sq.QueryExpression)
 
 // ─── Query expressions ───
 
-and private queryExprDoc (cfg: FormattingStyle) (qe: QueryExpression) : Doc = querySpecOrExprDoc cfg qe None
+and private queryExprDoc (cfg: Style) (qe: QueryExpression) : Doc = querySpecOrExprDoc cfg qe None
 
-and private querySpecOrExprDoc
-    (cfg: FormattingStyle)
-    (qe: QueryExpression)
-    (intoTarget: TrailingFragmentDoc option)
-    : Doc =
+and private querySpecOrExprDoc (cfg: Style) (qe: QueryExpression) (intoTarget: TrailingFragmentDoc option) : Doc =
     match qe with
     | :? QuerySpecification as qs -> querySpecDoc cfg qs intoTarget
     | :? BinaryQueryExpression as bqe -> binaryQueryDoc cfg bqe
@@ -1076,11 +1067,7 @@ and private querySpecOrExprDoc
         blockParenthesizedQueryDoc cfg false qpe.QueryExpression (queryExprDoc cfg qpe.QueryExpression)
     | _ -> tokenStreamDoc cfg qe
 
-and private querySpecDoc
-    (cfg: FormattingStyle)
-    (qs: QuerySpecification)
-    (intoTarget: TrailingFragmentDoc option)
-    : Doc =
+and private querySpecDoc (cfg: Style) (qs: QuerySpecification) (intoTarget: TrailingFragmentDoc option) : Doc =
     // SELECT clause
     let selectKw =
         let s = keyword cfg "SELECT"
@@ -1206,7 +1193,7 @@ and private querySpecDoc
 
     join line parts
 
-and private booleanSequenceItems (cfg: FormattingStyle) (bb: BooleanBinaryExpression) : Doc list =
+and private booleanSequenceItems (cfg: Style) (bb: BooleanBinaryExpression) : Doc list =
     let opText =
         match bb.BinaryExpressionType with
         | BooleanBinaryExpressionType.And -> "AND"
@@ -1238,7 +1225,7 @@ and private booleanSequenceItems (cfg: FormattingStyle) (bb: BooleanBinaryExpres
 
     leftPartsWithComments @ [ rightPart ]
 
-and private orderByElemDoc (cfg: FormattingStyle) (o: ExpressionWithSortOrder) : Doc =
+and private orderByElemDoc (cfg: Style) (o: ExpressionWithSortOrder) : Doc =
     let e = exprDoc cfg o.Expression
 
     match o.SortOrder with
@@ -1248,7 +1235,7 @@ and private orderByElemDoc (cfg: FormattingStyle) (o: ExpressionWithSortOrder) :
 
 // ─── Table references ───
 
-and private tableRefDoc (cfg: FormattingStyle) (tr: TableReference) : Doc =
+and private tableRefDoc (cfg: Style) (tr: TableReference) : Doc =
     match tr with
     | :? QualifiedJoin as qj -> qualifiedJoinDoc cfg qj
     | :? UnqualifiedJoin as uj -> unqualifiedJoinDoc cfg uj
@@ -1257,7 +1244,7 @@ and private tableRefDoc (cfg: FormattingStyle) (tr: TableReference) : Doc =
     | :? SchemaObjectFunctionTableReference as softr -> schemaObjectFuncTableDoc cfg softr
     | _ -> tokenStreamDoc cfg tr
 
-and private namedTableDoc (cfg: FormattingStyle) (ntr: NamedTableReference) : Doc =
+and private namedTableDoc (cfg: Style) (ntr: NamedTableReference) : Doc =
     let nameDoc = schemaObjectNameDoc cfg ntr.SchemaObject
 
     let hints =
@@ -1292,11 +1279,11 @@ and private namedTableDoc (cfg: FormattingStyle) (ntr: NamedTableReference) : Do
 
     nameDoc <+> hints <+> alias
 
-and private schemaObjectNameDoc (_cfg: FormattingStyle) (son: SchemaObjectName) : Doc =
+and private schemaObjectNameDoc (_cfg: Style) (son: SchemaObjectName) : Doc =
     let parts = son.Identifiers |> Seq.map identDoc |> Seq.toList
     join (text ".") parts
 
-and private qualifiedJoinDoc (cfg: FormattingStyle) (qj: QualifiedJoin) : Doc =
+and private qualifiedJoinDoc (cfg: Style) (qj: QualifiedJoin) : Doc =
     let firstTable = tableRefDoc cfg qj.FirstTableReference
 
     let joinType =
@@ -1327,7 +1314,7 @@ and private qualifiedJoinDoc (cfg: FormattingStyle) (qj: QualifiedJoin) : Doc =
     firstTable <+> line <+> joinType <++> secondTable
     <+> nest (indentWidth cfg) (line <+> onCondition)
 
-and private unqualifiedJoinDoc (cfg: FormattingStyle) (uj: UnqualifiedJoin) : Doc =
+and private unqualifiedJoinDoc (cfg: Style) (uj: UnqualifiedJoin) : Doc =
     let firstTable = tableRefDoc cfg uj.FirstTableReference
 
     let joinType =
@@ -1340,7 +1327,7 @@ and private unqualifiedJoinDoc (cfg: FormattingStyle) (uj: UnqualifiedJoin) : Do
     let secondTable = tableRefDoc cfg uj.SecondTableReference
     firstTable <+> line <+> joinType <++> secondTable
 
-and private queryDerivedTableDoc (cfg: FormattingStyle) (qdt: QueryDerivedTable) : Doc =
+and private queryDerivedTableDoc (cfg: Style) (qdt: QueryDerivedTable) : Doc =
     let inner = queryExprDoc cfg qdt.QueryExpression
 
     let parenDoc =
@@ -1354,7 +1341,7 @@ and private queryDerivedTableDoc (cfg: FormattingStyle) (qdt: QueryDerivedTable)
 
     parenDoc <+> aliasDoc
 
-and private schemaObjectFuncTableDoc (cfg: FormattingStyle) (softr: SchemaObjectFunctionTableReference) : Doc =
+and private schemaObjectFuncTableDoc (cfg: Style) (softr: SchemaObjectFunctionTableReference) : Doc =
     let nameDoc = schemaObjectNameDoc cfg softr.SchemaObject
 
     let args =
@@ -1388,7 +1375,7 @@ and private schemaObjectFuncTableDoc (cfg: FormattingStyle) (softr: SchemaObject
 
 // ─── Binary Query (UNION, EXCEPT, INTERSECT) ───
 
-and private binaryQueryDoc (cfg: FormattingStyle) (bqe: BinaryQueryExpression) : Doc =
+and private binaryQueryDoc (cfg: Style) (bqe: BinaryQueryExpression) : Doc =
     let lhs = queryExprDoc cfg bqe.FirstQueryExpression
     let rhs = queryExprDoc cfg bqe.SecondQueryExpression
 
@@ -1429,7 +1416,7 @@ and private binaryQueryDoc (cfg: FormattingStyle) (bqe: BinaryQueryExpression) :
 
 // ─── SELECT statement (top-level, with ORDER BY, FOR, etc.) ───
 
-and private selectStatementDoc (cfg: FormattingStyle) (ss: SelectStatement) : Doc =
+and private selectStatementDoc (cfg: Style) (ss: SelectStatement) : Doc =
     let intoTarget =
         if ss.Into <> null then
             Some(trailingFragmentDoc (ss.Into :> TSqlFragment) (schemaObjectNameDoc cfg ss.Into))
@@ -1462,7 +1449,7 @@ and private selectStatementDoc (cfg: FormattingStyle) (ss: SelectStatement) : Do
 
     join line parts
 
-and private cteExprDoc (cfg: FormattingStyle) (cte: CommonTableExpression) : Doc =
+and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
     let nameDoc = identDoc cte.ExpressionName
 
     let colsDoc =
@@ -1489,7 +1476,7 @@ and private cteExprDoc (cfg: FormattingStyle) (cte: CommonTableExpression) : Doc
 // ─── DDL: ALTER/CREATE FUNCTION/PROCEDURE ───
 
 and private ddlParamListDoc
-    (cfg: FormattingStyle)
+    (cfg: Style)
     (parameters: System.Collections.Generic.IList<ProcedureParameter>)
     (trailingCommentMap: Map<int, string>)
     (wrapInParens: bool)
@@ -1542,7 +1529,7 @@ and private ddlParamListDoc
             nest (indentWidth cfg) (line <+> paramsBody)
 
 and private statementListDoc
-    (cfg: FormattingStyle)
+    (cfg: Style)
     (statementContext: StatementContext)
     (separator: Doc)
     (fallback: Doc)
@@ -1563,11 +1550,11 @@ and private statementListDoc
             attachOwnLineComments
         |> join separator
 
-and private routineWithAsDoc (cfg: FormattingStyle) (header: Doc) (paramsDoc: Doc) (bodyDoc: Doc) : Doc =
+and private routineWithAsDoc (cfg: Style) (header: Doc) (paramsDoc: Doc) (bodyDoc: Doc) : Doc =
     header <+> paramsDoc <+> line <+> keyword cfg "AS" <+> line <+> bodyDoc
 
 and private functionHeaderDoc
-    (cfg: FormattingStyle)
+    (cfg: Style)
     (name: SchemaObjectName)
     (parameters: System.Collections.Generic.IList<ProcedureParameter>)
     : Doc =
@@ -1577,7 +1564,7 @@ and private functionHeaderDoc
     let paramsDoc = ddlParamListDoc cfg parameters commentMap true
     header <+> paramsDoc
 
-and private returnTypeDoc (cfg: FormattingStyle) (stmt: TSqlStatement) (returnType: FunctionReturnType) : Doc =
+and private returnTypeDoc (cfg: Style) (stmt: TSqlStatement) (returnType: FunctionReturnType) : Doc =
     let returnsComment, returnsKeywordDoc = returnsKeyword cfg stmt
 
     let returnsWith (doc: Doc) =
@@ -1630,7 +1617,7 @@ and private inlineTvfBodyStartsWithParen (stmt: TSqlStatement) : bool =
             | None -> false
             | Some idx -> stream.[idx].TokenType = TSqlTokenType.LeftParenthesis
 
-and private functionBodyDoc (cfg: FormattingStyle) (stmt: FunctionStatementBody) : Doc =
+and private functionBodyDoc (cfg: Style) (stmt: FunctionStatementBody) : Doc =
     match stmt.ReturnType with
     | :? SelectFunctionReturnType as sfrt ->
         let stmt = stmt :> TSqlStatement
@@ -1652,7 +1639,7 @@ and private functionBodyDoc (cfg: FormattingStyle) (stmt: FunctionStatementBody)
         <++> methodSpecifierDoc stmt.MethodSpecifier
     | _ -> statementListDoc cfg standaloneStatementContext line (tokenStreamDoc cfg stmt) stmt.StatementList
 
-and private executeAsOptionNameDoc (cfg: FormattingStyle) (executeAs: ExecuteAsOption) : Doc =
+and private executeAsOptionNameDoc (cfg: Style) (executeAs: ExecuteAsOption) : Doc =
     match executeAs with
     | ExecuteAsOption.Caller -> keyword cfg "CALLER"
     | ExecuteAsOption.Self -> keyword cfg "SELF"
@@ -1662,7 +1649,7 @@ and private executeAsOptionNameDoc (cfg: FormattingStyle) (executeAs: ExecuteAsO
     | ExecuteAsOption.User -> keyword cfg "USER"
     | _ -> text (executeAs.ToString().ToUpperInvariant())
 
-and private executeAsClauseDoc (cfg: FormattingStyle) (clause: ExecuteAsClause) : Doc =
+and private executeAsClauseDoc (cfg: Style) (clause: ExecuteAsClause) : Doc =
     let principalDoc =
         if clause.Literal <> null then
             exprDoc cfg clause.Literal
@@ -1676,37 +1663,33 @@ and private executeAsClauseDoc (cfg: FormattingStyle) (clause: ExecuteAsClause) 
     else
         keyword cfg "EXECUTE" <++> keyword cfg "AS" <++> optionDoc <++> principalDoc
 
-and private optionStateDoc (cfg: FormattingStyle) (state: OptionState) : Doc =
+and private optionStateDoc (cfg: Style) (state: OptionState) : Doc =
     match state with
     | OptionState.On -> keyword cfg "ON"
     | OptionState.Off -> keyword cfg "OFF"
     | OptionState.Primary -> keyword cfg "PRIMARY"
     | _ -> text (state.ToString().ToUpperInvariant())
 
-and private functionOptionDoc (cfg: FormattingStyle) (option: FunctionOption) : Doc =
+and private functionOptionDoc (cfg: Style) (option: FunctionOption) : Doc =
     match option with
     | :? ExecuteAsFunctionOption as executeAs -> executeAsClauseDoc cfg executeAs.ExecuteAs
     | :? InlineFunctionOption as inlineOpt ->
         keyword cfg "INLINE" <++> text "=" <++> optionStateDoc cfg inlineOpt.OptionState
     | _ -> tokenStreamDoc cfg option
 
-and private procedureOptionDoc (cfg: FormattingStyle) (option: ProcedureOption) : Doc =
+and private procedureOptionDoc (cfg: Style) (option: ProcedureOption) : Doc =
     match option with
     | :? ExecuteAsProcedureOption as executeAs -> executeAsClauseDoc cfg executeAs.ExecuteAs
     | _ -> tokenStreamDoc cfg option
 
-and private viewOptionDoc (cfg: FormattingStyle) (option: ViewOption) : Doc =
+and private viewOptionDoc (cfg: Style) (option: ViewOption) : Doc =
     match option.OptionKind with
     | ViewOptionKind.Encryption -> keyword cfg "ENCRYPTION"
     | ViewOptionKind.SchemaBinding -> keyword cfg "SCHEMABINDING"
     | ViewOptionKind.ViewMetadata -> keyword cfg "VIEW_METADATA"
     | _ -> tokenStreamDoc cfg option
 
-and private optionsClauseDoc
-    (cfg: FormattingStyle)
-    (optionDoc: 'T -> Doc)
-    (options: System.Collections.Generic.IList<'T>)
-    : Doc =
+and private optionsClauseDoc (cfg: Style) (optionDoc: 'T -> Doc) (options: System.Collections.Generic.IList<'T>) : Doc =
     if options = null || options.Count = 0 then
         empty
     else
@@ -1720,7 +1703,7 @@ and private methodSpecifierDoc (ms: MethodSpecifier) : Doc =
     <+> text "."
     <+> text ms.MethodName.Value
 
-and private orderHintDoc (cfg: FormattingStyle) (orderHint: OrderBulkInsertOption) : Doc =
+and private orderHintDoc (cfg: Style) (orderHint: OrderBulkInsertOption) : Doc =
     if orderHint = null then
         empty
     else
@@ -1738,7 +1721,7 @@ and private orderHintDoc (cfg: FormattingStyle) (orderHint: OrderBulkInsertOptio
         <+> join (text ", ") columns
         <+> text ")"
 
-and private procedureBodyDoc (cfg: FormattingStyle) (stmt: ProcedureStatementBody) : Doc =
+and private procedureBodyDoc (cfg: Style) (stmt: ProcedureStatementBody) : Doc =
     if stmt.MethodSpecifier <> null then
         keyword cfg "EXTERNAL"
         <++> keyword cfg "NAME"
@@ -1809,7 +1792,7 @@ and private getParamTrailingComments
         |> Seq.choose (fun (i, comment) -> comment |> Option.map (fun c -> i, c))
         |> Map.ofSeq
 
-and private functionStatementDoc (cfg: FormattingStyle) (verb: string) (stmt: FunctionStatementBody) : Doc =
+and private functionStatementDoc (cfg: Style) (verb: string) (stmt: FunctionStatementBody) : Doc =
     keyword cfg verb <++> functionHeaderDoc cfg stmt.Name stmt.Parameters
     <+> optionsClauseDoc cfg (functionOptionDoc cfg) stmt.Options
     <+> line
@@ -1820,13 +1803,11 @@ and private functionStatementDoc (cfg: FormattingStyle) (verb: string) (stmt: Fu
     <+> line
     <+> functionBodyDoc cfg stmt
 
-and private alterFunctionDoc (cfg: FormattingStyle) (af: AlterFunctionStatement) : Doc =
-    functionStatementDoc cfg "ALTER" af
+and private alterFunctionDoc (cfg: Style) (af: AlterFunctionStatement) : Doc = functionStatementDoc cfg "ALTER" af
 
-and private createFunctionDoc (cfg: FormattingStyle) (cf: CreateFunctionStatement) : Doc =
-    functionStatementDoc cfg "CREATE" cf
+and private createFunctionDoc (cfg: Style) (cf: CreateFunctionStatement) : Doc = functionStatementDoc cfg "CREATE" cf
 
-and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatement) : Doc =
+and private alterProcedureDoc (cfg: Style) (ap: AlterProcedureStatement) : Doc =
     let header =
         keyword cfg "ALTER"
         <++> keyword cfg "PROCEDURE"
@@ -1846,7 +1827,7 @@ and private alterProcedureDoc (cfg: FormattingStyle) (ap: AlterProcedureStatemen
     <+> line
     <+> bodyDoc
 
-and private createProcedureDoc (cfg: FormattingStyle) (cp: CreateProcedureStatement) : Doc =
+and private createProcedureDoc (cfg: Style) (cp: CreateProcedureStatement) : Doc =
     let header =
         keyword cfg "CREATE"
         <++> keyword cfg "PROCEDURE"
@@ -1866,7 +1847,7 @@ and private createProcedureDoc (cfg: FormattingStyle) (cp: CreateProcedureStatem
     <+> line
     <+> bodyDoc
 
-and private setOnOffDoc (cfg: FormattingStyle) (stmt: SetOnOffStatement) : Doc =
+and private setOnOffDoc (cfg: Style) (stmt: SetOnOffStatement) : Doc =
     let formatSetOption (option: SetOptions) =
         match option with
         | SetOptions.QuotedIdentifier -> keyword cfg "QUOTED_IDENTIFIER"
@@ -1936,7 +1917,7 @@ and private setOnOffDoc (cfg: FormattingStyle) (stmt: SetOnOffStatement) : Doc =
 
     keyword cfg "SET" <++> optionsDoc <++> stateDoc
 
-and private dropTableDoc (cfg: FormattingStyle) (stmt: DropTableStatement) : Doc =
+and private dropTableDoc (cfg: Style) (stmt: DropTableStatement) : Doc =
     let baseParts =
         [ keyword cfg "DROP"
           keyword cfg "TABLE"
@@ -1950,17 +1931,17 @@ and private dropTableDoc (cfg: FormattingStyle) (stmt: DropTableStatement) : Doc
 
     baseDoc <++> join (text "," <+> text " ") tableDocs
 
-and private viewColumnsDoc (cfg: FormattingStyle) (columns: IList<Identifier>) : Doc =
+and private viewColumnsDoc (cfg: Style) (columns: IList<Identifier>) : Doc =
     if columns = null || columns.Count = 0 then
         empty
     else
         let columnDocs = columns |> Seq.map identDoc |> Seq.toList
         text "(" <+> join (text "," <+> line) columnDocs <+> text ")"
 
-and private viewOptionsDoc (cfg: FormattingStyle) (options: IList<ViewOption>) : Doc =
+and private viewOptionsDoc (cfg: Style) (options: IList<ViewOption>) : Doc =
     optionsClauseDoc cfg (viewOptionDoc cfg) options
 
-and private viewStatementDoc (cfg: FormattingStyle) (verb: string) (vs: ViewStatementBody) : Doc =
+and private viewStatementDoc (cfg: Style) (verb: string) (vs: ViewStatementBody) : Doc =
     let header =
         keyword cfg verb
         <++> keyword cfg "VIEW"
@@ -1979,7 +1960,7 @@ and private viewStatementDoc (cfg: FormattingStyle) (verb: string) (vs: ViewStat
 
     header <+> columnsDoc <+> optionsDoc <+> asDoc <+> selectDoc <+> checkOptionDoc
 
-and private createTableElementDoc (cfg: FormattingStyle) (frag: TSqlFragment) : Doc =
+and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
     match frag with
     | :? ColumnDefinition as col ->
         let nameDoc = identDoc col.ColumnIdentifier
@@ -2095,7 +2076,7 @@ and private createTableElementDoc (cfg: FormattingStyle) (frag: TSqlFragment) : 
         prefixDoc <++> columnsDoc <+> optionsDoc <+> onDoc
     | _ -> tokenStreamDoc cfg frag
 
-and private createTableDoc (cfg: FormattingStyle) (ct: CreateTableStatement) : Doc =
+and private createTableDoc (cfg: Style) (ct: CreateTableStatement) : Doc =
     let header =
         keyword cfg "CREATE"
         <++> keyword cfg "TABLE"
@@ -2137,7 +2118,7 @@ and private createTableDoc (cfg: FormattingStyle) (ct: CreateTableStatement) : D
 
 // ─── Control flow ───
 
-and private beginEndDoc (cfg: FormattingStyle) (be: BeginEndBlockStatement) : Doc =
+and private beginEndDoc (cfg: Style) (be: BeginEndBlockStatement) : Doc =
     let stmts =
         if be.StatementList <> null then
             let statements =
@@ -2160,7 +2141,7 @@ and private beginEndDoc (cfg: FormattingStyle) (be: BeginEndBlockStatement) : Do
     <+> line
     <+> keyword cfg "END"
 
-and private ifDoc (cfg: FormattingStyle) (ifs: IfStatement) : Doc =
+and private ifDoc (cfg: Style) (ifs: IfStatement) : Doc =
     let ifCondition = headedConditionDoc cfg (keyword cfg "IF") ifs.Predicate
 
     let thenDoc =
@@ -2182,12 +2163,12 @@ and private ifDoc (cfg: FormattingStyle) (ifs: IfStatement) : Doc =
 
     ifCondition <+> thenDoc <+> elseDoc
 
-and private whileDoc (cfg: FormattingStyle) (ws: WhileStatement) : Doc =
+and private whileDoc (cfg: Style) (ws: WhileStatement) : Doc =
     let whileCondition = headedConditionDoc cfg (keyword cfg "WHILE") ws.Predicate
     let bodyDoc = statementDoc cfg standaloneStatementContext ws.Statement
     whileCondition <+> line <+> bodyDoc
 
-and private tryCatchDoc (cfg: FormattingStyle) (tc: TryCatchStatement) : Doc =
+and private tryCatchDoc (cfg: Style) (tc: TryCatchStatement) : Doc =
     let tryStmts =
         if tc.TryStatements <> null then
             tc.TryStatements.Statements
@@ -2221,7 +2202,7 @@ and private tryCatchDoc (cfg: FormattingStyle) (tc: TryCatchStatement) : Doc =
 
 // ─── Other DML ───
 
-and private insertDoc (cfg: FormattingStyle) (ins: InsertStatement) : Doc =
+and private insertDoc (cfg: Style) (ins: InsertStatement) : Doc =
     let spec = ins.InsertSpecification
 
     let target =
@@ -2274,12 +2255,12 @@ and private insertDoc (cfg: FormattingStyle) (ins: InsertStatement) : Doc =
 
     header <+> colsDoc <+> line <+> sourceDoc
 
-and private setClauseDoc (cfg: FormattingStyle) (sc: SetClause) : Doc =
+and private setClauseDoc (cfg: Style) (sc: SetClause) : Doc =
     match sc with
     | :? AssignmentSetClause as asc -> assignmentSetClauseDoc cfg asc
     | _ -> tokenStreamDoc cfg sc
 
-and private updateDoc (cfg: FormattingStyle) (upd: UpdateStatement) : Doc =
+and private updateDoc (cfg: Style) (upd: UpdateStatement) : Doc =
     let spec = upd.UpdateSpecification
 
     let target =
@@ -2306,7 +2287,7 @@ and private updateDoc (cfg: FormattingStyle) (upd: UpdateStatement) : Doc =
 
     join line parts
 
-and private deleteDoc (cfg: FormattingStyle) (del: DeleteStatement) : Doc =
+and private deleteDoc (cfg: Style) (del: DeleteStatement) : Doc =
     let spec = del.DeleteSpecification
 
     let target =
@@ -2330,7 +2311,7 @@ and private deleteDoc (cfg: FormattingStyle) (del: DeleteStatement) : Doc =
 
     join line parts
 
-and private assignmentSetClauseDoc (cfg: FormattingStyle) (asc: AssignmentSetClause) : Doc =
+and private assignmentSetClauseDoc (cfg: Style) (asc: AssignmentSetClause) : Doc =
     let col = columnRefDoc cfg asc.Column
     let value = exprDoc cfg asc.NewValue
 
@@ -2349,7 +2330,7 @@ and private assignmentSetClauseDoc (cfg: FormattingStyle) (asc: AssignmentSetCla
 
     col <++> text op <++> value
 
-and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
+and private mergeDoc (cfg: Style) (merge: MergeStatement) : Doc =
     let spec = merge.MergeSpecification
 
     let target =
@@ -2456,7 +2437,7 @@ and private mergeDoc (cfg: FormattingStyle) (merge: MergeStatement) : Doc =
 
 // ─── Variables ───
 
-and private declareDoc (cfg: FormattingStyle) (decl: DeclareVariableStatement) : Doc =
+and private declareDoc (cfg: Style) (decl: DeclareVariableStatement) : Doc =
     let varDocs =
         decl.Declarations
         |> Seq.map (fun d ->
@@ -2474,7 +2455,7 @@ and private declareDoc (cfg: FormattingStyle) (decl: DeclareVariableStatement) :
 
     formatList cfg (keyword cfg "DECLARE") varDocs
 
-and private setVarDoc (cfg: FormattingStyle) (sv: SetVariableStatement) : Doc =
+and private setVarDoc (cfg: Style) (sv: SetVariableStatement) : Doc =
     let varDoc = text sv.Variable.Name
 
     let op =
@@ -2491,7 +2472,7 @@ and private setVarDoc (cfg: FormattingStyle) (sv: SetVariableStatement) : Doc =
 
 // ─── Statement dispatcher ───
 
-and private statementDoc (cfg: FormattingStyle) (context: StatementContext) (stmt: TSqlStatement) : Doc =
+and private statementDoc (cfg: Style) (context: StatementContext) (stmt: TSqlStatement) : Doc =
     let semicolon (doc: Doc) =
         if context.HasTrailingSemicolon && hasTrailingSemicolon stmt then
             doc <+> text ";"
@@ -2593,7 +2574,7 @@ let private leadingCommentsDoc (script: TSqlScript) : Doc =
                     join line commentDocs <+> line
 
 /// Format a T-SQL string using the given configuration.
-let format (config: FormattingStyle) (sql: string) : Result<string, string list> =
+let format (config: Style) (sql: string) : Result<string, string list> =
     let parser = TSql160Parser(initialQuotedIdentifiers = true)
     use reader = new StringReader(sql)
     let mutable errors = null: System.Collections.Generic.IList<ParseError>
@@ -2624,4 +2605,4 @@ let format (config: FormattingStyle) (sql: string) : Result<string, string list>
             Ok(render config.whitespace.wrapLinesLongerThan result)
         | _ -> Ok(render config.whitespace.wrapLinesLongerThan (tokenStreamDoc config fragment))
 
-let formatBooleanExpressionDoc (cfg: FormattingStyle) (expr: BooleanExpression) : Doc = boolExprDoc cfg expr
+let formatBooleanExpressionDoc (cfg: Style) (expr: BooleanExpression) : Doc = boolExprDoc cfg expr

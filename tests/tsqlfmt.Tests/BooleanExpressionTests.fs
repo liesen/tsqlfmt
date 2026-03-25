@@ -1,7 +1,7 @@
 module BooleanExpressionTests
 
 open Xunit
-open TSqlFormatter.Config
+open TSqlFormatter.Style
 open TestSupport
 
 [<Fact>]

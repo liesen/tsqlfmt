@@ -4,7 +4,7 @@ open System
 open System.IO
 open Xunit
 open TSqlFormatter.CliArgs
-open TSqlFormatter.Config
+open TSqlFormatter.Style
 open TSqlFormatter.Program
 open TestSupport
 
@@ -178,7 +178,7 @@ let ``withOptionalCasing preserves style casing when applyCasing is true`` () =
     Assert.Equal(CasingStyle.Uppercase, result.casing.reservedKeywords)
 
 [<Fact>]
-let ``loadConfig parses unsupported right aligned boolean alignment`` () =
+let ``loadStyle parses unsupported right aligned boolean alignment`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
 
@@ -186,14 +186,14 @@ let ``loadConfig parses unsupported right aligned boolean alignment`` () =
         let stylePath = Path.Combine(stylesDir, "style.json")
         File.WriteAllText(stylePath, """{"operators":{"andOr":{"alignment":"rightAligned"}}}""")
 
-        let style = loadConfig stylePath
+        let style = loadStyle stylePath
 
         Assert.Equal(Alignment.RightAligned, style.operators.andOr.alignment)
     finally
         Directory.Delete(stylesDir, true)
 
 [<Fact>]
-let ``validateConfig rejects unsupported right aligned boolean alignment`` () =
+let ``validateStyle rejects unsupported right aligned boolean alignment`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
 
@@ -201,8 +201,8 @@ let ``validateConfig rejects unsupported right aligned boolean alignment`` () =
         let stylePath = Path.Combine(stylesDir, "style.json")
         File.WriteAllText(stylePath, """{"operators":{"andOr":{"alignment":"rightAligned"}}}""")
 
-        let style = loadConfig stylePath
-        let ex = Assert.Throws<ArgumentException>(fun () -> validateConfig style |> ignore)
+        let style = loadStyle stylePath
+        let ex = Assert.Throws<ArgumentException>(fun () -> validateStyle style |> ignore)
 
         Assert.Contains("operators.andOr.alignment", ex.Message)
         Assert.Contains("not supported", ex.Message)
@@ -210,7 +210,7 @@ let ``validateConfig rejects unsupported right aligned boolean alignment`` () =
         Directory.Delete(stylesDir, true)
 
 [<Fact>]
-let ``loadConfig parses unsupported right aligned case end alignment`` () =
+let ``loadStyle parses unsupported right aligned case end alignment`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
 
@@ -218,14 +218,14 @@ let ``loadConfig parses unsupported right aligned case end alignment`` () =
         let stylePath = Path.Combine(stylesDir, "style.json")
         File.WriteAllText(stylePath, """{"caseExpressions":{"endAlignment":"rightAlignedToWhen"}}""")
 
-        let style = loadConfig stylePath
+        let style = loadStyle stylePath
 
         Assert.Equal(EndAlignment.RightAlignedToWhen, style.caseExpressions.endAlignment)
     finally
         Directory.Delete(stylesDir, true)
 
 [<Fact>]
-let ``validateConfig rejects unsupported right aligned case end alignment`` () =
+let ``validateStyle rejects unsupported right aligned case end alignment`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore
 
@@ -233,9 +233,9 @@ let ``validateConfig rejects unsupported right aligned case end alignment`` () =
         let stylePath = Path.Combine(stylesDir, "style.json")
         File.WriteAllText(stylePath, """{"caseExpressions":{"endAlignment":"rightAlignedToWhen"}}""")
 
-        let style = loadConfig stylePath
+        let style = loadStyle stylePath
 
-        let ex = Assert.Throws<ArgumentException>(fun () -> validateConfig style |> ignore)
+        let ex = Assert.Throws<ArgumentException>(fun () -> validateStyle style |> ignore)
 
         Assert.Contains("caseExpressions.endAlignment", ex.Message)
         Assert.Contains("not supported", ex.Message)

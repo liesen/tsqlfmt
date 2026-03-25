@@ -4,7 +4,7 @@ open System
 open System.IO
 open BenchmarkDotNet.Attributes
 open BenchmarkDotNet.Running
-open TSqlFormatter.Config
+open TSqlFormatter.Style
 open TSqlFormatter.Formatter
 
 [<MemoryDiagnoser>]
@@ -18,7 +18,7 @@ type FormatterBenchmarks() =
            Path.Combine(testDataDir, "test15.actual.sql")
            Path.Combine(testDataDir, "test27.actual.sql") |]
 
-    let style = loadConfig defaultStylePath
+    let style = loadStyle defaultStylePath
 
     [<DefaultValue>]
     val mutable public sql: string

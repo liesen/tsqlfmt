@@ -5,7 +5,7 @@ open System.IO
 open Xunit
 open Microsoft.SqlServer.TransactSql.ScriptDom
 open TSqlFormatter.Doc
-open TSqlFormatter.Config
+open TSqlFormatter.Style
 open TSqlFormatter.Formatter
 
 let testDataDir =
@@ -41,7 +41,7 @@ let configPath =
             Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "..", "default-style.json")
         )
 
-let config = loadConfig configPath
+let config = loadStyle configPath
 
 let withOptionalCasing applyCasing config =
     if applyCasing then
@@ -49,7 +49,7 @@ let withOptionalCasing applyCasing config =
     else
         { config with casing = defaultCasing }
 
-let assertFormatsToWithConfig (testConfig: FormattingStyle) (expected: string) (sql: string) =
+let assertFormatsToWithConfig (testConfig: Style) (expected: string) (sql: string) =
     let expectedSql = expected.ReplaceLineEndings("\n").Trim().TrimEnd()
 
     match format testConfig sql with

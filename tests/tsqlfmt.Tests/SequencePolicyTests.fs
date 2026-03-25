@@ -1,7 +1,7 @@
 module SequencePolicyTests
 
 open Xunit
-open TSqlFormatter.Config
+open TSqlFormatter.Style
 open TSqlFormatter.Formatter
 open TestSupport
 

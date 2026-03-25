@@ -4,10 +4,10 @@ module TSqlFormatter.Program
 open System
 open System.IO
 open TSqlFormatter.CliArgs
-open TSqlFormatter.Config
+open TSqlFormatter.Style
 open TSqlFormatter.Formatter
 
-let private withOptionalCasing (applyCasing: bool) (config: FormattingStyle) =
+let private withOptionalCasing (applyCasing: bool) (config: Style) =
     // SQL Prompt treats --applyCasing as a gate on the style's existing casing rules.
     // This is not ideal because the style already contains the casing intent, but we
     // keep the behavior for compatibility with SQL Prompt's CLI contract.
@@ -83,12 +83,12 @@ let main argv =
                 defaultStyle
             | Ok(Some configPath) ->
                 try
-                    loadConfig configPath |> validateConfig
+                    loadStyle configPath |> validateStyle
                 with ex ->
                     eprintfn "Error loading config '%s': %s" configPath ex.Message
                     exit 2
                     defaultStyle
-            | Ok None -> defaultStyle |> validateConfig
+            | Ok None -> defaultStyle |> validateStyle
             |> withOptionalCasing args.applyCasing
 
         let inputSql = Console.In.ReadToEnd()
