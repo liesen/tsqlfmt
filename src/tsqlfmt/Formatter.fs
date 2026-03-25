@@ -215,9 +215,8 @@ let private formatCommaList (cfg: Style) (keyword: Doc) (items: CommaListItem li
         not (items |> List.exists _.ForcesExpandedLayout)
         && canCollapseList cfg (items |> List.map _.Doc)
         ->
-        let flatDoc = flatCommaListDoc keyword items
         let expandedDoc = expandedCommaListDoc cfg keyword items
-        choice flatDoc expandedDoc
+        group expandedDoc
     | _ -> expandedCommaListDoc cfg keyword items
 
 let private formatList (cfg: Style) (keyword: Doc) (items: Doc list) : Doc =
@@ -935,26 +934,17 @@ and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
             (queryExprDoc cfg inp.Subquery.QueryExpression)
     else
         let valDocs = inp.Values |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
-        // Use Union to allow the renderer to collapse onto one line when it fits.
-        // The flat version has no spaces inside parens: IN (val1, val2)
-        // The expanded version has each value on a new indented line.
-        let flatContent =
-            flatten (
-                lhs <++> notPart <+> inKw <++> text "("
-                <+> join (text ", ") valDocs
-                <+> text ")"
-            )
 
         let expandedContent =
             let valSep = text "," <+> line
             let valsDoc = join valSep valDocs
 
             lhs <++> notPart <+> inKw <++> text "("
-            <+> nest (indentWidth cfg) (line <+> valsDoc)
-            <+> line
+            <+> nest (indentWidth cfg) (softline <+> valsDoc)
+            <+> softline
             <+> text ")"
 
-        choice flatContent expandedContent
+        group expandedContent
 
 and private likePredicateDoc (cfg: Style) (lk: LikePredicate) : Doc =
     let lhs = exprDoc cfg lk.FirstExpression
@@ -2337,15 +2327,14 @@ and private mergeDoc (cfg: Style) (merge: MergeStatement) : Doc =
                 let cols =
                     if ins.Columns <> null && ins.Columns.Count > 0 then
                         let colDocs = ins.Columns |> Seq.map (fun c -> columnRefDoc cfg c) |> Seq.toList
-                        let flatCols = text " (" <+> join (text ", ") colDocs <+> text ")"
 
                         let expandedCols =
                             text " ("
-                            <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) colDocs)
-                            <+> line
+                            <+> nest (indentWidth cfg) (softline <+> join (text "," <+> line) colDocs)
+                            <+> softline
                             <+> text ")"
 
-                        choice flatCols expandedCols
+                        group expandedCols
                     else
                         empty
 
@@ -2354,15 +2343,14 @@ and private mergeDoc (cfg: Style) (merge: MergeStatement) : Doc =
 
                     let rowDoc (rv: RowValue) =
                         let valDocs = rv.ColumnValues |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
-                        let flatRow = text "(" <+> join (text ", ") valDocs <+> text ")"
 
                         let expandedRow =
                             text "("
-                            <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) valDocs)
-                            <+> line
+                            <+> nest (indentWidth cfg) (softline <+> join (text "," <+> line) valDocs)
+                            <+> softline
                             <+> text ")"
 
-                        choice flatRow expandedRow
+                        group expandedRow
 
                     let rows = vis.RowValues |> Seq.map rowDoc |> Seq.toList
                     keyword cfg "VALUES" <++> join (text ", ") rows

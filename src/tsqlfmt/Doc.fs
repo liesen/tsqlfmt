@@ -5,6 +5,7 @@ module TSqlFormatter.Doc
 /// The document type for pretty printing.
 [<RequireQualifiedAccess>]
 type Doc =
+    private
     | Nil
     | Text of string
     | Line // Line break, renders at current indent
@@ -74,9 +75,6 @@ let rec flatten (doc: Doc) : Doc =
 /// `group` tries to flatten a document onto a single line.
 /// If it fits, use the flattened version; otherwise keep line breaks.
 let group (doc: Doc) : Doc = Doc.Union(flatten doc, doc)
-
-/// Choose between an explicit flat layout and a broken layout.
-let choice (flatDoc: Doc) (brokenDoc: Doc) : Doc = Doc.Union(flatDoc, brokenDoc)
 
 // ─── Rendering ───
 
