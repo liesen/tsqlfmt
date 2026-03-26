@@ -61,3 +61,19 @@ let commaListDoc (cfg: Style) (items: Doc list) : Doc =
 
 let headedCommaListDoc (cfg: Style) (headDoc: Doc) (items: Doc list) : Doc =
     headedSequenceDoc (listSequencePolicy cfg) headDoc (commaItems cfg items)
+
+let private ddlCommaItems (items: Doc list) =
+    items
+    |> List.mapi (fun i item ->
+        if i = List.length items - 1 then
+            item
+        else
+            item <+> text ",")
+
+let private ddlSequencePolicy (cfg: Style) : SequencePolicy =
+    { placeFirstItemOnNewLine = cfg.ddl.placeFirstProcedureParameterOnNewLine = PlaceOnNewLine.Always
+      firstItemIndent = None
+      subsequentItemsIndent = None }
+
+let ddlCommaListDoc (cfg: Style) (items: Doc list) : Doc =
+    sequenceDoc (ddlSequencePolicy cfg) (ddlCommaItems items)

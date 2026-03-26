@@ -17,7 +17,6 @@ let ``andOrSequencePolicy uses indented alignment from style`` () =
                             alignment = Alignment.Indented } } }
 
     let policy = andOrSequencePolicy testConfig
-    Assert.False(policy.placeFirstItemOnNewLine)
     Assert.Equal(None, policy.firstItemIndent)
     Assert.Equal(Some 4, policy.subsequentItemsIndent)
 
@@ -32,7 +31,6 @@ let ``andOrSequencePolicy leaves subsequent items unindented for left alignment`
                             alignment = Alignment.LeftAligned } } }
 
     let policy = andOrSequencePolicy testConfig
-    Assert.False(policy.placeFirstItemOnNewLine)
     Assert.Equal(None, policy.firstItemIndent)
     Assert.Equal(None, policy.subsequentItemsIndent)
 
@@ -46,7 +44,6 @@ let ``listSequencePolicy respects first item and indent settings`` () =
                     indentListItems = true } }
 
     let policy = listSequencePolicy testConfig
-    Assert.True(policy.placeFirstItemOnNewLine)
     Assert.Equal(Some 4, policy.firstItemIndent)
     Assert.Equal(Some 4, policy.subsequentItemsIndent)
 

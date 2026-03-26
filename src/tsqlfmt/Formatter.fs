@@ -358,7 +358,8 @@ let rec private exprDoc (cfg: Style) (expr: TSqlFragment) : Doc =
     | :? InPredicate as inp -> inPredicateDoc cfg inp
     | :? LikePredicate as lk -> likePredicateDoc cfg lk
     | :? ExistsPredicate as ep ->
-        keyword cfg "EXISTS" <++> parenthesesDoc cfg (queryExprDoc cfg ep.Subquery.QueryExpression)
+        keyword cfg "EXISTS"
+        <++> parenthesesDoc cfg (queryExprDoc cfg ep.Subquery.QueryExpression)
     | :? BooleanTernaryExpression as be -> betweenDoc cfg be
     | :? BinaryExpression as binex -> binaryExprDoc cfg binex
     | :? UnaryExpression as unex ->
@@ -770,8 +771,8 @@ and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
     let inKw = keyword cfg "IN"
 
     if inp.Subquery <> null then
-        lhs <++> notPart
-        <+> inKw <++> parenthesesDoc cfg (queryExprDoc cfg inp.Subquery.QueryExpression)
+        lhs <++> notPart <+> inKw
+        <++> parenthesesDoc cfg (queryExprDoc cfg inp.Subquery.QueryExpression)
     else
         let valDocs = inp.Values |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
 
@@ -1316,9 +1317,6 @@ and private statementListDoc
             attachOwnLineComments
         |> join separator
 
-and private routineWithAsDoc (cfg: Style) (header: Doc) (paramsDoc: Doc) (bodyDoc: Doc) : Doc =
-    header <+> paramsDoc <+> line <+> keyword cfg "AS" <+> line <+> bodyDoc
-
 and private functionHeaderDoc
     (cfg: Style)
     (name: SchemaObjectName)
@@ -1392,7 +1390,7 @@ and private functionBodyDoc (cfg: Style) (stmt: FunctionStatementBody) : Doc =
 
         let bodyDoc =
             if inlineTvfBodyStartsWithParen stmt then
-                text "(" <+> nest (indentWidth cfg) (line <+> selectDoc) <+> line <+> text ")"
+                parenthesesDoc cfg selectDoc
             else
                 selectDoc
 
@@ -1416,18 +1414,12 @@ and private executeAsOptionNameDoc (cfg: Style) (executeAs: ExecuteAsOption) : D
     | _ -> text (executeAs.ToString().ToUpperInvariant())
 
 and private executeAsClauseDoc (cfg: Style) (clause: ExecuteAsClause) : Doc =
-    let principalDoc =
-        if clause.Literal <> null then
-            exprDoc cfg clause.Literal
-        else
-            empty
-
-    let optionDoc = executeAsOptionNameDoc cfg clause.ExecuteAsOption
-
-    if principalDoc = empty then
-        keyword cfg "EXECUTE" <++> keyword cfg "AS" <++> optionDoc
-    else
-        keyword cfg "EXECUTE" <++> keyword cfg "AS" <++> optionDoc <++> principalDoc
+    [ keyword cfg "EXECUTE"
+      keyword cfg "AS"
+      executeAsOptionNameDoc cfg clause.ExecuteAsOption
+      if clause.Literal <> null then
+          exprDoc cfg clause.Literal ]
+    |> List.reduce (<++>)
 
 and private optionStateDoc (cfg: Style) (state: OptionState) : Doc =
     match state with
@@ -1694,7 +1686,7 @@ and private setOnOffDoc (cfg: Style) (stmt: SetOnOffStatement) : Doc =
             |> List.map formatSetOption
         | _ -> []
 
-    let optionsDoc = join (text "," <+> text " ") optionDocs
+    let optionsDoc = commaListDoc cfg optionDocs
     let stateDoc = if stmt.IsOn then keyword cfg "ON" else keyword cfg "OFF"
 
     keyword cfg "SET" <++> optionsDoc <++> stateDoc
@@ -1711,14 +1703,14 @@ and private dropTableDoc (cfg: Style) (stmt: DropTableStatement) : Doc =
 
     let tableDocs = stmt.Objects |> Seq.map schemaObjectNameDoc |> Seq.toList
 
-    baseDoc <++> join (text "," <+> text " ") tableDocs
+    group (baseDoc <++> commaListDoc cfg tableDocs)
 
 and private viewColumnsDoc (cfg: Style) (columns: IList<Identifier>) : Doc =
     if columns = null || columns.Count = 0 then
         empty
     else
         let columnDocs = columns |> Seq.map identDoc |> Seq.toList
-        text "(" <+> join (text "," <+> line) columnDocs <+> text ")"
+        parenthesesDoc cfg (commaListDoc cfg columnDocs)
 
 and private viewOptionsDoc (cfg: Style) (options: IList<ViewOption>) : Doc =
     optionsClauseDoc cfg (viewOptionDoc cfg) options
@@ -1741,6 +1733,13 @@ and private viewStatementDoc (cfg: Style) (verb: string) (vs: ViewStatementBody)
             empty
 
     header <+> columnsDoc <+> optionsDoc <+> asDoc <+> selectDoc <+> checkOptionDoc
+
+and private columnWithSortOrderDoc (cfg: Style) (col: ColumnWithSortOrder) : Doc =
+    columnRefDoc cfg col.Column
+    <+> match col.SortOrder with
+        | SortOrder.Ascending -> text " " <+> keyword cfg "ASC"
+        | SortOrder.Descending -> text " " <+> keyword cfg "DESC"
+        | _ -> empty
 
 and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
     match frag with
@@ -1818,17 +1817,12 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
         let prefixDoc =
             [ constraintNameDoc; kindDoc; indexTypeDoc ] |> List.filter ((<>) empty) |> hcat
 
-        let columns = constraintDef.Columns |> Seq.map (tokenStreamDoc cfg) |> Seq.toList
-
         let columnsDoc =
-            match columns with
-            | [] -> text "()"
-            | [ singleColumn ] -> text "(" <+> singleColumn <+> text ")"
-            | _ ->
-                text "("
-                <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) columns)
-                <+> line
-                <+> text ")"
+            constraintDef.Columns
+            |> Seq.map (columnWithSortOrderDoc cfg)
+            |> Seq.toList
+            |> ddlCommaListDoc cfg
+            |> ddlDoc cfg
 
         let optionsDoc =
             if constraintDef.IndexOptions <> null && constraintDef.IndexOptions.Count > 0 then
@@ -1840,9 +1834,7 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
                             let columns =
                                 orderOption.Columns |> Seq.map (fun col -> exprDoc cfg col) |> Seq.toList
 
-                            keyword cfg "ORDER" <++> commaListDoc cfg columns
-                            |> parenthesesDoc cfg
-                            |> group
+                            keyword cfg "ORDER" <++> commaListDoc cfg columns |> parenthesesDoc cfg |> group
                         | _ -> tokenStreamDoc cfg option)
                     |> Seq.toList
 
