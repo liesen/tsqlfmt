@@ -3,25 +3,25 @@ module TSqlFormatter.Parenthesis
 open TSqlFormatter.Doc
 open TSqlFormatter.Style
 
-type ParenthesisCombinator = Doc -> Doc -> Doc
+type ParenthesisCombinator = Doc -> Doc
 
-let private expandedSplit (indentWidth: int) (indentContents: bool) (anchorDoc: Doc) (contentsDoc: Doc) =
+let private expandedSplit (indentWidth: int) (indentContents: bool) (contentsDoc: Doc) =
     let laidOutContents =
         if indentContents then
             nest indentWidth (softline <+> contentsDoc)
         else
             softline <+> contentsDoc
 
-    anchorDoc <+> text "(" <+> laidOutContents <+> softline <+> text ")"
+    text "(" <+> laidOutContents <+> softline <+> text ")"
 
-let private compactIndented (indentWidth: int) (indentContents: bool) (anchorDoc: Doc) (contentsDoc: Doc) =
+let private compactIndented (indentWidth: int) (indentContents: bool) (contentsDoc: Doc) =
     let laidOutContents =
         if indentContents then
             nest indentWidth (softline <+> contentsDoc)
         else
             softline <+> contentsDoc
 
-    anchorDoc <+> text "(" <+> laidOutContents <+> softline <+> text ")"
+    text "(" <+> laidOutContents <+> softline <+> text ")"
 
 let private parenthesisDoc (indentWidth: int) (indentContents: bool) (style: ParenthesisStyle) : ParenthesisCombinator =
     match style with

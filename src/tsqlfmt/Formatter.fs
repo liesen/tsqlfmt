@@ -358,7 +358,7 @@ let rec private exprDoc (cfg: Style) (expr: TSqlFragment) : Doc =
     | :? InPredicate as inp -> inPredicateDoc cfg inp
     | :? LikePredicate as lk -> likePredicateDoc cfg lk
     | :? ExistsPredicate as ep ->
-        parenthesesDoc cfg (keyword cfg "EXISTS" <+> text " ") (queryExprDoc cfg ep.Subquery.QueryExpression)
+        keyword cfg "EXISTS" <++> parenthesesDoc cfg (queryExprDoc cfg ep.Subquery.QueryExpression)
     | :? BooleanTernaryExpression as be -> betweenDoc cfg be
     | :? BinaryExpression as binex -> binaryExprDoc cfg binex
     | :? UnaryExpression as unex ->
@@ -756,7 +756,7 @@ and private boolCompDoc (cfg: Style) (bc: BooleanComparisonExpression) : Doc =
             lhs <+> text op <+> rhs
 
 and private boolParenDoc (cfg: Style) (bp: BooleanParenthesisExpression) : Doc =
-    boolExprDoc cfg bp.Expression |> parenthesesDoc cfg empty |> group
+    boolExprDoc cfg bp.Expression |> parenthesesDoc cfg |> group
 
 and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
     let lhs = exprDoc cfg inp.Expression
@@ -771,7 +771,7 @@ and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
 
     if inp.Subquery <> null then
         lhs <++> notPart
-        <+> parenthesesDoc cfg (inKw <+> text " ") (queryExprDoc cfg inp.Subquery.QueryExpression)
+        <+> inKw <++> parenthesesDoc cfg (queryExprDoc cfg inp.Subquery.QueryExpression)
     else
         let valDocs = inp.Values |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
 
@@ -841,11 +841,10 @@ and private binaryExprDoc (cfg: Style) (be: BinaryExpression) : Doc =
 // ─── Parenthesized expressions ───
 
 and private parenExprDoc (cfg: Style) (p: ParenthesisExpression) : Doc =
-    let parens = parenthesesDoc cfg
-    group (parens empty (exprDoc cfg p.Expression))
+    group (parenthesesDoc cfg (exprDoc cfg p.Expression))
 
 and private scalarSubqueryDoc (cfg: Style) (sq: ScalarSubquery) : Doc =
-    parenthesesDoc cfg empty (queryExprDoc cfg sq.QueryExpression)
+    parenthesesDoc cfg (queryExprDoc cfg sq.QueryExpression)
 
 // ─── Query expressions ───
 
@@ -855,7 +854,7 @@ and private querySpecOrExprDoc (cfg: Style) (qe: QueryExpression) (intoTarget: T
     match qe with
     | :? QuerySpecification as qs -> querySpecDoc cfg qs intoTarget
     | :? BinaryQueryExpression as bqe -> binaryQueryDoc cfg bqe
-    | :? QueryParenthesisExpression as qpe -> parenthesesDoc cfg empty (queryExprDoc cfg qpe.QueryExpression)
+    | :? QueryParenthesisExpression as qpe -> parenthesesDoc cfg (queryExprDoc cfg qpe.QueryExpression)
     | _ -> tokenStreamDoc cfg qe
 
 and private querySpecDoc (cfg: Style) (qs: QuerySpecification) (intoTarget: TrailingFragmentDoc option) : Doc =
@@ -1062,7 +1061,7 @@ and private namedTableDoc (cfg: Style) (ntr: NamedTableReference) : Doc =
                 |> Seq.map hintToText
                 |> Seq.toList
                 |> commaListDoc cfg
-                |> parenthesesDoc cfg empty
+                |> parenthesesDoc cfg
                 |> group
 
             hintDoc
@@ -1118,7 +1117,7 @@ and private unqualifiedJoinDoc (cfg: Style) (uj: UnqualifiedJoin) : Doc =
     firstTable <+> line <+> joinType <++> secondTable
 
 and private queryDerivedTableDoc (cfg: Style) (qdt: QueryDerivedTable) : Doc =
-    let parenDoc = queryExprDoc cfg qdt.QueryExpression |> parenthesesDoc cfg empty
+    let parenDoc = queryExprDoc cfg qdt.QueryExpression |> parenthesesDoc cfg
 
     let aliasDoc =
         if qdt.Alias <> null then
@@ -1227,7 +1226,7 @@ and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
     let colsDoc =
         if cte.Columns <> null && cte.Columns.Count > 0 then
             let cols = cte.Columns |> Seq.map identDoc |> Seq.toList
-            text " " <+> (commaListDoc cfg cols |> parenthesesDoc cfg empty |> group)
+            text " " <+> (commaListDoc cfg cols |> parenthesesDoc cfg |> group)
         else
             empty
 
@@ -1238,7 +1237,7 @@ and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
             keyword cfg "AS"
 
     let body = queryExprDoc cfg cte.QueryExpression
-    cteDoc cfg (nameDoc <+> colsDoc <++> asDoc <+> text " ") body
+    nameDoc <+> colsDoc <++> asDoc <++> cteDoc cfg body
 
 // ─── DDL: ALTER/CREATE FUNCTION/PROCEDURE ───
 
@@ -1502,7 +1501,7 @@ and private orderHintDoc (cfg: Style) (orderHint: OrderBulkInsertOption) : Doc =
         let columns = orderHint.Columns |> Seq.map columnDoc |> Seq.toList
 
         line <+> keyword cfg "ORDER"
-        <++> (commaListDoc cfg columns |> parenthesesDoc cfg empty |> group)
+        <++> (commaListDoc cfg columns |> parenthesesDoc cfg |> group)
 
 and private procedureBodyDoc (cfg: Style) (stmt: ProcedureStatementBody) : Doc =
     if stmt.MethodSpecifier <> null then
@@ -1841,9 +1840,9 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
                             let columns =
                                 orderOption.Columns |> Seq.map (fun col -> exprDoc cfg col) |> Seq.toList
 
-                            (keyword cfg "ORDER" <++> commaListDoc cfg columns
-                             |> parenthesesDoc cfg empty
-                             |> group)
+                            keyword cfg "ORDER" <++> commaListDoc cfg columns
+                            |> parenthesesDoc cfg
+                            |> group
                         | _ -> tokenStreamDoc cfg option)
                     |> Seq.toList
 
@@ -2000,9 +1999,8 @@ and private insertDoc (cfg: Style) (ins: InsertStatement) : Doc =
 
     let targetDoc =
         if spec.Columns <> null && spec.Columns.Count > 0 then
-            let cols = spec.Columns |> Seq.map (fun c -> columnRefDoc cfg c) |> Seq.toList
-            let parens = insertColumnsDoc cfg
-            group (parens (header <+> text " ") (join (text "," <+> line) cols))
+            let cols = spec.Columns |> Seq.map (columnRefDoc cfg) |> Seq.toList
+            header <++> group (insertColumnsDoc cfg (join (text "," <+> line) cols))
         else
             header
 
@@ -2010,9 +2008,8 @@ and private insertDoc (cfg: Style) (ins: InsertStatement) : Doc =
         match spec.InsertSource with
         | :? ValuesInsertSource as vis ->
             let rowDoc (rv: RowValue) =
-                let vals = rv.ColumnValues |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
-                let parens = insertValuesDoc cfg
-                group (parens empty (join (text "," <+> line) vals))
+                let vals = rv.ColumnValues |> Seq.map (exprDoc cfg) |> Seq.toList
+                group (insertValuesDoc cfg (join (text "," <+> line) vals))
 
             let rows = vis.RowValues |> Seq.map rowDoc |> Seq.toList
             group (keyword cfg "VALUES" <++> join (text ", ") rows)
