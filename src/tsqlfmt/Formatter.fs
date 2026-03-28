@@ -1353,11 +1353,7 @@ and private returnTypeDoc (cfg: Style) (stmt: TSqlStatement) (returnType: Functi
         let tableDoc =
             match elements with
             | [] -> keyword cfg "TABLE"
-            | _ ->
-                keyword cfg "TABLE" <++> text "("
-                <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) elements)
-                <+> line
-                <+> text ")"
+            | _ -> keyword cfg "TABLE" <++> ddlParensDoc cfg (join (text "," <+> line) elements)
 
         returnsWith tableDoc
     | :? ScalarFunctionReturnType as srt -> returnsWith (dataTypeRefDoc cfg srt.DataType)
@@ -1933,11 +1929,7 @@ and private createTableDoc (cfg: Style) (ct: CreateTableStatement) : Doc =
     let bodyDoc =
         match elements with
         | [] -> text "()"
-        | _ ->
-            text " ("
-            <+> nest (indentWidth cfg) (line <+> join (text "," <+> line) elements)
-            <+> line
-            <+> text ")"
+        | _ -> text " " <+> ddlParensDoc cfg (join (text "," <+> line) elements)
 
     let onDoc =
         if ct.OnFileGroupOrPartitionScheme <> null then
@@ -2216,13 +2208,8 @@ and private mergeDoc (cfg: Style) (merge: MergeStatement) : Doc =
                     if ins.Columns <> null && ins.Columns.Count > 0 then
                         let colDocs = ins.Columns |> Seq.map (fun c -> columnRefDoc cfg c) |> Seq.toList
 
-                        let expandedCols =
-                            text " ("
-                            <+> nest (indentWidth cfg) (softline <+> join (text "," <+> line) colDocs)
-                            <+> softline
-                            <+> text ")"
-
-                        group expandedCols
+                        text " "
+                        <+> group (insertColumnListParensDoc cfg (join (text "," <+> line) colDocs))
                     else
                         empty
 
@@ -2232,13 +2219,7 @@ and private mergeDoc (cfg: Style) (merge: MergeStatement) : Doc =
                     let rowDoc (rv: RowValue) =
                         let valDocs = rv.ColumnValues |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
 
-                        let expandedRow =
-                            text "("
-                            <+> nest (indentWidth cfg) (softline <+> join (text "," <+> line) valDocs)
-                            <+> softline
-                            <+> text ")"
-
-                        group expandedRow
+                        group (insertValuesListParensDoc cfg (join (text "," <+> line) valDocs))
 
                     let rows = vis.RowValues |> Seq.map rowDoc |> Seq.toList
                     keyword cfg "VALUES" <++> join (text ", ") rows
