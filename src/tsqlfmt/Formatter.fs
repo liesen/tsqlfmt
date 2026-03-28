@@ -359,7 +359,7 @@ let rec private exprDoc (cfg: Style) (expr: TSqlFragment) : Doc =
     | :? LikePredicate as lk -> likePredicateDoc cfg lk
     | :? ExistsPredicate as ep ->
         keyword cfg "EXISTS"
-        <++> parenthesesDoc cfg (queryExprDoc cfg ep.Subquery.QueryExpression)
+        <++> expressionParensDoc cfg (queryExprDoc cfg ep.Subquery.QueryExpression)
     | :? BooleanTernaryExpression as be -> betweenDoc cfg be
     | :? BinaryExpression as binex -> binaryExprDoc cfg binex
     | :? UnaryExpression as unex ->
@@ -757,7 +757,7 @@ and private boolCompDoc (cfg: Style) (bc: BooleanComparisonExpression) : Doc =
             lhs <+> text op <+> rhs
 
 and private boolParenDoc (cfg: Style) (bp: BooleanParenthesisExpression) : Doc =
-    boolExprDoc cfg bp.Expression |> parenthesesDoc cfg |> group
+    boolExprDoc cfg bp.Expression |> expressionParensDoc cfg |> group
 
 and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
     let lhs = exprDoc cfg inp.Expression
@@ -772,7 +772,7 @@ and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
 
     if inp.Subquery <> null then
         lhs <++> notPart <+> inKw
-        <++> parenthesesDoc cfg (queryExprDoc cfg inp.Subquery.QueryExpression)
+        <++> expressionParensDoc cfg (queryExprDoc cfg inp.Subquery.QueryExpression)
     else
         let valDocs = inp.Values |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
 
@@ -842,10 +842,10 @@ and private binaryExprDoc (cfg: Style) (be: BinaryExpression) : Doc =
 // ─── Parenthesized expressions ───
 
 and private parenExprDoc (cfg: Style) (p: ParenthesisExpression) : Doc =
-    group (parenthesesDoc cfg (exprDoc cfg p.Expression))
+    group (expressionParensDoc cfg (exprDoc cfg p.Expression))
 
 and private scalarSubqueryDoc (cfg: Style) (sq: ScalarSubquery) : Doc =
-    parenthesesDoc cfg (queryExprDoc cfg sq.QueryExpression)
+    expressionParensDoc cfg (queryExprDoc cfg sq.QueryExpression)
 
 // ─── Query expressions ───
 
@@ -855,7 +855,7 @@ and private querySpecOrExprDoc (cfg: Style) (qe: QueryExpression) (intoTarget: T
     match qe with
     | :? QuerySpecification as qs -> querySpecDoc cfg qs intoTarget
     | :? BinaryQueryExpression as bqe -> binaryQueryDoc cfg bqe
-    | :? QueryParenthesisExpression as qpe -> parenthesesDoc cfg (queryExprDoc cfg qpe.QueryExpression)
+    | :? QueryParenthesisExpression as qpe -> expressionParensDoc cfg (queryExprDoc cfg qpe.QueryExpression)
     | _ -> tokenStreamDoc cfg qe
 
 and private querySpecDoc (cfg: Style) (qs: QuerySpecification) (intoTarget: TrailingFragmentDoc option) : Doc =
@@ -1062,7 +1062,7 @@ and private namedTableDoc (cfg: Style) (ntr: NamedTableReference) : Doc =
                 |> Seq.map hintToText
                 |> Seq.toList
                 |> commaListDoc cfg
-                |> parenthesesDoc cfg
+                |> expressionParensDoc cfg
                 |> group
 
             hintDoc
@@ -1118,7 +1118,7 @@ and private unqualifiedJoinDoc (cfg: Style) (uj: UnqualifiedJoin) : Doc =
     firstTable <+> line <+> joinType <++> secondTable
 
 and private queryDerivedTableDoc (cfg: Style) (qdt: QueryDerivedTable) : Doc =
-    let parenDoc = queryExprDoc cfg qdt.QueryExpression |> parenthesesDoc cfg
+    let parenDoc = queryExprDoc cfg qdt.QueryExpression |> expressionParensDoc cfg
 
     let aliasDoc =
         if qdt.Alias <> null then
@@ -1198,7 +1198,7 @@ and private selectStatementDoc (cfg: Style) (ss: SelectStatement) : Doc =
     let qe = querySpecOrExprDoc cfg ss.QueryExpression intoTarget
 
     // CTEs
-    let cteDoc =
+    let withDoc =
         if
             ss.WithCtesAndXmlNamespaces <> null
             && ss.WithCtesAndXmlNamespaces.CommonTableExpressions <> null
@@ -1214,7 +1214,7 @@ and private selectStatementDoc (cfg: Style) (ss: SelectStatement) : Doc =
             None
 
     let parts =
-        [ match cteDoc with
+        [ match withDoc with
           | Some d -> yield d
           | None -> ()
           yield qe ]
@@ -1227,7 +1227,7 @@ and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
     let colsDoc =
         if cte.Columns <> null && cte.Columns.Count > 0 then
             let cols = cte.Columns |> Seq.map identDoc |> Seq.toList
-            text " " <+> (commaListDoc cfg cols |> parenthesesDoc cfg |> group)
+            text " " <+> (commaListDoc cfg cols |> expressionParensDoc cfg |> group)
         else
             empty
 
@@ -1238,7 +1238,7 @@ and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
             keyword cfg "AS"
 
     let body = queryExprDoc cfg cte.QueryExpression
-    nameDoc <+> colsDoc <++> asDoc <++> cteDoc cfg body
+    nameDoc <+> colsDoc <++> asDoc <++> cteBodyParensDoc cfg body
 
 // ─── DDL: ALTER/CREATE FUNCTION/PROCEDURE ───
 
@@ -1390,7 +1390,7 @@ and private functionBodyDoc (cfg: Style) (stmt: FunctionStatementBody) : Doc =
 
         let bodyDoc =
             if inlineTvfBodyStartsWithParen stmt then
-                parenthesesDoc cfg selectDoc
+                expressionParensDoc cfg selectDoc
             else
                 selectDoc
 
@@ -1493,7 +1493,7 @@ and private orderHintDoc (cfg: Style) (orderHint: OrderBulkInsertOption) : Doc =
         let columns = orderHint.Columns |> Seq.map columnDoc |> Seq.toList
 
         line <+> keyword cfg "ORDER"
-        <++> (commaListDoc cfg columns |> parenthesesDoc cfg |> group)
+        <++> (commaListDoc cfg columns |> expressionParensDoc cfg |> group)
 
 and private procedureBodyDoc (cfg: Style) (stmt: ProcedureStatementBody) : Doc =
     if stmt.MethodSpecifier <> null then
@@ -1710,7 +1710,7 @@ and private viewColumnsDoc (cfg: Style) (columns: IList<Identifier>) : Doc =
         empty
     else
         let columnDocs = columns |> Seq.map identDoc |> Seq.toList
-        parenthesesDoc cfg (commaListDoc cfg columnDocs)
+        expressionParensDoc cfg (commaListDoc cfg columnDocs)
 
 and private viewOptionsDoc (cfg: Style) (options: IList<ViewOption>) : Doc =
     optionsClauseDoc cfg (viewOptionDoc cfg) options
@@ -1822,7 +1822,7 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
             |> Seq.map (columnWithSortOrderDoc cfg)
             |> Seq.toList
             |> ddlCommaListDoc cfg
-            |> ddlDoc cfg
+            |> ddlParensDoc cfg
 
         let optionsDoc =
             if constraintDef.IndexOptions <> null && constraintDef.IndexOptions.Count > 0 then
@@ -1834,7 +1834,9 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
                             let columns =
                                 orderOption.Columns |> Seq.map (fun col -> exprDoc cfg col) |> Seq.toList
 
-                            keyword cfg "ORDER" <++> commaListDoc cfg columns |> parenthesesDoc cfg |> group
+                            keyword cfg "ORDER" <++> commaListDoc cfg columns
+                            |> expressionParensDoc cfg
+                            |> group
                         | _ -> tokenStreamDoc cfg option)
                     |> Seq.toList
 
@@ -1851,6 +1853,66 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
 
         prefixDoc <++> columnsDoc <+> optionsDoc <+> onDoc
     | _ -> tokenStreamDoc cfg frag
+
+and private indexOptionDoc (cfg: Style) (option: IndexOption) : Doc =
+    match option with
+    | :? OrderIndexOption as orderOpt ->
+        let columns = orderOpt.Columns |> Seq.map (fun col -> exprDoc cfg col) |> Seq.toList
+
+        keyword cfg "ORDER" <++> commaListDoc cfg columns
+        |> expressionParensDoc cfg
+        |> group
+    | :? CompressionDelayIndexOption as compressionDelay ->
+        keyword cfg "COMPRESSION_DELAY"
+        <++> text "="
+        <++> exprDoc cfg compressionDelay.Expression
+    | :? OnlineIndexOption as online -> keyword cfg "ONLINE" <++> optionStateDoc cfg online.OptionState
+    | :? IgnoreDupKeyIndexOption as ignoreDupKey ->
+        keyword cfg "IGNORE_DUP_KEY" <++> optionStateDoc cfg ignoreDupKey.OptionState
+    | :? DataCompressionOption as dataComp ->
+        keyword cfg "DATA_COMPRESSION" <++> text "=" <++> tokenStreamDoc cfg option
+    | :? XmlCompressionOption as xmlComp ->
+        keyword cfg "XML_COMPRESSION"
+        <++> optionStateDoc
+            cfg
+            (if xmlComp.IsCompressed = XmlCompressionOptionState.On then
+                 OptionState.On
+             else
+                 OptionState.Off)
+    | :? MoveToDropIndexOption as moveTo -> keyword cfg "MOVE_TO" <++> tokenStreamDoc cfg moveTo.MoveTo
+    | :? FileStreamOnDropIndexOption as fileStreamOn ->
+        keyword cfg "FILESTREAM_ON" <++> tokenStreamDoc cfg fileStreamOn.FileStreamOn
+    | :? MaxDurationOption as maxDur -> keyword cfg "MAX_DURATION" <++> text "=" <++> exprDoc cfg maxDur.MaxDuration
+    | :? WaitAtLowPriorityOption as waitLow -> keyword cfg "WAIT_AT_LOW_PRIORITY" <++> tokenStreamDoc cfg option
+    | :? IndexStateOption as stateOpt ->
+        match option.OptionKind with
+        | IndexOptionKind.PadIndex -> keyword cfg "PAD_INDEX" <++> optionStateDoc cfg stateOpt.OptionState
+        | IndexOptionKind.SortInTempDB -> keyword cfg "SORT_IN_TEMPDB" <++> optionStateDoc cfg stateOpt.OptionState
+        | IndexOptionKind.StatisticsNoRecompute ->
+            keyword cfg "STATISTICS_NORECOMPUTE"
+            <++> optionStateDoc cfg stateOpt.OptionState
+        | IndexOptionKind.DropExisting -> keyword cfg "DROP_EXISTING" <++> optionStateDoc cfg stateOpt.OptionState
+        | IndexOptionKind.AllowRowLocks -> keyword cfg "ALLOW_ROW_LOCKS" <++> optionStateDoc cfg stateOpt.OptionState
+        | IndexOptionKind.AllowPageLocks -> keyword cfg "ALLOW_PAGE_LOCKS" <++> optionStateDoc cfg stateOpt.OptionState
+        | IndexOptionKind.LobCompaction -> keyword cfg "LOB_COMPACTION" <++> optionStateDoc cfg stateOpt.OptionState
+        | IndexOptionKind.StatisticsIncremental ->
+            keyword cfg "STATISTICS_INCREMENTAL"
+            <++> optionStateDoc cfg stateOpt.OptionState
+        | IndexOptionKind.CompressAllRowGroups ->
+            keyword cfg "COMPRESS_ALL_ROW_GROUPS"
+            <++> optionStateDoc cfg stateOpt.OptionState
+        | IndexOptionKind.Resumable -> keyword cfg "RESUMABLE" <++> optionStateDoc cfg stateOpt.OptionState
+        | IndexOptionKind.OptimizeForSequentialKey ->
+            keyword cfg "OPTIMIZE_FOR_SEQUENTIAL_KEY"
+            <++> optionStateDoc cfg stateOpt.OptionState
+        | _ -> tokenStreamDoc cfg option
+    | :? IndexExpressionOption as exprOpt ->
+        match option.OptionKind with
+        | IndexOptionKind.FillFactor -> keyword cfg "FILLFACTOR" <++> text "=" <++> exprDoc cfg exprOpt.Expression
+        | IndexOptionKind.MaxDop -> keyword cfg "MAXDOP" <++> text "=" <++> exprDoc cfg exprOpt.Expression
+        | IndexOptionKind.BucketCount -> keyword cfg "BUCKET_COUNT" <++> text "=" <++> exprDoc cfg exprOpt.Expression
+        | _ -> tokenStreamDoc cfg option
+    | _ -> tokenStreamDoc cfg option
 
 and private createTableDoc (cfg: Style) (ct: CreateTableStatement) : Doc =
     let header =
@@ -1992,7 +2054,9 @@ and private insertDoc (cfg: Style) (ins: InsertStatement) : Doc =
     let targetDoc =
         if spec.Columns <> null && spec.Columns.Count > 0 then
             let cols = spec.Columns |> Seq.map (columnRefDoc cfg) |> Seq.toList
-            header <++> group (insertColumnsDoc cfg (join (text "," <+> line) cols))
+
+            header
+            <++> group (insertColumnListParensDoc cfg (join (text "," <+> line) cols))
         else
             header
 
@@ -2001,7 +2065,7 @@ and private insertDoc (cfg: Style) (ins: InsertStatement) : Doc =
         | :? ValuesInsertSource as vis ->
             let rowDoc (rv: RowValue) =
                 let vals = rv.ColumnValues |> Seq.map (exprDoc cfg) |> Seq.toList
-                group (insertValuesDoc cfg (join (text "," <+> line) vals))
+                group (insertValuesListParensDoc cfg (join (text "," <+> line) vals))
 
             let rows = vis.RowValues |> Seq.map rowDoc |> Seq.toList
             group (keyword cfg "VALUES" <++> join (text ", ") rows)
