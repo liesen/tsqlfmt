@@ -648,20 +648,13 @@ and private functionCallDoc (cfg: Style) (f: FunctionCall) : Doc =
 
 and private overClauseDoc (cfg: Style) (oc: OverClause) : Doc =
     let overClauseListDoc headDoc items =
-        let itemDocs =
-            items
-            |> List.mapi (fun i item ->
-                if i = List.length items - 1 then
-                    item
-                else
-                    item <+> text ",")
-
-        headDoc
-        <++> sequenceDoc
+        headedCommaListWithPolicyDoc
             { placeFirstItemOnNewLine = false
               firstItemIndent = None
               subsequentItemsIndent = Some(indentWidth cfg) }
-            itemDocs
+            cfg
+            headDoc
+            items
 
     let parts =
         [ if oc.Partitions <> null && oc.Partitions.Count > 0 then

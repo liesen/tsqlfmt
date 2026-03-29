@@ -62,6 +62,9 @@ let commaListDoc (cfg: Style) (items: Doc list) : Doc =
 let headedCommaListDoc (cfg: Style) (headDoc: Doc) (items: Doc list) : Doc =
     headedSequenceDoc (listSequencePolicy cfg) headDoc (commaItems cfg items)
 
+let headedCommaListWithPolicyDoc (policy: SequencePolicy) (cfg: Style) (headDoc: Doc) (items: Doc list) : Doc =
+    headedSequenceDoc policy headDoc (commaItems cfg items)
+
 let private ddlCommaItems (items: Doc list) =
     items
     |> List.mapi (fun i item ->
