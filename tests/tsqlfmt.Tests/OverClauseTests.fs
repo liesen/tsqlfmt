@@ -30,7 +30,7 @@ FROM employees
     assertFormatsTo expected sql
 
 [<Fact>]
-let ``aggregate with long OVER contents breaks inside parentheses but keeps OVER attached`` () =
+let ``aggregate with long OVER contents can break inside parentheses while keeping OVER attached`` () =
     let testConfig =
         { config with
             whitespace =
@@ -45,8 +45,32 @@ let ``aggregate with long OVER contents breaks inside parentheses but keeps OVER
 SELECT SUM(amount) OVER (
         PARTITION BY customer_id,
         region_id,
-        territory_id ORDER BY order_date,
+        territory_id
+        ORDER BY order_date,
         invoice_id
+    )
+FROM sales
+"""
+
+    assertFormatsToWithConfig testConfig expected sql
+
+[<Fact>]
+let ``aggregate with long OVER contents follows sqlprompt-style clause breaks`` () =
+    let testConfig =
+        { config with
+            whitespace =
+                { config.whitespace with
+                    wrapLinesLongerThan = 60 } }
+
+    let sql =
+        "select sum(amount) over (partition by department_id order by hire_date rows between unbounded preceding and current row) from sales"
+
+    let expected =
+        """
+SELECT SUM(amount) OVER (
+        PARTITION BY department_id
+        ORDER BY hire_date
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     )
 FROM sales
 """
