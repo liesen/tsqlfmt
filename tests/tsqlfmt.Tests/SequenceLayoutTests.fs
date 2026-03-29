@@ -149,3 +149,68 @@ c
 """
 
     assertRenderedDoc 120 expected (join line (decorateDdlListItems items))
+
+[<Fact>]
+let ``anchoredSequenceDoc equals anchor <++> commaListDoc when placeFirstItemOnNewLine is false`` () =
+    // When placeFirstItemOnNewLine = false, the anchored helper just concatenates
+    // the anchor with the sequence via <++>.  This means the caller can use either
+    // anchoredCommaSeparatedListDoc or manually write anchor <++> commaListDoc
+    // and get identical output.  Anchoring only matters when placeFirstItemOnNewLine = true.
+    let items = [ text "a"; text "b"; text "c" ]
+    let anchorDoc = text "ORDER BY"
+
+    let anchored = anchoredCommaSeparatedListDoc config anchorDoc items
+    let manual = anchorDoc <++> commaListDoc config items
+
+    let width = 120
+    let anchoredRendered = render width anchored
+    let manualRendered = render width manual
+    Assert.Equal(anchoredRendered, manualRendered)
+
+[<Fact>]
+let ``anchoredSequenceDoc breaks after keyword when placeFirstItemOnNewLine is true`` () =
+    // placeFirstItemOnNewLine controls the break between a keyword and the first
+    // list item (SQL Prompt applies it to SELECT, PARTITION BY, ORDER BY, etc.).
+    // Only anchoredSequenceDoc can honour this — it sees the keyword and inserts a
+    // line break before the first item.
+    let items = [ text "a"; text "b"; text "c" ]
+    let anchorDoc = text "SELECT"
+
+    let newLineConfig =
+        { config with
+            lists =
+                { config.lists with
+                    placeFirstItemOnNewLine = PlaceOnNewLine.Always } }
+
+    assertRenderedDoc
+        120
+        """
+SELECT
+    a,
+    b,
+    c
+"""
+        (anchoredCommaSeparatedListDoc newLineConfig anchorDoc items)
+
+[<Fact>]
+let ``commaListDoc ignores placeFirstItemOnNewLine because it has no keyword anchor`` () =
+    // commaListDoc (sequenceDoc) formats the item list without knowledge of the
+    // preceding keyword, so placeFirstItemOnNewLine has no effect — the first
+    // item stays on the same line as whatever precedes the list.
+    let items = [ text "a"; text "b"; text "c" ]
+    let anchorDoc = text "SELECT"
+
+    let newLineConfig =
+        { config with
+            lists =
+                { config.lists with
+                    placeFirstItemOnNewLine = PlaceOnNewLine.Always } }
+
+    assertRenderedDoc
+        120
+        """
+SELECT a,
+    b,
+    c
+"""
+        (anchorDoc <++> commaListDoc newLineConfig items)
