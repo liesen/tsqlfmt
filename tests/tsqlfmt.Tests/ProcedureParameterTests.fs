@@ -3,6 +3,12 @@ module ProcedureParameterTests
 open Xunit
 open TestSupport
 
+let narrowConfig =
+    { config with
+        whitespace =
+            { config.whitespace with
+                wrapLinesLongerThan = 60 } }
+
 // ─── CREATE PROCEDURE without parentheses ───
 
 [<Fact>]
@@ -70,7 +76,7 @@ SELECT 1"""
     assertFormatsTo expected sql
 
 [<Fact>]
-let ``proc many params with parens expands with paren on same line`` () =
+let ``proc many params with parens expands at narrow width`` () =
     let sql =
         "CREATE PROCEDURE dbo.MyProc (@FirstName VARCHAR(50), @LastName VARCHAR(50), @Age INT = 25, @Active BIT OUTPUT) AS SELECT 1"
 
@@ -84,7 +90,7 @@ let ``proc many params with parens expands with paren on same line`` () =
 AS
 SELECT 1"""
 
-    assertFormatsTo expected sql
+    assertFormatsToWithConfig narrowConfig expected sql
 
 // ─── CREATE FUNCTION ───
 
@@ -118,7 +124,7 @@ END"""
     assertFormatsTo expected sql
 
 [<Fact>]
-let ``func many params expands with paren on same line`` () =
+let ``func many params expands at narrow width`` () =
     let sql =
         "CREATE FUNCTION dbo.MyFunc (@FirstName VARCHAR(50), @LastName VARCHAR(50), @Age INT = 25, @Active BIT) RETURNS INT AS BEGIN RETURN 1 END"
 
@@ -135,7 +141,7 @@ BEGIN
     RETURN 1
 END"""
 
-    assertFormatsTo expected sql
+    assertFormatsToWithConfig narrowConfig expected sql
 
 // ─── ALTER PROCEDURE ───
 
@@ -151,7 +157,7 @@ SELECT 1"""
     assertFormatsTo expected sql
 
 [<Fact>]
-let ``alter proc many params with parens expands`` () =
+let ``alter proc many params with parens expands at narrow width`` () =
     let sql =
         "ALTER PROCEDURE dbo.MyProc (@FirstName VARCHAR(50), @LastName VARCHAR(50), @Age INT = 25, @Active BIT OUTPUT) AS SELECT 1"
 
@@ -165,7 +171,7 @@ let ``alter proc many params with parens expands`` () =
 AS
 SELECT 1"""
 
-    assertFormatsTo expected sql
+    assertFormatsToWithConfig narrowConfig expected sql
 
 // ─── ALTER FUNCTION ───
 
@@ -182,3 +188,32 @@ BEGIN
 END"""
 
     assertFormatsTo expected sql
+
+// ─── Width-driven collapse/expand ───
+
+[<Fact>]
+let ``proc params collapse inline at wide width`` () =
+    let sql =
+        "CREATE PROCEDURE dbo.MyProc (@FirstName VARCHAR(50), @LastName VARCHAR(50)) AS SELECT 1"
+
+    let expected =
+        """CREATE PROCEDURE dbo.MyProc (@FirstName VARCHAR(50), @LastName VARCHAR(50))
+AS
+SELECT 1"""
+
+    assertFormatsTo expected sql
+
+[<Fact>]
+let ``proc params expand at narrow width`` () =
+    let sql =
+        "CREATE PROCEDURE dbo.MyProc (@FirstName VARCHAR(50), @LastName VARCHAR(50)) AS SELECT 1"
+
+    let expected =
+        """CREATE PROCEDURE dbo.MyProc (
+    @FirstName VARCHAR(50),
+    @LastName VARCHAR(50)
+)
+AS
+SELECT 1"""
+
+    assertFormatsToWithConfig narrowConfig expected sql

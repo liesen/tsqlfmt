@@ -1279,15 +1279,7 @@ and private ddlParamItemDocs
     |> Seq.toList
 
 and private ddlParenthesizedParamsDoc (cfg: Style) (paramItems: Doc list) : Doc =
-    let paramsBody = join line paramItems
-
-    if
-        cfg.parentheses.collapseShortParenthesisContents
-        && (render cfg.whitespace.wrapLinesLongerThan (flatten paramsBody)).Length < cfg.parentheses.collapseParenthesesShorterThan
-    then
-        text "(" <+> flatten paramsBody <+> text ")"
-    else
-        ddlParensDoc cfg paramsBody
+    join line paramItems |> ddlParensDoc cfg
 
 and private statementListDoc
     (cfg: Style)
@@ -1323,7 +1315,12 @@ and private functionHeaderDoc
     else
         let commentMap = getParamTrailingComments parameters
         let paramItems = ddlParamItemDocs cfg parameters commentMap
-        header <++> ddlParenthesizedParamsDoc cfg paramItems
+        let headerWithParams = header <++> ddlParenthesizedParamsDoc cfg paramItems
+
+        if cfg.parentheses.collapseShortParenthesisContents && commentMap.IsEmpty then
+            group headerWithParams
+        else
+            headerWithParams
 
 and private returnTypeDoc (cfg: Style) (stmt: TSqlStatement) (returnType: FunctionReturnType) : Doc =
     let returnsComment, returnsKeywordDoc = returnsKeyword cfg stmt
@@ -1589,7 +1586,12 @@ and private procedureParamsDoc
         let paramItems = ddlParamItemDocs cfg parameters commentMap
 
         if hasParens then
-            header <++> ddlParenthesizedParamsDoc cfg paramItems
+            let headerWithParams = header <++> ddlParenthesizedParamsDoc cfg paramItems
+
+            if cfg.parentheses.collapseShortParenthesisContents && commentMap.IsEmpty then
+                group headerWithParams
+            else
+                headerWithParams
         else
             let layout =
                 { ddlSequenceLayout cfg parameters.Count with
