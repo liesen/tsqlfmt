@@ -56,7 +56,7 @@ let withFirstItemIndent (indent: int) (layout: SequenceLayout) =
     { layout with
         firstItemIndent = if indent > 0 then Some indent else None }
 
-let decorateCommaSeparatedItems (cfg: Style) (items: Doc list) =
+let commaDecoratedItems (cfg: Style) (items: Doc list) =
     let comma =
         if cfg.lists.addSpaceBeforeComma then
             text " ,"
@@ -70,10 +70,10 @@ let decorateCommaSeparatedItems (cfg: Style) (items: Doc list) =
         |> List.mapi (fun i item -> if i = List.length items - 1 then item else item <+> comma)
 
 let commaListDoc (cfg: Style) (items: Doc list) : Doc =
-    sequenceDoc (listSequenceLayout cfg) (decorateCommaSeparatedItems cfg items)
+    sequenceDoc (listSequenceLayout cfg) (commaDecoratedItems cfg items)
 
 let anchoredCommaSeparatedListDoc (cfg: Style) (anchorDoc: Doc) (items: Doc list) : Doc =
-    anchoredSequenceDoc (listSequenceLayout cfg) anchorDoc (decorateCommaSeparatedItems cfg items)
+    anchoredSequenceDoc (listSequenceLayout cfg) anchorDoc (commaDecoratedItems cfg items)
 
 let anchoredCommaSeparatedListWithLayoutDoc
     (layout: SequenceLayout)
@@ -81,9 +81,9 @@ let anchoredCommaSeparatedListWithLayoutDoc
     (anchorDoc: Doc)
     (items: Doc list)
     : Doc =
-    anchoredSequenceDoc layout anchorDoc (decorateCommaSeparatedItems cfg items)
+    anchoredSequenceDoc layout anchorDoc (commaDecoratedItems cfg items)
 
-let decorateDdlCommaSeparatedItems (items: Doc list) =
+let ddlCommaDecoratedItems (items: Doc list) =
     items
     |> List.mapi (fun i item ->
         if i = List.length items - 1 then
@@ -97,4 +97,4 @@ let ddlSequenceLayout (cfg: Style) : SequenceLayout =
       subsequentItemsIndent = None }
 
 let ddlCommaListDoc (cfg: Style) (items: Doc list) : Doc =
-    sequenceDoc (ddlSequenceLayout cfg) (decorateDdlCommaSeparatedItems items)
+    sequenceDoc (ddlSequenceLayout cfg) (ddlCommaDecoratedItems items)

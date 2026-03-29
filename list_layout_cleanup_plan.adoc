@@ -41,8 +41,8 @@ It is the anchor that the list attaches to.
 - `headedSequenceDoc` -> `anchoredSequenceDoc`
 - `listSequencePolicy` -> `listSequenceLayout`
 - `ddlSequencePolicy` -> `ddlSequenceLayout`
-- `commaItems` -> `decorateCommaSeparatedItems`
-- `ddlCommaItems` -> `decorateDdlCommaSeparatedItems`
+- `commaItems` -> `commaDecoratedItems`
+- `ddlCommaItems` -> `ddlCommaDecoratedItems`
 - `headedCommaListDoc` -> `anchoredCommaSeparatedListDoc`
 - `headedCommaListWithPolicyDoc` -> `anchoredCommaSeparatedListWithLayoutDoc`
 
@@ -70,8 +70,8 @@ The lightest version of the cleanup keeps decoration as helper functions:
 
 [source,fsharp]
 ----
-val decorateCommaSeparatedItems : Style -> Doc list -> Doc list
-val decorateDdlCommaSeparatedItems : Doc list -> Doc list
+val commaDecoratedItems : Style -> Doc list -> Doc list
+val ddlCommaDecoratedItems : Doc list -> Doc list
 ----
 
 If we need more than one or two decoration families later, we can make the decoration rules explicit:
@@ -86,7 +86,7 @@ type SequenceDecoration =
     { commaPlacement: CommaPlacement
       addSpaceBeforeComma: bool }
 
-val decorateCommaSeparatedItems : SequenceDecoration -> Doc list -> Doc list
+val commaDecoratedItems : SequenceDecoration -> Doc list -> Doc list
 ----
 
 That step is optional for now.
@@ -137,7 +137,7 @@ The intended composition is:
 [source,fsharp]
 ----
 items
-|> decorateCommaSeparatedItems cfg
+|> commaDecoratedItems cfg
 |> anchoredSequenceDoc overClauseLayout anchorDoc
 ----
 
@@ -166,7 +166,7 @@ Then a clause like `PARTITION BY` can be expressed as:
 [source,fsharp]
 ----
 partDocs
-|> decorateCommaSeparatedItems cfg
+|> commaDecoratedItems cfg
 |> anchoredSequenceDoc (overClauseLayout cfg) (keyword cfg "PARTITION" <++> keyword cfg "BY")
 ----
 
@@ -184,8 +184,8 @@ This is cleaner than a special-purpose `overClauseListDoc` because it says direc
   - `listSequencePolicy` -> `listSequenceLayout`
   - `ddlSequencePolicy` -> `ddlSequenceLayout`
 . Rename the decoration helpers:
-  - `commaItems` -> `decorateCommaSeparatedItems`
-  - `ddlCommaItems` -> `decorateDdlCommaSeparatedItems`
+  - `commaItems` -> `commaDecoratedItems`
+  - `ddlCommaItems` -> `ddlCommaDecoratedItems`
 . Rename the convenience wrappers:
   - `headedCommaListDoc` -> `anchoredCommaSeparatedListDoc`
   - `headedCommaListWithPolicyDoc` -> `anchoredCommaSeparatedListWithLayoutDoc`
