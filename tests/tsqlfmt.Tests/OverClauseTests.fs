@@ -33,6 +33,9 @@ FROM employees
 let ``aggregate with long OVER contents can break inside parentheses while keeping OVER attached`` () =
     let testConfig =
         { config with
+            lists =
+                { config.lists with
+                    placeSubsequentItemsOnNewLines = PlaceOnNewLine.Always }
             whitespace =
                 { config.whitespace with
                     wrapLinesLongerThan = 60 } }
@@ -44,10 +47,10 @@ let ``aggregate with long OVER contents can break inside parentheses while keepi
         """
 SELECT SUM(amount) OVER (
         PARTITION BY customer_id,
-        region_id,
-        territory_id
+            region_id,
+            territory_id
         ORDER BY order_date,
-        invoice_id
+            invoice_id
     )
 FROM sales
 """

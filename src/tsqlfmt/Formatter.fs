@@ -647,10 +647,26 @@ and private functionCallDoc (cfg: Style) (f: FunctionCall) : Doc =
         argsDoc
 
 and private overClauseDoc (cfg: Style) (oc: OverClause) : Doc =
+    let overClauseListDoc headDoc items =
+        let itemDocs =
+            items
+            |> List.mapi (fun i item ->
+                if i = List.length items - 1 then
+                    item
+                else
+                    item <+> text ",")
+
+        headDoc
+        <++> sequenceDoc
+            { placeFirstItemOnNewLine = false
+              firstItemIndent = None
+              subsequentItemsIndent = Some(indentWidth cfg) }
+            itemDocs
+
     let parts =
         [ if oc.Partitions <> null && oc.Partitions.Count > 0 then
               let partDocs = oc.Partitions |> Seq.map (fun p -> exprDoc cfg p) |> Seq.toList
-              yield keyword cfg "PARTITION" <++> keyword cfg "BY" <++> commaSep partDocs
+              yield overClauseListDoc (keyword cfg "PARTITION" <++> keyword cfg "BY") partDocs
           if
               oc.OrderByClause <> null
               && oc.OrderByClause.OrderByElements <> null
@@ -661,7 +677,7 @@ and private overClauseDoc (cfg: Style) (oc: OverClause) : Doc =
                   |> Seq.map (fun o -> orderByElemDoc cfg o)
                   |> Seq.toList
 
-              yield keyword cfg "ORDER" <++> keyword cfg "BY" <++> commaSep orderDocs
+              yield overClauseListDoc (keyword cfg "ORDER" <++> keyword cfg "BY") orderDocs
           if oc.WindowFrameClause <> null then
               // ScriptDOM's WindowFrameClause.LastTokenIndex may not include
               // the trailing ROW keyword in "CURRENT ROW". Extend the range
