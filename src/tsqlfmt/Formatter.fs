@@ -1242,46 +1242,45 @@ and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
 
 // ─── DDL: ALTER/CREATE FUNCTION/PROCEDURE ───
 
-and private ddlParamBodyDoc
+and private ddlParamItemDocs
     (cfg: Style)
     (parameters: System.Collections.Generic.IList<ProcedureParameter>)
     (trailingCommentMap: Map<int, string>)
-    : Doc =
+    : Doc list =
     let paramCount = parameters.Count
 
-    let paramDocs =
-        parameters
-        |> Seq.mapi (fun i p ->
-            let nameDoc = text p.VariableName.Value
-            let typeDoc = dataTypeRefDoc cfg p.DataType
+    parameters
+    |> Seq.mapi (fun i p ->
+        let nameDoc = text p.VariableName.Value
+        let typeDoc = dataTypeRefDoc cfg p.DataType
 
-            let defaultDoc =
-                if p.Value <> null then
-                    text " " <+> text "=" <++> exprDoc cfg p.Value
-                else
-                    empty
+        let defaultDoc =
+            if p.Value <> null then
+                text " " <+> text "=" <++> exprDoc cfg p.Value
+            else
+                empty
 
-            let outputDoc =
-                if p.Modifier = ParameterModifier.Output then
-                    text " " <+> keyword cfg "OUTPUT"
-                elif p.Modifier = ParameterModifier.ReadOnly then
-                    text " " <+> keyword cfg "READONLY"
-                else
-                    empty
-            // Place comma before trailing comment (not after)
-            let commaDoc = if i < paramCount - 1 then text "," else empty
+        let outputDoc =
+            if p.Modifier = ParameterModifier.Output then
+                text " " <+> keyword cfg "OUTPUT"
+            elif p.Modifier = ParameterModifier.ReadOnly then
+                text " " <+> keyword cfg "READONLY"
+            else
+                empty
+        // Place comma before trailing comment (not after)
+        let commaDoc = if i < paramCount - 1 then text "," else empty
 
-            let commentDoc =
-                match trailingCommentMap |> Map.tryFind i with
-                | Some c -> text " " <+> text c
-                | None -> empty
+        let commentDoc =
+            match trailingCommentMap |> Map.tryFind i with
+            | Some c -> text " " <+> text c
+            | None -> empty
 
-            nameDoc <++> typeDoc <+> defaultDoc <+> outputDoc <+> commaDoc <+> commentDoc)
-        |> Seq.toList
+        nameDoc <++> typeDoc <+> defaultDoc <+> outputDoc <+> commaDoc <+> commentDoc)
+    |> Seq.toList
 
-    join line paramDocs
+and private ddlParenthesizedParamsDoc (cfg: Style) (paramItems: Doc list) : Doc =
+    let paramsBody = join line paramItems
 
-and private ddlParenthesizedParamsDoc (cfg: Style) (paramsBody: Doc) : Doc =
     if
         cfg.parentheses.collapseShortParenthesisContents
         && (render cfg.whitespace.wrapLinesLongerThan (flatten paramsBody)).Length < cfg.parentheses.collapseParenthesesShorterThan
@@ -1323,8 +1322,8 @@ and private functionHeaderDoc
         header <+> text "()"
     else
         let commentMap = getParamTrailingComments parameters
-        let paramsBody = ddlParamBodyDoc cfg parameters commentMap
-        header <++> ddlParenthesizedParamsDoc cfg paramsBody
+        let paramItems = ddlParamItemDocs cfg parameters commentMap
+        header <++> ddlParenthesizedParamsDoc cfg paramItems
 
 and private returnTypeDoc (cfg: Style) (stmt: TSqlStatement) (returnType: FunctionReturnType) : Doc =
     let returnsComment, returnsKeywordDoc = returnsKeyword cfg stmt
@@ -1575,39 +1574,41 @@ and private alterFunctionDoc (cfg: Style) (af: AlterFunctionStatement) : Doc = f
 
 and private createFunctionDoc (cfg: Style) (cf: CreateFunctionStatement) : Doc = functionStatementDoc cfg "CREATE" cf
 
+and private procedureParamsDoc
+    (cfg: Style)
+    (stmt: TSqlStatement)
+    (parameters: System.Collections.Generic.IList<ProcedureParameter>)
+    (header: Doc)
+    : Doc =
+    let commentMap = getParamTrailingComments parameters
+    let hasParens = procedureParamsHaveParens stmt parameters
+
+    if parameters = null || parameters.Count = 0 then
+        if hasParens then header <+> text "()" else header
+    else
+        let paramItems = ddlParamItemDocs cfg parameters commentMap
+
+        if hasParens then
+            header <++> ddlParenthesizedParamsDoc cfg paramItems
+        else
+            let layout =
+                { ddlSequenceLayout cfg parameters.Count with
+                    subsequentItemsIndent = Some(indentWidth cfg) }
+
+            anchoredSequenceDoc layout header paramItems
+
 and private alterProcedureDoc (cfg: Style) (ap: AlterProcedureStatement) : Doc =
     let header =
         keyword cfg "ALTER"
         <++> keyword cfg "PROCEDURE"
         <++> schemaObjectNameDoc ap.ProcedureReference.Name
 
-    let commentMap = getParamTrailingComments ap.Parameters
-    let hasParens = procedureParamsHaveParens (ap :> TSqlStatement) ap.Parameters
-
-    let paramsDoc =
-        if ap.Parameters = null || ap.Parameters.Count = 0 then
-            if hasParens then text "()" else empty
-        else
-            let paramsBody = ddlParamBodyDoc cfg ap.Parameters commentMap
-
-            if hasParens then
-                text " " <+> ddlParenthesizedParamsDoc cfg paramsBody
-            else
-                let placeOnNewLine =
-                    match cfg.ddl.placeFirstProcedureParameterOnNewLine with
-                    | PlaceOnNewLine.Always -> true
-                    | PlaceOnNewLine.IfMultipleItems -> ap.Parameters.Count > 1
-                    | _ -> false
-
-                if placeOnNewLine then
-                    nest (indentWidth cfg) (line <+> paramsBody)
-                else
-                    text " " <+> paramsBody
+    let headerWithParams =
+        procedureParamsDoc cfg (ap :> TSqlStatement) ap.Parameters header
 
     let bodyDoc = procedureBodyDoc cfg ap
 
-    header
-    <+> paramsDoc
+    headerWithParams
     <+> optionsClauseDoc cfg (procedureOptionDoc cfg) ap.Options
     <+> line
     <+> keyword cfg "AS"
@@ -1620,33 +1621,12 @@ and private createProcedureDoc (cfg: Style) (cp: CreateProcedureStatement) : Doc
         <++> keyword cfg "PROCEDURE"
         <++> schemaObjectNameDoc cp.ProcedureReference.Name
 
-    let commentMap = getParamTrailingComments cp.Parameters
-    let hasParens = procedureParamsHaveParens (cp :> TSqlStatement) cp.Parameters
-
-    let paramsDoc =
-        if cp.Parameters = null || cp.Parameters.Count = 0 then
-            if hasParens then text "()" else empty
-        else
-            let paramsBody = ddlParamBodyDoc cfg cp.Parameters commentMap
-
-            if hasParens then
-                text " " <+> ddlParenthesizedParamsDoc cfg paramsBody
-            else
-                let placeOnNewLine =
-                    match cfg.ddl.placeFirstProcedureParameterOnNewLine with
-                    | PlaceOnNewLine.Always -> true
-                    | PlaceOnNewLine.IfMultipleItems -> cp.Parameters.Count > 1
-                    | _ -> false
-
-                if placeOnNewLine then
-                    nest (indentWidth cfg) (line <+> paramsBody)
-                else
-                    text " " <+> paramsBody
+    let headerWithParams =
+        procedureParamsDoc cfg (cp :> TSqlStatement) cp.Parameters header
 
     let bodyDoc = procedureBodyDoc cfg cp
 
-    header
-    <+> paramsDoc
+    headerWithParams
     <+> optionsClauseDoc cfg (procedureOptionDoc cfg) cp.Options
     <+> line
     <+> keyword cfg "AS"

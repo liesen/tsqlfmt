@@ -109,10 +109,16 @@ let anchoredCommaSeparatedListWithLayoutDoc
     : Doc =
     anchoredSequenceDoc layout anchorDoc (decorateListItems cfg items)
 
-let ddlSequenceLayout (cfg: Style) : SequenceLayout =
-    { placeFirstItemOnNewLine = cfg.ddl.placeFirstProcedureParameterOnNewLine = PlaceOnNewLine.Always
+let ddlSequenceLayout (cfg: Style) (itemCount: int) : SequenceLayout =
+    let placeOnNewLine =
+        match cfg.ddl.placeFirstProcedureParameterOnNewLine with
+        | PlaceOnNewLine.Always -> true
+        | PlaceOnNewLine.IfMultipleItems -> itemCount > 1
+        | _ -> false
+
+    { placeFirstItemOnNewLine = placeOnNewLine
       firstItemIndent = None
       subsequentItemsIndent = None }
 
 let ddlCommaListDoc (cfg: Style) (items: Doc list) : Doc =
-    sequenceDoc (ddlSequenceLayout cfg) (decorateDdlListItems items)
+    sequenceDoc (ddlSequenceLayout cfg items.Length) (decorateDdlListItems items)
