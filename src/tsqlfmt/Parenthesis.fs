@@ -3,6 +3,16 @@ module TSqlFormatter.Parenthesis
 open TSqlFormatter.Doc
 open TSqlFormatter.Style
 
+/// Parenthesis combinators are organized by style bucket, not by AST node.
+/// Add a new public combinator only when there is a distinct user-facing
+/// style concept behind it.
+///
+/// Use the private `parens` helper for shared mechanics.
+/// Reuse an existing public bucket when a construct has no separate style
+/// concept of its own.
+///
+/// Place `group` around the semantic unit, not just the parenthesized shell.
+/// Example: group `SUM(x) OVER (...)`, not only `OVER (...)`.
 type ParenthesisCombinator = Doc -> Doc
 
 let private optNest (indent: int option) (doc: Doc) : Doc =

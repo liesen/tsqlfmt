@@ -1,0 +1,247 @@
+= SQL Prompt parenthesis mapping
+
+This note maps SQL Prompt style concepts for parentheses to the matching `tsqlfmt` style concepts and public combinators in `src/tsqlfmt/Parenthesis.fs`.
+
+The guiding rule is simple: SQL Prompt concept and `tsqlfmt` concept should match when the concept is user-facing in style JSON.
+We do not need to copy every lower-level formatting distinction from SQL Prompt.
+
+== Scope
+
+This document focuses on parenthesis placement and indentation concepts.
+It does not try to catalog every place where literal `(` and `)` appear in SQL syntax.
+
+== Current `tsqlfmt` combinators
+
+`tsqlfmt` currently exposes these public parenthesis combinators:
+
+- `expressionParensDoc`
+- `ddlParensDoc`
+- `cteBodyParensDoc`
+- `cteColumnListParensDoc`
+- `insertColumnListParensDoc`
+- `insertValuesListParensDoc`
+- `functionCallParensDoc`
+
+These are style-bucket combinators.
+They are not meant to mirror every AST node that happens to contain parentheses.
+
+== Core principle
+
+When SQL Prompt exposes a distinct style concept in style JSON, `tsqlfmt` should usually expose the same concept.
+
+When SQL Prompt does not expose a distinct style concept, `tsqlfmt` should usually reuse an existing concept instead of inventing a new public bucket.
+
+This gives two practical rules:
+
+- match SQL Prompt at the style-concept level
+- do not copy SQL Prompt distinctions that are not visible in style JSON
+
+== Design rule
+
+Parenthesis handling follows style concepts, not AST nodes.
+
+A public parenthesis combinator should exist only when there is a real
+user-facing style concept behind it. If SQL Prompt and `tsqlfmt` expose the
+same concept in style JSON, `tsqlfmt` should usually expose the same public
+bucket.
+
+This leads to four rules:
+
+- Public combinators represent style buckets.
+- A small private helper implements shared parenthesis mechanics.
+- If no separate style concept exists, reuse an existing bucket instead of
+  inventing a new one.
+- `group` belongs around the semantic unit, not just around the parentheses.
+
+Examples:
+
+- generic expressions -> `expressionParensDoc`
+- DDL definition lists -> `ddlParensDoc`
+- CTE body -> `cteBodyParensDoc`
+- CTE column list -> `cteColumnListParensDoc`
+- insert values -> `insertValuesListParensDoc`
+- function calls -> `functionCallParensDoc`
+- `IN (value, ...)` -> `inValuesParensDoc`
+- `OVER (...)` -> `expressionParensDoc`
+
+`OVER (...)` is a good example of the last rule. The parentheses use the
+generic bucket, but the important grouping boundary is the full windowed
+expression, such as `SUM(x) OVER (...)`, not the parenthesized clause alone.
+
+== Style concept table
+
+[cols="2,2,3,2,2",options="header"]
+|===
+| SQL shape | Example | Shared style concept | `tsqlfmt` choice | Notes
+
+| Generic parenthesized expression
+| `(a + b)`
+| `parentheses.parenthesisStyle`, `parentheses.indentParenthesesContents`
+| `expressionParensDoc`
+| Direct match.
+
+| Generic subquery / derived table
+| `EXISTS (SELECT 1)`
+| `parentheses.parenthesisStyle`, `parentheses.indentParenthesesContents`
+| `expressionParensDoc`
+| Same generic bucket.
+
+| DDL definition list
+| `CREATE TABLE t (a int, b int)`
+| `ddl.parenthesisStyle`, `ddl.indentParenthesesContents`
+| `ddlParensDoc`
+| Direct DDL match.
+
+| View column list
+| `CREATE VIEW v (a, b) AS ...`
+| `ddl.parenthesisStyle`, `ddl.indentParenthesesContents`
+| `ddlParensDoc`
+| DDL, not generic.
+
+| CTE body
+| `WITH cte AS (SELECT ...)`
+| `cte.parenthesisStyle`, `cte.indentContents`
+| `cteBodyParensDoc`
+| Separate from CTE columns.
+
+| CTE column list
+| `WITH cte (a, b) AS ...`
+| `cte.placeColumnsOnNewLine`, `cte.columnAlignment`
+| `cteColumnListParensDoc`
+| Separate from CTE body.
+
+| Insert target columns
+| `INSERT INTO t (a, b)`
+| `insertStatements.columns.parenthesisStyle`, `insertStatements.columns.indentContents`
+| `insertColumnListParensDoc`
+| Insert-column bucket.
+
+| Insert row values
+| `VALUES (1, 2)`
+| `insertStatements.values.parenthesisStyle`, `insertStatements.values.indentContents`
+| `insertValuesListParensDoc`
+| Insert-values bucket.
+
+| Function call arguments
+| `COALESCE(a, b)`
+| `functionCalls.placeArgumentsOnNewLines`, `functionCalls.addSpacesAroundParentheses`, `functionCalls.addSpacesAroundArgumentList`, `functionCalls.addSpaceBetweenEmptyParentheses`
+| `functionCallParensDoc`
+| Function-call bucket.
+
+| `IN (subquery)`
+| `x IN (SELECT y ...)`
+| generic parenthesized subquery concept
+| `expressionParensDoc`
+| Generic subquery bucket.
+
+| `IN (value, ...)`
+| `x IN (1, 2, 3)`
+| `operators.in.placeOpeningParenthesisOnNewLine`, `operators.in.alignment`, `operators.in.placeFirstValueOnNewLine`, `operators.in.placeSubsequentValuesOnNewLines`, `operators.in.addSpaceAroundInContents`
+| still manual today; likely `inValuesParensDoc` next
+| Main remaining gap.
+
+| `OVER (...)`
+| `SUM(x) OVER (PARTITION BY y)`
+| no separate style-json parenthesis concept
+| use `expressionParensDoc`
+| Reuse generic parens.
+
+| Routine parameter list
+| `CREATE PROC p (@x int)`
+| likely DDL-related, but not fully traced yet
+| keep manual for now
+| Needs more tracing.
+
+| Data type parameters
+| `varchar(10)`
+| `variables.addSpaceBetweenDataTypeAndPrecision`
+| keep manual
+| Spacing, not paren layout.
+
+| `TOP (...)`
+| `TOP (10)`
+| `dml.placeDistinctAndTopClausesOnNewLine`, `dml.addNewLineAfterDistinctAndTopClauses`
+| keep manual
+| Clause placement, not parens.
+|===
+
+== What `tsqlfmt` already matches well
+
+- generic expressions and subqueries -> `expressionParensDoc`
+- DDL definition-style lists and view column lists -> `ddlParensDoc`
+- CTE body -> `cteBodyParensDoc`
+- CTE column list -> `cteColumnListParensDoc`
+- insert columns -> `insertColumnListParensDoc`
+- insert row values -> `insertValuesListParensDoc`
+- function call arguments -> `functionCallParensDoc`
+
+== Where `tsqlfmt` still differs or is incomplete
+
+- `IN (value, ...)`
+  - SQL Prompt and `tsqlfmt` already share the same style concept in JSON under `operators.in.*`
+  - `tsqlfmt` still formats this manually in `src/tsqlfmt/Formatter.fs`
+  - the natural next step is a dedicated `inValuesParensDoc`
+
+- `OVER (...)`
+  - SQL Prompt treats this separately
+  - but there is no separate style-json concept for over-clause parentheses
+  - `tsqlfmt` should prefer the symmetric public concept: generic expression parentheses
+
+- routine parameter lists
+  - we have not yet traced the exact SQL Prompt style concept cleanly enough
+  - until that is clear, they should stay manual rather than being forced into the wrong bucket
+
+== Recommended taxonomy
+
+The current public taxonomy is coherent:
+
+- `expressionParensDoc`
+- `ddlParensDoc`
+- `cteBodyParensDoc`
+- `cteColumnListParensDoc`
+- `insertColumnListParensDoc`
+- `insertValuesListParensDoc`
+- `functionCallParensDoc`
+
+The next likely addition is:
+
+- `inValuesParensDoc`
+
+The important negative rule is:
+
+- do not add a new public combinator unless it corresponds to a real style concept in JSON
+
+That is why `OVER (...)` should probably reuse `expressionParensDoc` instead of getting its own public combinator.
+
+== Fundamental combinator
+
+Below the public style-bucket combinators, `Parenthesis.fs` still wants one shared structural primitive.
+
+The shape is:
+
+- opening `(`
+- contents with optional indentation
+- closing `)`
+- a style choice that controls line breaking
+
+A reasonable lower-level shape is:
+
+[source,fsharp]
+----
+type ParenthesisLayoutSpec =
+    {
+        contentsIndent: int option
+        style: ParenthesisStyle
+    }
+
+val parenthesize : ParenthesisLayoutSpec -> Doc -> Doc
+----
+
+The public combinators should remain the semantic entry points.
+The low-level primitive should stay style-parameterized, not AST-parameterized.
+
+== Next step
+
+The clearest remaining parenthesis concept that is present in style JSON but not yet mapped to a public `Parenthesis` combinator is:
+
+- `operators.in.*` for `IN (value, ...)`
