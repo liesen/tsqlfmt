@@ -16,6 +16,7 @@
     <Compile Include="StructuredListTests.fs" />
     <Compile Include="FunctionCallsTests.fs" />
     <Compile Include="ParenthesisTests.fs" />
+    <Compile Include="OverClauseTests.fs" />
     <Compile Include="SqlPromptParityTests.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>

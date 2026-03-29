@@ -641,13 +641,10 @@ and private functionCallDoc (cfg: Style) (f: FunctionCall) : Doc =
         else
             call callName []
 
-    let overDoc =
-        if f.OverClause <> null then
-            text " " <+> overClauseDoc cfg f.OverClause
-        else
-            empty
-
-    argsDoc <+> overDoc
+    if f.OverClause <> null then
+        group (argsDoc <+> text " " <+> overClauseDoc cfg f.OverClause)
+    else
+        argsDoc
 
 and private overClauseDoc (cfg: Style) (oc: OverClause) : Doc =
     let parts =
