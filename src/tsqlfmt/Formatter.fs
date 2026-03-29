@@ -88,7 +88,7 @@ let private canCollapseList (cfg: Style) (items: Doc list) =
 // We intentionally do not support right-aligned variants such as:
 //   WHERE a = 1
 //     AND b = 2
-let andOrSequencePolicy (cfg: Style) =
+let andOrSequenceLayout (cfg: Style) =
     let indent = indentWidth cfg
 
     { placeFirstItemOnNewLine = false
@@ -126,7 +126,7 @@ let private expandedCommaListDoc (cfg: Style) (keyword: Doc) (items: CommaListIt
         items
         |> List.mapi (fun i item -> decoratedCommaItemDoc (i = List.length items - 1) item)
 
-    headedSequenceDoc (listSequencePolicy cfg) keyword decoratedItems
+    anchoredSequenceDoc (listSequenceLayout cfg) keyword decoratedItems
 
 let private formatCommaList (cfg: Style) (keyword: Doc) (items: CommaListItem list) : Doc =
     match items with
@@ -390,9 +390,9 @@ and private boolExprDoc (cfg: Style) (expr: BooleanExpression) : Doc =
 and private boolBinaryExprDoc (cfg: Style) (afterHead: bool) (bb: BooleanBinaryExpression) : Doc =
     let policy =
         if afterHead then
-            andOrSequencePolicy cfg |> withFirstItemIndent (indentWidth cfg)
+            andOrSequenceLayout cfg |> withFirstItemIndent (indentWidth cfg)
         else
-            andOrSequencePolicy cfg
+            andOrSequenceLayout cfg
 
     sequenceDoc policy (booleanSequenceItems cfg bb)
 
@@ -494,7 +494,7 @@ and private expandedCaseFromParts (cfg: Style) (caseHead: Doc) (whenDocs: Doc li
             | WhenAlignment.IndentedFromCase -> Some indent
             | _ -> None }
 
-    headedSequenceDoc whenPolicy caseHead bodyItems <+> line <+> keyword cfg "END"
+    anchoredSequenceDoc whenPolicy caseHead bodyItems <+> line <+> keyword cfg "END"
 
 and private searchedCaseDoc (cfg: Style) (c: SearchedCaseExpression) : Doc =
     let whenDocs =
@@ -647,13 +647,13 @@ and private functionCallDoc (cfg: Style) (f: FunctionCall) : Doc =
         argsDoc
 
 and private overClauseDoc (cfg: Style) (oc: OverClause) : Doc =
-    let overClauseListDoc headDoc items =
-        headedCommaListWithPolicyDoc
+    let overClauseListDoc anchorDoc items =
+        anchoredCommaSeparatedListWithLayoutDoc
             { placeFirstItemOnNewLine = false
               firstItemIndent = None
               subsequentItemsIndent = Some(indentWidth cfg) }
             cfg
-            headDoc
+            anchorDoc
             items
 
     let parts =
@@ -963,7 +963,7 @@ and private querySpecDoc (cfg: Style) (qs: QuerySpecification) (intoTarget: Trai
                       | _ -> tokenStreamDoc cfg g)
                   |> Seq.toList
 
-              yield headedCommaListDoc cfg (keyword cfg "GROUP" <++> keyword cfg "BY") groupItems
+              yield anchoredCommaSeparatedListDoc cfg (keyword cfg "GROUP" <++> keyword cfg "BY") groupItems
 
           // HAVING clause
           if qs.HavingClause <> null && qs.HavingClause.SearchCondition <> null then
@@ -980,7 +980,7 @@ and private querySpecDoc (cfg: Style) (qs: QuerySpecification) (intoTarget: Trai
                   |> Seq.map (fun o -> orderByElemDoc cfg o)
                   |> Seq.toList
 
-              yield headedCommaListDoc cfg (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems ]
+              yield anchoredCommaSeparatedListDoc cfg (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems ]
 
     join line parts
 
@@ -1182,7 +1182,7 @@ and private binaryQueryDoc (cfg: Style) (bqe: BinaryQueryExpression) : Doc =
 
         result
         <+> line
-        <+> headedCommaListDoc cfg (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems
+        <+> anchoredCommaSeparatedListDoc cfg (keyword cfg "ORDER" <++> keyword cfg "BY") orderItems
     else
         result
 
@@ -1453,8 +1453,8 @@ and private optionsClauseDoc (cfg: Style) (optionDoc: 'T -> Doc) (options: Syste
 
         let optionListDoc =
             if placeFirstOnNewLine then
-                headedSequenceDoc
-                    (listSequencePolicy cfg)
+                anchoredSequenceDoc
+                    (listSequenceLayout cfg)
                     (keyword cfg "WITH")
                     (optionDocs
                      |> List.mapi (fun i doc ->
@@ -1836,7 +1836,7 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
                         | _ -> tokenStreamDoc cfg option)
                     |> Seq.toList
 
-                text " " <+> headedCommaListDoc cfg (keyword cfg "WITH") optionDocs
+                text " " <+> anchoredCommaSeparatedListDoc cfg (keyword cfg "WITH") optionDocs
             else
                 empty
 
@@ -2084,7 +2084,7 @@ and private updateDoc (cfg: Style) (upd: UpdateStatement) : Doc =
 
     let parts =
         [ yield keyword cfg "UPDATE" <++> target
-          yield headedCommaListDoc cfg (keyword cfg "SET") setClauses
+          yield anchoredCommaSeparatedListDoc cfg (keyword cfg "SET") setClauses
 
           if
               spec.FromClause <> null
@@ -2202,7 +2202,7 @@ and private mergeDoc (cfg: Style) (merge: MergeStatement) : Doc =
                 <+> nest
                         (indentWidth cfg)
                         (line
-                         <+> headedCommaListDoc cfg (keyword cfg "UPDATE" <++> keyword cfg "SET") setClauses)
+                         <+> anchoredCommaSeparatedListDoc cfg (keyword cfg "UPDATE" <++> keyword cfg "SET") setClauses)
             | :? InsertMergeAction as ins ->
                 let cols =
                     if ins.Columns <> null && ins.Columns.Count > 0 then
@@ -2252,7 +2252,7 @@ and private declareDoc (cfg: Style) (decl: DeclareVariableStatement) : Doc =
             nameDoc <++> typeDoc <+> valueDoc)
         |> Seq.toList
 
-    headedCommaListDoc cfg (keyword cfg "DECLARE") varDocs
+    anchoredCommaSeparatedListDoc cfg (keyword cfg "DECLARE") varDocs
 
 and private setVarDoc (cfg: Style) (sv: SetVariableStatement) : Doc =
     let varDoc = text sv.Variable.Name

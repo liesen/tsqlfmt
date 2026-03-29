@@ -8,7 +8,7 @@ open TestSupport
 
 [<Fact>]
 let ``sequenceDoc indents the first item when configured`` () =
-    let policy =
+    let layout =
         { placeFirstItemOnNewLine = false
           firstItemIndent = Some 4
           subsequentItemsIndent = Some 4 }
@@ -25,11 +25,11 @@ let ``sequenceDoc indents the first item when configured`` () =
     AND b = 2
 """
 
-    assertRenderedDoc 120 expected (sequenceDoc policy items)
+    assertRenderedDoc 120 expected (sequenceDoc layout items)
 
 [<Fact>]
-let ``sequenceDoc leaves subsequent items flush when policy has no subsequent indent`` () =
-    let policy =
+let ``sequenceDoc leaves subsequent items flush when layout has no subsequent indent`` () =
+    let layout =
         { placeFirstItemOnNewLine = false
           firstItemIndent = None
           subsequentItemsIndent = None }
@@ -43,11 +43,11 @@ AND b = 2
 AND c = 3
 """
 
-    assertRenderedDoc 120 expected (sequenceDoc policy items)
+    assertRenderedDoc 120 expected (sequenceDoc layout items)
 
 [<Fact>]
-let ``headedSequenceDoc places the first item on a new line when policy requests it`` () =
-    let policy =
+let ``anchoredSequenceDoc places the first item on a new line when layout requests it`` () =
+    let layout =
         { placeFirstItemOnNewLine = true
           firstItemIndent = None
           subsequentItemsIndent = Some 4 }
@@ -62,11 +62,11 @@ SELECT
     c
 """
 
-    assertRenderedDoc 120 expected (headedSequenceDoc policy (text "SELECT") items)
+    assertRenderedDoc 120 expected (anchoredSequenceDoc layout (text "SELECT") items)
 
 [<Fact>]
-let ``headedSequenceDoc keeps the first item after the head when policy allows it`` () =
-    let policy =
+let ``anchoredSequenceDoc keeps the first item after the head when layout allows it`` () =
+    let layout =
         { placeFirstItemOnNewLine = false
           firstItemIndent = None
           subsequentItemsIndent = Some 4 }
@@ -79,7 +79,7 @@ WHERE a = 1
     AND b = 2
 """
 
-    assertRenderedDoc 120 expected (headedSequenceDoc policy (text "WHERE") items)
+    assertRenderedDoc 120 expected (anchoredSequenceDoc layout (text "WHERE") items)
 
 [<Fact>]
 let ``render trims indentation on blank lines in nested docs`` () =
