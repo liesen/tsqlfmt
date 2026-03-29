@@ -1,0 +1,171 @@
+= List decoration unification plan
+
+This note proposes the next cleanup step for `src/tsqlfmt/Lists.fs`.
+
+The current state is better than before because layout and anchoring are now named
+more clearly, but the remaining goal is to make generic and DDL comma decoration
+share one low-level implementation.
+
+- generic lists use `decorateListItems`
+- DDL lists use `decorateDdlListItems`
+
+These are not structurally different. They differ only in where their decoration
+rules come from.
+
+== Goal
+
+Use one low-level comma-decoration combinator for both generic and DDL lists.
+
+The difference between generic and DDL lists should be expressed as a decoration
+value, not as separate implementations.
+
+== Core idea
+
+Introduce an explicit decoration concept:
+
+[source,fsharp]
+----
+type CommaPlacement =
+    | BeforeItems
+    | AfterItems
+
+type SequenceDecoration =
+    { commaPlacement: CommaPlacement
+      addSpaceBeforeComma: bool }
+----
+
+Then make the low-level helper take that value:
+
+[source,fsharp]
+----
+val decorateListItemsWith : SequenceDecoration -> Doc list -> Doc list
+
+val decorateListItems : Style -> Doc list -> Doc list
+val decorateDdlListItems : Doc list -> Doc list
+----
+
+This keeps the split clean:
+
+- layout decides where items go
+- decoration decides where commas go
+- anchoring decides what the list attaches to
+
+The first function is the true core.
+The latter two are convenience helpers for the common generic-list and DDL-list cases.
+
+== Decoration sources
+
+Generic lists should derive decoration from `lists.*` settings:
+
+- `lists.placeCommasBeforeItems`
+- `lists.addSpaceBeforeComma`
+
+DDL lists should use a fixed decoration value:
+
+- commas after items
+- no extra space before comma
+
+Conceptually:
+
+[source,fsharp]
+----
+val listCommaDecoration : Style -> SequenceDecoration
+val ddlCommaDecoration : SequenceDecoration
+
+val decorateListItems : Style -> Doc list -> Doc list
+val decorateDdlListItems : Doc list -> Doc list
+----
+
+== Resulting composition
+
+Generic comma list:
+
+[source,fsharp]
+----
+items
+|> decorateListItems cfg
+|> sequenceDoc (listSequenceLayout cfg)
+----
+
+Anchored generic comma list:
+
+[source,fsharp]
+----
+items
+|> decorateListItems cfg
+|> anchoredSequenceDoc layout anchorDoc
+----
+
+DDL comma list:
+
+[source,fsharp]
+----
+items
+|> decorateDdlListItems
+|> sequenceDoc (ddlSequenceLayout cfg)
+----
+
+== Why this is cleaner
+
+Today, generic and DDL lists already share the same structural list machinery.
+
+The remaining difference is only decoration source:
+
+- generic lists read style JSON
+- DDL lists use a fixed convention
+
+That is exactly the kind of difference that should be expressed as data, not
+as separate helper functions.
+
+At the same time, the call sites do not always need to mention the decoration
+value explicitly.
+That is why the plan keeps both:
+
+- an explicit core decoration function
+- tiny convenience helpers for generic and DDL list items
+
+== Scope of this step
+
+This step should cover only plain `Doc list` comma decoration.
+
+It should not try to solve comment-sensitive decoration yet.
+
+That means this step does not change the richer comma-list logic in
+`src/tsqlfmt/Formatter.fs` that carries comment-related layout information.
+
+== Recommended migration order
+
+. Add:
+  - `CommaPlacement`
+  - `SequenceDecoration`
+  - `listCommaDecoration`
+  - `ddlCommaDecoration`
+  - `decorateListItems`
+  - `decorateDdlListItems`
+. Change:
+  - `decorateListItemsWith : SequenceDecoration -> Doc list -> Doc list`
+  to
+  - a private core decoration helper driven by `SequenceDecoration`
+. Rewrite:
+  - `commaListDoc`
+  - `anchoredCommaSeparatedListDoc`
+  - `anchoredCommaSeparatedListWithLayoutDoc`
+  - `ddlCommaListDoc`
+. Delete:
+  - the old DDL-specific comma-decoration helper
+. Re-express that old behavior through:
+  - `decorateListItemsWith`
+  - `ddlCommaDecoration`
+  - `decorateDdlListItems`
+. Add focused tests for decoration behavior.
+. Run build, Fantomas, and tests.
+
+== Expected outcome
+
+After this change:
+
+- generic and DDL comma decoration share one implementation
+- layout and decoration are more cleanly separated
+- common call sites stay concise through tiny convenience helpers
+- `OVER (...)` keeps reusing the generic comma-decoration path
+- trivia-sensitive list decoration can be addressed later as a separate concern

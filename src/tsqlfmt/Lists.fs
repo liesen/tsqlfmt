@@ -21,6 +21,14 @@ type SequenceLayout =
       firstItemIndent: int option
       subsequentItemsIndent: int option }
 
+type CommaPlacement =
+    | BeforeItems
+    | AfterItems
+
+type SequenceDecoration =
+    { commaPlacement: CommaPlacement
+      addSpaceBeforeComma: bool }
+
 let sequenceDoc (layout: SequenceLayout) (items: Doc list) : Doc =
     let nestIfIndented indent doc =
         match indent with
@@ -56,24 +64,42 @@ let withFirstItemIndent (indent: int) (layout: SequenceLayout) =
     { layout with
         firstItemIndent = if indent > 0 then Some indent else None }
 
-let commaDecoratedItems (cfg: Style) (items: Doc list) =
+let listCommaDecoration (cfg: Style) : SequenceDecoration =
+    { commaPlacement =
+        if cfg.lists.placeCommasBeforeItems then
+            CommaPlacement.BeforeItems
+        else
+            CommaPlacement.AfterItems
+      addSpaceBeforeComma = cfg.lists.addSpaceBeforeComma }
+
+let ddlCommaDecoration: SequenceDecoration =
+    { commaPlacement = CommaPlacement.AfterItems
+      addSpaceBeforeComma = false }
+
+let private decorateListItemsWith (decoration: SequenceDecoration) (items: Doc list) =
     let comma =
-        if cfg.lists.addSpaceBeforeComma then
+        if decoration.addSpaceBeforeComma then
             text " ,"
         else
             text ","
 
-    if cfg.lists.placeCommasBeforeItems then
+    if decoration.commaPlacement = CommaPlacement.BeforeItems then
         items |> List.mapi (fun i item -> if i = 0 then item else comma <+> item)
     else
         items
         |> List.mapi (fun i item -> if i = List.length items - 1 then item else item <+> comma)
 
+let decorateListItems (cfg: Style) (items: Doc list) =
+    decorateListItemsWith (listCommaDecoration cfg) items
+
+let decorateDdlListItems (items: Doc list) =
+    decorateListItemsWith ddlCommaDecoration items
+
 let commaListDoc (cfg: Style) (items: Doc list) : Doc =
-    sequenceDoc (listSequenceLayout cfg) (commaDecoratedItems cfg items)
+    sequenceDoc (listSequenceLayout cfg) (decorateListItems cfg items)
 
 let anchoredCommaSeparatedListDoc (cfg: Style) (anchorDoc: Doc) (items: Doc list) : Doc =
-    anchoredSequenceDoc (listSequenceLayout cfg) anchorDoc (commaDecoratedItems cfg items)
+    anchoredSequenceDoc (listSequenceLayout cfg) anchorDoc (decorateListItems cfg items)
 
 let anchoredCommaSeparatedListWithLayoutDoc
     (layout: SequenceLayout)
@@ -81,15 +107,7 @@ let anchoredCommaSeparatedListWithLayoutDoc
     (anchorDoc: Doc)
     (items: Doc list)
     : Doc =
-    anchoredSequenceDoc layout anchorDoc (commaDecoratedItems cfg items)
-
-let ddlCommaDecoratedItems (items: Doc list) =
-    items
-    |> List.mapi (fun i item ->
-        if i = List.length items - 1 then
-            item
-        else
-            item <+> text ",")
+    anchoredSequenceDoc layout anchorDoc (decorateListItems cfg items)
 
 let ddlSequenceLayout (cfg: Style) : SequenceLayout =
     { placeFirstItemOnNewLine = cfg.ddl.placeFirstProcedureParameterOnNewLine = PlaceOnNewLine.Always
@@ -97,4 +115,4 @@ let ddlSequenceLayout (cfg: Style) : SequenceLayout =
       subsequentItemsIndent = None }
 
 let ddlCommaListDoc (cfg: Style) (items: Doc list) : Doc =
-    sequenceDoc (ddlSequenceLayout cfg) (ddlCommaDecoratedItems items)
+    sequenceDoc (ddlSequenceLayout cfg) (decorateDdlListItems items)

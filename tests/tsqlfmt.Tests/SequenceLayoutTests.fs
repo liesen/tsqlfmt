@@ -4,6 +4,7 @@ open Xunit
 open TSqlFormatter.Doc
 open TSqlFormatter.Formatter
 open TSqlFormatter.Lists
+open TSqlFormatter.Style
 open TestSupport
 
 [<Fact>]
@@ -95,3 +96,56 @@ END
 """
 
     assertRenderedDoc 120 expected doc
+
+[<Fact>]
+let ``decorateListItems respects leading comma style`` () =
+    let testConfig =
+        { config with
+            lists =
+                { config.lists with
+                    placeCommasBeforeItems = true
+                    addSpaceBeforeComma = false } }
+
+    let items = [ text "a"; text "b"; text "c" ]
+
+    let expected =
+        """
+a
+,b
+,c
+"""
+
+    assertRenderedDoc 120 expected (join line (decorateListItems testConfig items))
+
+[<Fact>]
+let ``decorateListItems respects space before comma`` () =
+    let testConfig =
+        { config with
+            lists =
+                { config.lists with
+                    placeCommasBeforeItems = false
+                    addSpaceBeforeComma = true } }
+
+    let items = [ text "a"; text "b"; text "c" ]
+
+    let expected =
+        """
+a ,
+b ,
+c
+"""
+
+    assertRenderedDoc 120 expected (join line (decorateListItems testConfig items))
+
+[<Fact>]
+let ``decorateDdlListItems keeps trailing commas without extra spacing`` () =
+    let items = [ text "a"; text "b"; text "c" ]
+
+    let expected =
+        """
+a,
+b,
+c
+"""
+
+    assertRenderedDoc 120 expected (join line (decorateDdlListItems items))
