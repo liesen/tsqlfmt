@@ -1,4 +1,4 @@
-CREATE FUNCTION dbo.fn_test27(@param INT)
+CREATE FUNCTION dbo.fn_test27 (@param INT)
 RETURNS TABLE
 AS
 RETURN (

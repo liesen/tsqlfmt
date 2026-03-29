@@ -31,8 +31,7 @@ BEGIN
     DROP TABLE #temp;
 END
 GO
-CREATE PROCEDURE dbo.usp_CleanupRecords
-    @cutoffDays INT = 30
+CREATE PROCEDURE dbo.usp_CleanupRecords @cutoffDays INT = 30
 AS
 BEGIN
     DELETE dbo.archive_records

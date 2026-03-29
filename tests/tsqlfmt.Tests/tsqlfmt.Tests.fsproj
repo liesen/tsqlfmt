@@ -14,6 +14,7 @@
     <Compile Include="BooleanExpressionTests.fs" />
     <Compile Include="TableReferenceTests.fs" />
     <Compile Include="StructuredListTests.fs" />
+    <Compile Include="ProcedureParameterTests.fs" />
     <Compile Include="FunctionCallsTests.fs" />
     <Compile Include="ParenthesisTests.fs" />
     <Compile Include="OverClauseTests.fs" />

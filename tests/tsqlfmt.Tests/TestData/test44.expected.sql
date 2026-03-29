@@ -1,4 +1,4 @@
-CREATE FUNCTION dbo.fn_test44(@n INT)
+CREATE FUNCTION dbo.fn_test44 (@n INT)
 RETURNS TABLE
 AS
 RETURN WITH nums AS (

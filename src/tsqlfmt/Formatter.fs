@@ -1242,58 +1242,53 @@ and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
 
 // ─── DDL: ALTER/CREATE FUNCTION/PROCEDURE ───
 
-and private ddlParamListDoc
+and private ddlParamBodyDoc
     (cfg: Style)
     (parameters: System.Collections.Generic.IList<ProcedureParameter>)
     (trailingCommentMap: Map<int, string>)
-    (wrapInParens: bool)
     : Doc =
-    if parameters = null || parameters.Count = 0 then
-        if wrapInParens then text "()" else empty
+    let paramCount = parameters.Count
+
+    let paramDocs =
+        parameters
+        |> Seq.mapi (fun i p ->
+            let nameDoc = text p.VariableName.Value
+            let typeDoc = dataTypeRefDoc cfg p.DataType
+
+            let defaultDoc =
+                if p.Value <> null then
+                    text " " <+> text "=" <++> exprDoc cfg p.Value
+                else
+                    empty
+
+            let outputDoc =
+                if p.Modifier = ParameterModifier.Output then
+                    text " " <+> keyword cfg "OUTPUT"
+                elif p.Modifier = ParameterModifier.ReadOnly then
+                    text " " <+> keyword cfg "READONLY"
+                else
+                    empty
+            // Place comma before trailing comment (not after)
+            let commaDoc = if i < paramCount - 1 then text "," else empty
+
+            let commentDoc =
+                match trailingCommentMap |> Map.tryFind i with
+                | Some c -> text " " <+> text c
+                | None -> empty
+
+            nameDoc <++> typeDoc <+> defaultDoc <+> outputDoc <+> commaDoc <+> commentDoc)
+        |> Seq.toList
+
+    join line paramDocs
+
+and private ddlParenthesizedParamsDoc (cfg: Style) (paramsBody: Doc) : Doc =
+    if
+        cfg.parentheses.collapseShortParenthesisContents
+        && (render cfg.whitespace.wrapLinesLongerThan (flatten paramsBody)).Length < cfg.parentheses.collapseParenthesesShorterThan
+    then
+        text "(" <+> flatten paramsBody <+> text ")"
     else
-        let paramCount = parameters.Count
-
-        let paramDocs =
-            parameters
-            |> Seq.mapi (fun i p ->
-                let nameDoc = text p.VariableName.Value
-                let typeDoc = dataTypeRefDoc cfg p.DataType
-
-                let defaultDoc =
-                    if p.Value <> null then
-                        text " " <+> text "=" <++> exprDoc cfg p.Value
-                    else
-                        empty
-
-                let outputDoc =
-                    if p.Modifier = ParameterModifier.Output then
-                        text " " <+> keyword cfg "OUTPUT"
-                    elif p.Modifier = ParameterModifier.ReadOnly then
-                        text " " <+> keyword cfg "READONLY"
-                    else
-                        empty
-                // Place comma before trailing comment (not after)
-                let commaDoc = if i < paramCount - 1 then text "," else empty
-
-                let commentDoc =
-                    match trailingCommentMap |> Map.tryFind i with
-                    | Some c -> text " " <+> text c
-                    | None -> empty
-
-                nameDoc <++> typeDoc <+> defaultDoc <+> outputDoc <+> commaDoc <+> commentDoc)
-            |> Seq.toList
-
-        let paramsBody = join line paramDocs
-
-        if wrapInParens then
-            let isSingleLine = parameters.Count = 1 && trailingCommentMap.IsEmpty
-
-            if isSingleLine then
-                text "(" <+> flatten paramsBody <+> text ")"
-            else
-                text " (" <+> nest (indentWidth cfg) (line <+> paramsBody) <+> line <+> text ")"
-        else
-            nest (indentWidth cfg) (line <+> paramsBody)
+        ddlParensDoc cfg paramsBody
 
 and private statementListDoc
     (cfg: Style)
@@ -1324,9 +1319,12 @@ and private functionHeaderDoc
     : Doc =
     let header = keyword cfg "FUNCTION" <++> schemaObjectNameDoc name
 
-    let commentMap = getParamTrailingComments parameters
-    let paramsDoc = ddlParamListDoc cfg parameters commentMap true
-    header <+> paramsDoc
+    if parameters = null || parameters.Count = 0 then
+        header <+> text "()"
+    else
+        let commentMap = getParamTrailingComments parameters
+        let paramsBody = ddlParamBodyDoc cfg parameters commentMap
+        header <++> ddlParenthesizedParamsDoc cfg paramsBody
 
 and private returnTypeDoc (cfg: Style) (stmt: TSqlStatement) (returnType: FunctionReturnType) : Doc =
     let returnsComment, returnsKeywordDoc = returnsKeyword cfg stmt
@@ -1584,8 +1582,27 @@ and private alterProcedureDoc (cfg: Style) (ap: AlterProcedureStatement) : Doc =
         <++> schemaObjectNameDoc ap.ProcedureReference.Name
 
     let commentMap = getParamTrailingComments ap.Parameters
-    let wrapParams = procedureParamsHaveParens (ap :> TSqlStatement) ap.Parameters
-    let paramsDoc = ddlParamListDoc cfg ap.Parameters commentMap wrapParams
+    let hasParens = procedureParamsHaveParens (ap :> TSqlStatement) ap.Parameters
+
+    let paramsDoc =
+        if ap.Parameters = null || ap.Parameters.Count = 0 then
+            if hasParens then text "()" else empty
+        else
+            let paramsBody = ddlParamBodyDoc cfg ap.Parameters commentMap
+
+            if hasParens then
+                text " " <+> ddlParenthesizedParamsDoc cfg paramsBody
+            else
+                let placeOnNewLine =
+                    match cfg.ddl.placeFirstProcedureParameterOnNewLine with
+                    | PlaceOnNewLine.Always -> true
+                    | PlaceOnNewLine.IfMultipleItems -> ap.Parameters.Count > 1
+                    | _ -> false
+
+                if placeOnNewLine then
+                    nest (indentWidth cfg) (line <+> paramsBody)
+                else
+                    text " " <+> paramsBody
 
     let bodyDoc = procedureBodyDoc cfg ap
 
@@ -1604,8 +1621,27 @@ and private createProcedureDoc (cfg: Style) (cp: CreateProcedureStatement) : Doc
         <++> schemaObjectNameDoc cp.ProcedureReference.Name
 
     let commentMap = getParamTrailingComments cp.Parameters
-    let wrapParams = procedureParamsHaveParens (cp :> TSqlStatement) cp.Parameters
-    let paramsDoc = ddlParamListDoc cfg cp.Parameters commentMap wrapParams
+    let hasParens = procedureParamsHaveParens (cp :> TSqlStatement) cp.Parameters
+
+    let paramsDoc =
+        if cp.Parameters = null || cp.Parameters.Count = 0 then
+            if hasParens then text "()" else empty
+        else
+            let paramsBody = ddlParamBodyDoc cfg cp.Parameters commentMap
+
+            if hasParens then
+                text " " <+> ddlParenthesizedParamsDoc cfg paramsBody
+            else
+                let placeOnNewLine =
+                    match cfg.ddl.placeFirstProcedureParameterOnNewLine with
+                    | PlaceOnNewLine.Always -> true
+                    | PlaceOnNewLine.IfMultipleItems -> cp.Parameters.Count > 1
+                    | _ -> false
+
+                if placeOnNewLine then
+                    nest (indentWidth cfg) (line <+> paramsBody)
+                else
+                    text " " <+> paramsBody
 
     let bodyDoc = procedureBodyDoc cfg cp
 
