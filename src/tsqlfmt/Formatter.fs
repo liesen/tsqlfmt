@@ -708,7 +708,7 @@ and private overClauseDoc (cfg: Style) (oc: OverClause) : Doc =
 
               yield text (sb.ToString().Trim()) ]
 
-    keyword cfg "OVER" <++> text "(" <+> join (text " ") parts <+> text ")"
+    keyword cfg "OVER" <++> expressionParensDoc cfg (join (text " ") parts)
 
 and private coalesceDoc (cfg: Style) (c: CoalesceExpression) : Doc =
     c.Expressions
