@@ -1227,7 +1227,7 @@ and private cteExprDoc (cfg: Style) (cte: CommonTableExpression) : Doc =
     let colsDoc =
         if cte.Columns <> null && cte.Columns.Count > 0 then
             let cols = cte.Columns |> Seq.map identDoc |> Seq.toList
-            text " " <+> (commaListDoc cfg cols |> expressionParensDoc cfg |> group)
+            text " " <+> (commaListDoc cfg cols |> cteColumnListParensDoc cfg |> group)
         else
             empty
 
@@ -1706,7 +1706,7 @@ and private viewColumnsDoc (cfg: Style) (columns: IList<Identifier>) : Doc =
         empty
     else
         let columnDocs = columns |> Seq.map identDoc |> Seq.toList
-        expressionParensDoc cfg (commaListDoc cfg columnDocs)
+        ddlParensDoc cfg (commaListDoc cfg columnDocs)
 
 and private viewOptionsDoc (cfg: Style) (options: IList<ViewOption>) : Doc =
     optionsClauseDoc cfg (viewOptionDoc cfg) options

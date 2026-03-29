@@ -5,62 +5,75 @@ open TSqlFormatter.Style
 
 type ParenthesisCombinator = Doc -> Doc
 
-let private expandedSplit (indentWidth: int) (indentContents: bool) (contentsDoc: Doc) =
-    let laidOutContents =
-        if indentContents then
-            nest indentWidth (softline <+> contentsDoc)
-        else
-            softline <+> contentsDoc
+let private optNest (indent: int option) (doc: Doc) : Doc =
+    match indent with
+    | Some spaces -> nest spaces doc
+    | None -> doc
+
+let private expandedSplit (contentsIndent: int option) (contentsDoc: Doc) =
+    let laidOutContents = optNest contentsIndent (softline <+> contentsDoc)
 
     text "(" <+> laidOutContents <+> softline <+> text ")"
 
-let private compactIndented (indentWidth: int) (indentContents: bool) (contentsDoc: Doc) =
-    let laidOutContents =
-        if indentContents then
-            nest indentWidth (softline <+> contentsDoc)
-        else
-            softline <+> contentsDoc
+let private compactIndented (contentsIndent: int option) (contentsDoc: Doc) =
+    let laidOutContents = optNest contentsIndent (softline <+> contentsDoc)
 
     text "(" <+> laidOutContents <+> softline <+> text ")"
 
-let private parenthesisDoc (indentWidth: int) (indentContents: bool) (style: ParenthesisStyle) : ParenthesisCombinator =
+let private parenthesisDoc (contentsIndent: int option) (style: ParenthesisStyle) : ParenthesisCombinator =
     match style with
-    | ParenthesisStyle.ExpandedSplit -> expandedSplit indentWidth indentContents
-    | ParenthesisStyle.CompactIndented -> compactIndented indentWidth indentContents
+    | ParenthesisStyle.ExpandedSplit -> expandedSplit contentsIndent
+    | ParenthesisStyle.CompactIndented -> compactIndented contentsIndent
     | unsupported -> failwithf "Unsupported parenthesis style: %A" unsupported
+
+let private optWhen condition value = if condition then Some value else None
+
+let private cteColumnAlignmentIndent (cfg: Style) =
+    match cfg.cte.columnAlignment with
+    | Alignment.Indented -> Some cfg.whitespace.numberOfSpacesInTabs
+    | _ -> None
 
 /// Use for generic parenthesized expressions driven by `cfg.parentheses`.
 /// Example: `(a + b)`, `EXISTS (SELECT 1 ...)`, `(SELECT ... UNION SELECT ...)`.
 let expressionParensDoc (cfg: Style) : ParenthesisCombinator =
     parenthesisDoc
-        cfg.whitespace.numberOfSpacesInTabs
-        cfg.parentheses.indentParenthesesContents
+        (optWhen cfg.parentheses.indentParenthesesContents cfg.whitespace.numberOfSpacesInTabs)
         cfg.parentheses.parenthesisStyle
 
 /// Use for DDL definition-style lists driven by `cfg.ddl`.
 /// Example: `CREATE TABLE t (a int, b int)` or `CONSTRAINT pk PRIMARY KEY (id)`.
 let ddlParensDoc (cfg: Style) : ParenthesisCombinator =
-    parenthesisDoc cfg.whitespace.numberOfSpacesInTabs cfg.ddl.indentParenthesesContents cfg.ddl.parenthesisStyle
+    parenthesisDoc
+        (optWhen cfg.ddl.indentParenthesesContents cfg.whitespace.numberOfSpacesInTabs)
+        cfg.ddl.parenthesisStyle
 
 /// Use for the parenthesized CTE body after `AS`, driven by `cfg.cte`.
 /// Example: `WITH cte AS (SELECT ... FROM ...)`.
 let cteBodyParensDoc (cfg: Style) : ParenthesisCombinator =
-    parenthesisDoc cfg.whitespace.numberOfSpacesInTabs cfg.cte.indentContents cfg.cte.parenthesisStyle
+    parenthesisDoc (optWhen cfg.cte.indentContents cfg.whitespace.numberOfSpacesInTabs) cfg.cte.parenthesisStyle
+
+/// Use for the optional CTE column list driven by `cfg.cte.placeColumnsOnNewLine` and `cfg.cte.columnAlignment`.
+/// Example: `WITH cte (col1, col2) AS ...`.
+let cteColumnListParensDoc (cfg: Style) columnsDoc : Doc =
+    let columnIndent = cteColumnAlignmentIndent cfg
+
+    if cfg.cte.placeColumnsOnNewLine then
+        text "(" <+> optNest columnIndent (line <+> columnsDoc) <+> line <+> text ")"
+    else
+        text "(" <+> columnsDoc <+> text ")"
 
 /// Use for insert target column lists driven by `cfg.insertStatements.columns`.
 /// Example: `INSERT INTO t (a, b, c)`.
 let insertColumnListParensDoc (cfg: Style) : ParenthesisCombinator =
     parenthesisDoc
-        cfg.whitespace.numberOfSpacesInTabs
-        cfg.insertStatements.columns.indentContents
+        (optWhen cfg.insertStatements.columns.indentContents cfg.whitespace.numberOfSpacesInTabs)
         cfg.insertStatements.columns.parenthesisStyle
 
 /// Use for insert row value tuples driven by `cfg.insertStatements.values`.
 /// Example: `VALUES (1, 'x', GETDATE())`.
 let insertValuesListParensDoc (cfg: Style) : ParenthesisCombinator =
     parenthesisDoc
-        cfg.whitespace.numberOfSpacesInTabs
-        cfg.insertStatements.values.indentContents
+        (optWhen cfg.insertStatements.values.indentContents cfg.whitespace.numberOfSpacesInTabs)
         cfg.insertStatements.values.parenthesisStyle
 
 /// Use for function-call argument lists driven by `cfg.functionCalls`.
