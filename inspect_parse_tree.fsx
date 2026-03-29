@@ -21,7 +21,9 @@ type CliArgs =
             | Ast -> "print the AST with scalar properties"
 
 let parser = ArgumentParser.Create<CliArgs>(programName = "inspect_parse_tree.fsx")
-let results = parser.Parse(fsi.CommandLineArgs |> Array.skip 1 |> Array.filter ((<>) "--"), raiseOnUsage = false)
+
+let results =
+    parser.Parse(fsi.CommandLineArgs |> Array.skip 1 |> Array.filter ((<>) "--"), raiseOnUsage = false)
 
 if results.IsUsageRequested then
     printfn "%s" (parser.PrintUsage())
@@ -45,8 +47,7 @@ let mode =
 
 let filePath = results.TryGetResult <@ File @>
 
-let usage () =
-    printfn "%s" (parser.PrintUsage())
+let usage () = printfn "%s" (parser.PrintUsage())
 
 let readSql () =
     match filePath with
