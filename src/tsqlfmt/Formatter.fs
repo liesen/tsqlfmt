@@ -776,16 +776,10 @@ and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
     else
         let valDocs = inp.Values |> Seq.map (fun v -> exprDoc cfg v) |> Seq.toList
 
-        let expandedContent =
-            let valSep = text "," <+> line
-            let valsDoc = join valSep valDocs
+        let valSep = text "," <+> line
+        let valsDoc = join valSep valDocs
 
-            lhs <++> notPart <+> inKw <++> text "("
-            <+> nest (indentWidth cfg) (softline <+> valsDoc)
-            <+> softline
-            <+> text ")"
-
-        group expandedContent
+        lhs <++> notPart <+> inKw <++> inValuesParensDoc cfg valsDoc
 
 and private likePredicateDoc (cfg: Style) (lk: LikePredicate) : Doc =
     let lhs = exprDoc cfg lk.FirstExpression

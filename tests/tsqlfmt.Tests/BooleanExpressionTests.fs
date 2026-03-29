@@ -114,3 +114,29 @@ a = 1
 let ``plain parenthesized boolean expression stays inline when it fits`` () =
     let expected = "NOT (a = 1 AND b = 2 OR c = 3)"
     assertBooleanExpressionDoc expected "not (a = 1 and b = 2 or c = 3)"
+
+[<Fact>]
+let ``IN value list uses operators.in placement settings`` () =
+    let testConfig =
+        { config with
+            operators =
+                { config.operators with
+                    ``in`` =
+                        { config.operators.``in`` with
+                            placeOpeningParenthesisOnNewLine = true
+                            alignment = InAlignment.Indented
+                            addSpaceAroundInContents = false } } }
+
+    let sql = "select 1 where a in (1, 2, 3)"
+
+    let expected =
+        """
+SELECT 1
+WHERE a IN (
+    1,
+    2,
+    3
+)
+"""
+
+    assertFormatsToWithConfig testConfig expected sql

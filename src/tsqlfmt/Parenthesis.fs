@@ -33,6 +33,11 @@ let private cteColumnAlignmentIndent (cfg: Style) =
     | Alignment.Indented -> Some cfg.whitespace.numberOfSpacesInTabs
     | _ -> None
 
+let private inValuesAlignmentIndent (cfg: Style) =
+    match cfg.operators.``in``.alignment with
+    | InAlignment.Indented -> Some cfg.whitespace.numberOfSpacesInTabs
+    | _ -> None
+
 /// Use for generic parenthesized expressions driven by `cfg.parentheses`.
 /// Example: `(a + b)`, `EXISTS (SELECT 1 ...)`, `(SELECT ... UNION SELECT ...)`.
 let expressionParensDoc (cfg: Style) : ParenthesisCombinator =
@@ -111,3 +116,20 @@ let functionCallParensDoc (cfg: Style) (argDocs: Doc list) : Doc =
             match cfg.functionCalls.placeArgumentsOnNewLines with
             | PlaceOnNewLine.Always -> doc
             | _ -> group doc
+
+/// Use for `IN (value, ...)` lists driven by `cfg.operators.in`.
+/// Example: `x IN (1, 2, 3)`.
+let inValuesParensDoc (cfg: Style) (valuesDoc: Doc) : Doc =
+    let spacingDoc =
+        if cfg.operators.``in``.addSpaceAroundInContents then
+            line
+        else
+            softline
+
+    let alignedValuesDoc =
+        optNest (inValuesAlignmentIndent cfg) (spacingDoc <+> valuesDoc)
+
+    if cfg.operators.``in``.placeOpeningParenthesisOnNewLine then
+        text "(" <+> alignedValuesDoc <+> spacingDoc <+> text ")"
+    else
+        group (text "(" <+> alignedValuesDoc <+> spacingDoc <+> text ")")
