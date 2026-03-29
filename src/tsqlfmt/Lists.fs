@@ -67,13 +67,13 @@ let withFirstItemIndent (indent: int) (layout: SequenceLayout) =
 let listCommaDecoration (cfg: Style) : SequenceDecoration =
     { commaPlacement =
         if cfg.lists.placeCommasBeforeItems then
-            CommaPlacement.BeforeItems
+            BeforeItems
         else
-            CommaPlacement.AfterItems
+            AfterItems
       addSpaceBeforeComma = cfg.lists.addSpaceBeforeComma }
 
 let ddlCommaDecoration: SequenceDecoration =
-    { commaPlacement = CommaPlacement.AfterItems
+    { commaPlacement = AfterItems
       addSpaceBeforeComma = false }
 
 let private decorateListItemsWith (decoration: SequenceDecoration) (items: Doc list) =
@@ -83,7 +83,7 @@ let private decorateListItemsWith (decoration: SequenceDecoration) (items: Doc l
         else
             text ","
 
-    if decoration.commaPlacement = CommaPlacement.BeforeItems then
+    if decoration.commaPlacement = BeforeItems then
         items |> List.mapi (fun i item -> if i = 0 then item else comma <+> item)
     else
         items
