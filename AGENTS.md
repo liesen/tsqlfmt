@@ -4,11 +4,11 @@ T-SQL formatter built on ScriptDOM and a `Doc` pipeline.
 
 External interface target is SQL Prompt compatibility: style files follow the SQL Prompt shape, and the CLI follows SQL Prompt's `formatSql` command model.
 
-Primary goal: reproduce the style in `default-style.json`.
+Primary goal: parity with `default-style.json`.
 
 ## Rules
 
-- Prefer parity with `default-style.json` over broad style coverage.
+- Prefer parity with `default-style.json` over broader style coverage.
 - Do not add support for style modes we do not use unless the change clearly requires it.
 - Derive formatting from AST shape, token structure, or explicit layout intent.
 - Never inspect rendered `Doc` output to choose a layout. If a helper needs rendered text, redesign the helper.

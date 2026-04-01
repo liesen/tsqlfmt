@@ -3,10 +3,14 @@
 `tsqlfmt` is a command-line formatter for T-SQL.
 It parses SQL with Microsoft's SQL ScriptDOM, then renders formatted output from the syntax tree.
 
-It reads SQL Prompt-style JSON configuration files and aims to be a mostly drop-in replacement for SQL Prompt formatting in automated workflows and editor integrations.
+It reads SQL Prompt-style JSON configuration files and targets SQL Prompt-compatible formatting in automated workflows and editor integrations.
 It also supports project-specific options under `formatterExtensions`.
 
-The main profile in this repository is `default-style.json`.
+[IMPORTANT]
+====
+First goal: reproduce the style in `default-style.json`.
+If there is demand for other styles later, we can expand from there.
+====
 
 == Usage
 
