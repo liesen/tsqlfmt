@@ -8,8 +8,7 @@ type Doc =
     private
     | Nil
     | Text of string
-    | Line // Line break, renders at current indent
-    | SoftLine // Line break in broken mode, nothing in flat mode
+    | Line of bool // Line break, renders at current indent
     | Cat of Doc * Doc // Concatenation
     | Nest of int * Doc // Add indent to context for doc
     | Union of Doc * Doc // Flattened vs normal
@@ -27,9 +26,9 @@ let empty = Doc.Nil
 let text (s: string) =
     if s.Length = 0 then Doc.Nil else Doc.Text(s)
 
-let line = Doc.Line
+let line = Doc.Line false
 
-let softline = Doc.SoftLine
+let linebreak = Doc.Line true
 
 // ─── Concatenation ───
 
@@ -66,8 +65,7 @@ let rec flatten (doc: Doc) : Doc =
     match doc with
     | Doc.Nil -> Doc.Nil
     | Doc.Text _ -> doc
-    | Doc.Line -> Doc.Text(" ")
-    | Doc.SoftLine -> Doc.Nil
+    | Doc.Line(brk) -> if brk then Doc.Nil else Doc.Text(" ")
     | Doc.Cat(a, b) -> Doc.Cat(flatten a, flatten b)
     | Doc.Nest(i, d) -> Doc.Nest(i, flatten d)
     | Doc.Union(a, _) -> flatten a
@@ -75,6 +73,10 @@ let rec flatten (doc: Doc) : Doc =
 /// `group` tries to flatten a document onto a single line.
 /// If it fits, use the flattened version; otherwise keep line breaks.
 let group (doc: Doc) : Doc = Doc.Union(flatten doc, doc)
+
+let softline = group line
+
+let softbreak = group linebreak
 
 // ─── Rendering ───
 
@@ -101,14 +103,12 @@ let private best (width: int) (doc: Doc) : SDoc =
         | (_, _, Doc.Nil) :: rest -> go col rest
         | (i, m, Doc.Text(s)) :: rest -> SText(s, go (col + s.Length) rest)
         | (i, m, Doc.Cat(a, b)) :: rest -> go col ((i, m, a) :: (i, m, b) :: rest)
-        | (i, Flat, Doc.Line) :: rest ->
+        | (i, Flat, Doc.Line _) :: rest ->
             // In flat mode, line becomes a space
             SText(" ", go (col + 1) rest)
-        | (i, Flat, Doc.SoftLine) :: rest -> go col rest
-        | (i, Break, Doc.Line) :: rest ->
+        | (i, Break, Doc.Line _) :: rest ->
             // In break mode, emit a line at current indent
             SLine(i, go i rest)
-        | (i, Break, Doc.SoftLine) :: rest -> SLine(i, go i rest)
         | (i, m, Doc.Nest(j, d)) :: rest ->
             // Push new indent context for the nested doc
             go col ((i + j, m, d) :: rest)
@@ -164,10 +164,3 @@ let commaSep (docs: Doc list) : Doc =
     | [] -> empty
     | [ d ] -> d
     | d :: rest -> List.fold (fun acc x -> acc <+> text "," <+> line <+> x) d rest
-
-/// Like commaSep but uses hardline.
-let commaHardSep (docs: Doc list) : Doc =
-    match docs with
-    | [] -> empty
-    | [ d ] -> d
-    | d :: rest -> List.fold (fun acc x -> acc <+> text "," <+> Doc.Line <+> x) d rest

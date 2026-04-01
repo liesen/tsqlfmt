@@ -21,14 +21,14 @@ let private optNest (indent: int option) (doc: Doc) : Doc =
     | None -> doc
 
 let private expandedSplit (contentsIndent: int option) (contentsDoc: Doc) =
-    let laidOutContents = optNest contentsIndent (softline <+> contentsDoc)
+    let laidOutContents = optNest contentsIndent (linebreak <+> contentsDoc)
 
-    text "(" <+> laidOutContents <+> softline <+> text ")"
+    text "(" <+> laidOutContents <+> linebreak <+> text ")"
 
 let private compactIndented (contentsIndent: int option) (contentsDoc: Doc) =
-    let laidOutContents = optNest contentsIndent (softline <+> contentsDoc)
+    let laidOutContents = optNest contentsIndent (linebreak <+> contentsDoc)
 
-    text "(" <+> laidOutContents <+> softline <+> text ")"
+    text "(" <+> laidOutContents <+> linebreak <+> text ")"
 
 let private parens (contentsIndent: int option) (style: ParenthesisStyle) : ParenthesisCombinator =
     match style with
@@ -111,16 +111,10 @@ let functionCallParensDoc (cfg: Style) (argDocs: Doc list) : Doc =
         if cfg.functionCalls.placeArgumentsOnNewLines = PlaceOnNewLine.Never then
             openDoc <+> join (text ", ") argDocs <+> closeDoc
         else
-            let argListSpacing =
-                if cfg.functionCalls.addSpacesAroundArgumentList then
-                    line
-                else
-                    softline
-
             let doc =
                 openDoc
-                <+> nest cfg.whitespace.numberOfSpacesInTabs (argListSpacing <+> join (text "," <+> line) argDocs)
-                <+> argListSpacing
+                <+> nest cfg.whitespace.numberOfSpacesInTabs (linebreak <+> join (text "," <+> line) argDocs)
+                <+> linebreak
                 <+> closeDoc
 
             match cfg.functionCalls.placeArgumentsOnNewLines with
@@ -134,7 +128,7 @@ let inValuesParensDoc (cfg: Style) (valuesDoc: Doc) : Doc =
         if cfg.operators.``in``.addSpaceAroundInContents then
             line
         else
-            softline
+            linebreak
 
     let alignedValuesDoc =
         optNest (inValuesAlignmentIndent cfg) (spacingDoc <+> valuesDoc)
