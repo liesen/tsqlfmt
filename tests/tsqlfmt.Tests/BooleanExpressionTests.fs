@@ -5,7 +5,7 @@ open TSqlFormatter.Style
 open TestSupport
 
 [<Fact>]
-let ``headed condition indents multiline first item without overindenting following AND`` () =
+let ``anchored condition indents multiline first item without overindenting following AND`` () =
     let testConfig =
         { config with
             dml =
@@ -30,16 +30,34 @@ WHERE a IN (
     assertFormatsToWithConfig testConfig expected sql
 
 [<Fact>]
-let ``headed IF condition formats EXISTS like other subquery predicates`` () =
+let ``anchored IF condition formats EXISTS like other subquery predicates`` () =
     let sql = "if exists (select 1 from sys.tables where name = 'test24') select 1"
 
     let expected =
         """
 IF EXISTS (
+        SELECT 1
+        FROM sys.tables
+        WHERE name = 'test24'
+    )
     SELECT 1
-    FROM sys.tables
-    WHERE name = 'test24'
-)
+"""
+
+    assertFormatsTo expected sql
+
+[<Fact>]
+let ``anchored IF condition keeps AND aligned after EXISTS subquery`` () =
+    let sql =
+        "if exists (select 1 from sys.tables where name = 'test24') and 1 = 1 select 1"
+
+    let expected =
+        """
+IF EXISTS (
+        SELECT 1
+        FROM sys.tables
+        WHERE name = 'test24'
+    )
+    AND 1 = 1
     SELECT 1
 """
 
@@ -99,6 +117,36 @@ WHERE NOT (a = 1 AND b = 2 OR c = 3)
 
     assertFormatsTo expected sql
 
+[<Fact(Skip="Needs better handling of NOT with parenthesized conditions")>]
+let ``anchored WHERE NOT parenthesized condition keeps grouped IN predicate inline`` () =
+    let testConfig =
+        { config with
+            whitespace =
+                { config.whitespace with
+                    wrapLinesLongerThan = 100 }
+            dml =
+                { config.dml with
+                    collapseShortSubqueries = true }
+            parentheses =
+                { config.parentheses with
+                    collapseShortParenthesisContents = true
+                    collapseParenthesesShorterThan = 40 } }
+
+    let sql =
+        "select 1 from dbo.t where not (a in (select 1 from dbo.u where u.id = t.id) and b = 2)"
+
+    let expected =
+        """
+SELECT 1
+FROM dbo.t
+WHERE NOT (
+        a IN (SELECT 1 FROM dbo.u WHERE u.id = t.id)
+        AND b = 2
+    )
+"""
+
+    assertFormatsToWithConfig testConfig expected sql
+
 [<Fact>]
 let ``plain boolean expression formats with normal AND indentation`` () =
     let expected =
@@ -133,10 +181,10 @@ let ``IN value list uses operators.in placement settings`` () =
         """
 SELECT 1
 WHERE a IN (
-    1,
-    2,
-    3
-)
+        1,
+        2,
+        3
+    )
 """
 
     assertFormatsToWithConfig testConfig expected sql

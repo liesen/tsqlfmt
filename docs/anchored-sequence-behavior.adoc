@@ -1,0 +1,232 @@
+= Anchored sequence behavior
+
+== Examples first
+
+Anchored sequence:
+
+[source,sql]
+----
+IF EXISTS (
+        SELECT 1
+        FROM sys.tables
+        WHERE name = 'test24'
+    )
+    AND 1 = 1
+----
+
+In this rendering:
+
+- anchor: `IF`
+- item 1: `EXISTS (...)`
+- item 2: `AND 1 = 1`
+
+The anchor shifts the whole item sequence one level deeper than the unanchored form.
+The items keep their own internal formatting rules.
+
+Unanchored sequence:
+
+[source,sql]
+----
+EXISTS (
+    SELECT 1
+    FROM sys.tables
+    WHERE name = 'test24'
+)
+AND 1 = 1
+----
+
+In this rendering:
+
+- no anchor
+- item 1: `EXISTS (...)`
+- item 2: `AND 1 = 1`
+
+The only difference is the indentation context supplied by the anchor.
+
+This note defines how anchored sequences work in `tsqlfmt` and where the related helpers belong.
+
+== Core idea
+
+Anchoring and sequence layout are separate concerns.
+
+- anchoring decides what a sequence attaches to
+- sequence layout decides how sequence items break and indent
+- item formatting decides the internal layout of each item
+
+An anchored sequence is not a different kind of item.
+It is the same item sequence placed relative to a leading head such as `WHERE`, `IF`, `ON`, or `ORDER BY`.
+
+== Separation of responsibilities
+
+Three layers stay distinct.
+
+- anchoring: what the sequence attaches to
+- layout: where items go relative to each other
+- item formatting: how each item renders internally
+
+Examples:
+
+- anchoring: `WHERE`, `IF`, `ON`, `SELECT`
+- layout: first item on same line or next line, first-item indent, subsequent-item indent
+- item formatting: `EXISTS (...)`, `a = 1`, `SUM(x)`, `b IN (...)`
+
+This matters because an anchored construct should shift the condition item as a whole.
+It should not rewrite how parentheses, subqueries, or other nested constructs format internally.
+
+== What anchoring means
+
+`anchoredSequenceDoc` takes:
+
+- a `SequenceLayout`
+- an anchor `Doc`
+- a list of item `Doc`s
+
+The anchor controls the indentation context of the sequence.
+The layout controls whether items stay on the same line as the anchor, move to the next line, and how continuation items indent.
+
+The anchor does not decide the internal formatting of an item.
+
+== `Lists.fs` vs `Formatter.fs`
+
+`src/tsqlfmt/Lists.fs` owns generic sequence layout over `Doc list`.
+It should not know about SQL AST node types.
+
+Helpers that belong in `src/tsqlfmt/Lists.fs`:
+
+- `sequenceDoc`
+- `anchoredSequenceDoc`
+- `withFirstItemIndent`
+- other generic layout and decoration helpers over `Doc list`
+
+`src/tsqlfmt/Formatter.fs` owns AST-specific helpers that turn SQL nodes into `Doc`s or `Doc list`s.
+
+Helpers that belong in `src/tsqlfmt/Formatter.fs`:
+
+- `conditionItems`
+- `boolExprDoc`
+- `anchoredBoolExprDoc`
+- other helpers that inspect `BooleanExpression`, `QuerySpecification`, or other ScriptDOM node shapes
+
+Rule of thumb:
+
+- if a helper is generic over `Doc list`, it belongs in `Lists.fs`
+- if a helper inspects `BooleanExpression` or another AST type, it belongs in `Formatter.fs`
+
+== Anchored boolean conditions
+
+Boolean conditions are the main current use case for anchored sequences.
+
+For anchored clauses such as:
+
+- `WHERE`
+- `HAVING`
+- `ON`
+- `IF`
+- `WHILE`
+
+the anchor should shift the whole condition block one level deeper than the unanchored form.
+
+That means an anchored condition such as:
+
+[source,sql]
+----
+IF EXISTS (...)
+    AND x = 1
+----
+
+is modeled as:
+
+- anchor: `IF`
+- items: `EXISTS (...)`, `AND x = 1`
+- layout: normal `AND` / `OR` sequence layout, with the first item also indented under the anchor
+
+The important point is that `IF` does not directly control the internal formatting of `EXISTS (...)`.
+It controls the indentation context in which that item is placed.
+
+== `anchoredBoolExprDoc`
+
+`anchoredBoolExprDoc` is the formatter-level helper for anchored boolean conditions.
+
+Its role is simple:
+
+- take an anchor such as `WHERE` or `IF`
+- turn a `BooleanExpression` into condition items
+- place those items with `anchoredSequenceDoc`
+
+Conceptually:
+
+[source,fsharp]
+----
+conditionItems : Style -> BooleanExpression -> Doc list
+boolExprDoc : Style -> BooleanExpression -> Doc
+anchoredBoolExprDoc : Style -> Doc -> BooleanExpression -> Doc
+----
+
+The intended implementation shape is:
+
+[source,fsharp]
+----
+and private conditionItems (cfg: Style) (expr: BooleanExpression) : Doc list =
+    match expr with
+    | :? BooleanBinaryExpression as bb -> booleanSequenceItems cfg bb
+    | _ -> [ exprDoc cfg expr ]
+
+and private boolExprDoc (cfg: Style) (expr: BooleanExpression) : Doc =
+    sequenceDoc (andOrSequenceLayout cfg) (conditionItems cfg expr)
+
+and private anchoredBoolExprDoc (cfg: Style) (head: Doc) (expr: BooleanExpression) : Doc =
+    anchoredSequenceDoc
+        (andOrSequenceLayout cfg |> withFirstItemIndent (indentWidth cfg))
+        head
+        (conditionItems cfg expr)
+----
+
+This keeps one structural itemization path and two rendering modes:
+
+- unanchored: `boolExprDoc`
+- anchored: `anchoredBoolExprDoc`
+
+== Where `anchoredBoolExprDoc` should be used
+
+Use `anchoredBoolExprDoc` for anchored boolean conditions in `src/tsqlfmt/Formatter.fs`.
+
+Current target sites include:
+
+- `SELECT ... WHERE`
+- `HAVING`
+- join `ON`
+- `IF`
+- `WHILE`
+- `UPDATE ... WHERE`
+- `DELETE ... WHERE`
+- `MERGE ... ON`
+
+Use plain `boolExprDoc` for non-anchored boolean-expression contexts.
+
+Examples:
+
+- `NOT (...)`
+- parenthesized boolean expressions
+- function arguments such as `IIF(...)`
+- other expression-only contexts with no clause head
+
+== Design rule
+
+If a construct is naturally "head plus continuation items", prefer this split:
+
+- a generic anchored sequence helper for layout
+- a formatter-level helper that turns the AST node into sequence items
+
+Do not push AST knowledge into `Lists.fs`.
+Do not let anchoring leak into lower-level item formatting such as parenthesis combinators.
+
+== Relation to SQL Prompt
+
+This model matches SQL Prompt at the style-concept level.
+
+It does not try to copy every low-level alignment quirk.
+It keeps the public concept clear:
+
+- the leading construct anchors the continuation block
+- the continuation layout determines line breaks and indentation
+- nested constructs keep their own internal formatting rules
