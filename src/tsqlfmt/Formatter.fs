@@ -762,6 +762,7 @@ and private inPredicateDoc (cfg: Style) (inp: InPredicate) : Doc =
             empty
 
     let inKw = keyword cfg "IN"
+
     if inp.Subquery <> null then
         lhs <++> notPart <+> inKw
         <++> expressionParensDoc cfg (queryExprDoc cfg inp.Subquery.QueryExpression)

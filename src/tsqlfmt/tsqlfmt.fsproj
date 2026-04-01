@@ -7,7 +7,7 @@
 
   <ItemGroup>
     <Compile Include="Doc.fs" />
-    <Compile Include="Lindig.fs" />
+    <Compile Include="StrictlyPretty.fs" />
     <Compile Include="Trivia.fs" />
     <Compile Include="Style.fs" />
     <Compile Include="Parenthesis.fs" />
