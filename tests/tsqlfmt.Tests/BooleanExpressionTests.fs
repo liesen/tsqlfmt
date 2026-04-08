@@ -117,7 +117,7 @@ WHERE NOT (a = 1 AND b = 2 OR c = 3)
 
     assertFormatsTo expected sql
 
-[<Fact(Skip="Needs better handling of NOT with parenthesized conditions")>]
+[<Fact(Skip = "Needs better handling of NOT with parenthesized conditions")>]
 let ``anchored WHERE NOT parenthesized condition keeps grouped IN predicate inline`` () =
     let testConfig =
         { config with

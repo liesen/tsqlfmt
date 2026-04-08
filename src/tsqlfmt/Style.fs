@@ -41,6 +41,20 @@ type PlaceOnNewLine =
     | [<JsonPropertyName("ifMultipleItems")>] IfMultipleItems = 6
     | [<JsonPropertyName("ifInputExpression")>] IfInputExpression = 7
 
+/// When constraint columns in DDL are placed on new lines.
+[<JsonConverter(typeof<JsonStringEnumConverter>)>]
+type DdlConstraintColumnsOnNewLines =
+    | [<JsonPropertyName("always")>] Always = 0
+    | [<JsonPropertyName("ifLongerThanMaxLineLength")>] IfLongerThanMaxLineLength = 1
+    | [<JsonPropertyName("ifLongerOrMultipleColumns")>] IfLongerOrMultipleColumns = 2
+
+/// When the first stored procedure parameter is placed on a new line.
+[<JsonConverter(typeof<JsonStringEnumConverter>)>]
+type DdlFirstProcedureParameterOnNewLine =
+    | [<JsonPropertyName("always")>] Always = 0
+    | [<JsonPropertyName("never")>] Never = 1
+    | [<JsonPropertyName("ifMultipleItems")>] IfMultipleItems = 2
+
 /// How clauses within DML statements are aligned.
 [<JsonConverter(typeof<JsonStringEnumConverter>)>]
 type ClauseAlignment =
@@ -316,13 +330,13 @@ type Ddl =
         placeConstraintsOnNewLines: bool
         /// When to place constraint columns on a new line.
         [<JsonPropertyName("placeConstraintColumnsOnNewLines")>]
-        placeConstraintColumnsOnNewLines: PlaceOnNewLine
+        placeConstraintColumnsOnNewLines: DdlConstraintColumnsOnNewLines
         /// Whether to indent clauses in DDL statements.
         [<JsonPropertyName("indentClauses")>]
         indentClauses: bool
         /// Whether to place the first parameter of a stored procedure on a new line.
         [<JsonPropertyName("placeFirstProcedureParameterOnNewLine")>]
-        placeFirstProcedureParameterOnNewLine: PlaceOnNewLine
+        placeFirstProcedureParameterOnNewLine: DdlFirstProcedureParameterOnNewLine
         /// Collapse short DDL statements onto a single line.
         [<JsonPropertyName("collapseShortStatements")>]
         collapseShortStatements: bool
@@ -814,13 +828,13 @@ let defaultDml =
       listItems = defaultDmlListItems }
 
 let defaultDdl =
-    { parenthesisStyle = ParenthesisStyle.CompactSimple
-      indentParenthesesContents = false
+    { parenthesisStyle = ParenthesisStyle.ExpandedSplit
+      indentParenthesesContents = true
       alignDataTypesAndConstraints = true
       placeConstraintsOnNewLines = false
-      placeConstraintColumnsOnNewLines = PlaceOnNewLine.IfLongerThanMaxLineLength
+      placeConstraintColumnsOnNewLines = DdlConstraintColumnsOnNewLines.IfLongerOrMultipleColumns
       indentClauses = false
-      placeFirstProcedureParameterOnNewLine = PlaceOnNewLine.IfMultipleItems
+      placeFirstProcedureParameterOnNewLine = DdlFirstProcedureParameterOnNewLine.IfMultipleItems
       collapseShortStatements = false
       collapseStatementsShorterThan = 80 }
 

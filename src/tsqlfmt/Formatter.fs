@@ -1587,7 +1587,7 @@ and private procedureParamsDoc
                 headerWithParams
         else
             let layout =
-                { ddlSequenceLayout cfg parameters.Count with
+                { ddlProcedureParameterSequenceLayout cfg parameters.Count with
                     subsequentItemsIndent = Some(indentWidth cfg) }
 
             anchoredSequenceDoc layout header paramItems
@@ -1828,7 +1828,7 @@ and private createTableElementDoc (cfg: Style) (frag: TSqlFragment) : Doc =
             constraintDef.Columns
             |> Seq.map (columnWithSortOrderDoc cfg)
             |> Seq.toList
-            |> ddlCommaListDoc cfg
+            |> ddlConstraintColumnListDoc cfg
             |> ddlParensDoc cfg
 
         let optionsDoc =

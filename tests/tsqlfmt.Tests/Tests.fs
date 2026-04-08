@@ -178,6 +178,43 @@ let ``withOptionalCasing preserves style casing when applyCasing is true`` () =
     Assert.Equal(CasingStyle.Uppercase, result.casing.reservedKeywords)
 
 [<Fact>]
+let ``loadStyle parses ddl constraint columns if longer or multiple columns`` () =
+    let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(stylesDir) |> ignore
+
+    try
+        let stylePath = Path.Combine(stylesDir, "style.json")
+
+        File.WriteAllText(stylePath, """{"ddl":{"placeConstraintColumnsOnNewLines":"ifLongerOrMultipleColumns"}}""")
+
+        let style = loadStyle stylePath
+
+        Assert.Equal(
+            DdlConstraintColumnsOnNewLines.IfLongerOrMultipleColumns,
+            style.ddl.placeConstraintColumnsOnNewLines
+        )
+    finally
+        Directory.Delete(stylesDir, true)
+
+[<Fact>]
+let ``loadStyle parses ddl first procedure parameter enum`` () =
+    let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(stylesDir) |> ignore
+
+    try
+        let stylePath = Path.Combine(stylesDir, "style.json")
+        File.WriteAllText(stylePath, """{"ddl":{"placeFirstProcedureParameterOnNewLine":"ifMultipleItems"}}""")
+
+        let style = loadStyle stylePath
+
+        Assert.Equal(
+            DdlFirstProcedureParameterOnNewLine.IfMultipleItems,
+            style.ddl.placeFirstProcedureParameterOnNewLine
+        )
+    finally
+        Directory.Delete(stylesDir, true)
+
+[<Fact>]
 let ``loadStyle parses unsupported right aligned boolean alignment`` () =
     let stylesDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(stylesDir) |> ignore

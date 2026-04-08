@@ -109,16 +109,38 @@ let anchoredCommaSeparatedListWithLayoutDoc
     : Doc =
     anchoredSequenceDoc layout anchorDoc (decorateListItems cfg items)
 
-let ddlSequenceLayout (cfg: Style) (itemCount: int) : SequenceLayout =
+let ddlProcedureParameterSequenceLayout (cfg: Style) (itemCount: int) : SequenceLayout =
     let placeOnNewLine =
         match cfg.ddl.placeFirstProcedureParameterOnNewLine with
-        | PlaceOnNewLine.Always -> true
-        | PlaceOnNewLine.IfMultipleItems -> itemCount > 1
+        | DdlFirstProcedureParameterOnNewLine.Always -> true
+        | DdlFirstProcedureParameterOnNewLine.IfMultipleItems -> itemCount > 1
         | _ -> false
 
     { placeFirstItemOnNewLine = placeOnNewLine
       firstItemIndent = None
       subsequentItemsIndent = None }
 
-let ddlCommaListDoc (cfg: Style) (items: Doc list) : Doc =
-    sequenceDoc (ddlSequenceLayout cfg items.Length) (decorateDdlListItems items)
+let ddlConstraintColumnSequenceLayout (cfg: Style) (itemCount: int) : SequenceLayout =
+    let multilineLayout =
+        { placeFirstItemOnNewLine = true
+          firstItemIndent = None
+          subsequentItemsIndent = None }
+
+    let collapsedLayout =
+        { placeFirstItemOnNewLine = false
+          firstItemIndent = None
+          subsequentItemsIndent = None }
+
+    match cfg.ddl.placeConstraintColumnsOnNewLines with
+    | DdlConstraintColumnsOnNewLines.Always -> multilineLayout
+    | DdlConstraintColumnsOnNewLines.IfLongerOrMultipleColumns when itemCount > 1 -> multilineLayout
+    | _ -> collapsedLayout
+
+let ddlConstraintColumnListDoc (cfg: Style) (items: Doc list) : Doc =
+    let layout = ddlConstraintColumnSequenceLayout cfg items.Length
+    let doc = sequenceDoc layout (decorateDdlListItems items)
+
+    match cfg.ddl.placeConstraintColumnsOnNewLines with
+    | DdlConstraintColumnsOnNewLines.Always
+    | DdlConstraintColumnsOnNewLines.IfLongerOrMultipleColumns when items.Length > 1 -> doc
+    | _ -> group doc
